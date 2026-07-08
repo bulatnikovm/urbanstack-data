@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Секреты / креды
+*.key
+*.pem
+service-account*.json
+credentials*.json
+.env
+.env.*
+
+# dbt (на будущее)
+target/
+dbt_packages/
+logs/
+
+# ОС / редакторы
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Временные выгрузки
+*.tmp
+~$*
