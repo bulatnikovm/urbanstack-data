@@ -21,28 +21,29 @@ Project: `analytics-454817`
 |---|---|---|
 | `postgresqldim9000` | **активний** | Stitch-sync продуктової Postgres БД: CRM (users/spaces/sections/houses/complexes), білінг (master_buh_*), копія Amplitude events (`EVENTS_407641`), + вже існуючі "недо-марти" (`dm_*`, `vw_dm_*`, `view_*`) |
 | `finance_dash` | активний | Фінансовий шар. Вже має конвенцію `dim_*` / `fact_*` / `mart_*` — хороший приклад для dbt-міграції, переносити майже 1:1 |
-| `dim9000_fast` | активний | Джерело для алертної системи. Ще не аудували — schema/lineage невідомі |
-| `dim9000_analytics` | активний | Джерело для masterbuh-дашборду. Ще не аудували — schema/lineage невідомі |
+| `dim9000_fast` | активний (**US**) | Окремий внутрішній продукт (алертна система), **не джерело жодного дашборду** (0 Looker-задань). Аудит не робимо. План: перенести в EU. |
+| `dim9000_analytics` | активний (**US**) | Окремий внутрішній продукт (masterbuh), **не джерело дашбордів** (0 Looker-задань). Аудит не робимо. План: перенести в EU. |
+| `bigquery` | **осиротілий (US)** | Не було в снімку v0.1 (Микита його «жодного разу не відкривав»). Містить `EVENTS_407641` (ще одна US-копія Amplitude) + 9 ad-hoc event-view (Retention D7/14/28, Phone Auth, New Users…). **Жоден дашборд його не читає** (0 Looker-задань). Схема — `schema/us_bigquery_*`. |
 | `amlitude_EU` | **не використовується** | Оригінальний Amplitude BigQuery export (`EVENTS_407641` + `users_objects_complexes`). Дублюючий і мертвий, як `postgresql` нижче — лишається в BigQuery, свідомо ігноруємо |
 | `postgresql` | **МЕРТВИЙ** | Останній sync 2025-04-29 (підтверджено запитом). Не використовувати. Лишається в BigQuery, свідомо ігноруємо |
 
-Регіон датасету (`region-eu`/`region-us`) — не підтверджено, перевірити перед INFORMATION_SCHEMA-запитами.
+**Регіон датасетів (підтверджено 2026-07-08):** EU — `postgresqldim9000`, `finance_dash`, `amlitude_EU`; US — `dim9000_fast`, `dim9000_analytics`, `bigquery`. ⚠️ BigQuery **не джойнить між регіонами** — дашборди й Looker живуть у EU; US-датасети ізольовані. Для INFORMATION_SCHEMA використовуй `region-eu` (дашбордний шар) або `region-us` (внутрішні продукти) відповідно. `EVENTS_407641` існує у **трьох** копіях: `amlitude_EU`, `postgresqldim9000` (жива, її читає продуктовий дашборд), `bigquery` (US, осиротіла).
 
 ## 4. Знайдені проблеми (Фаза 0 audit)
 
 1. **`deactivated_houses` drift.** Хардкод-список задубльований у 4+ views з розбіжністю: 10 записів у `view_monthly_active_residents`/`vw_dm_complex_user_segments_monthly`, 11 у `vw_dm_apartment_occupancy_monthly`/`vw_dm_operations_monthly`, і лише **3 з 11** у `vw_dm_objects_filter` — з коментарем у самому коді `-- и остальные...` (незавершений копіпаст). Наслідок: підрахунки в `vw_dm_objects_filter` не виключають 8 деактивованих будинків, які виключають інші view. **Фікс:** винести список в окремий reference view `ref_deactivated_houses`, всі 5 view джойняться на нього замість дублювання UNNEST — див. пункт у розділі 8.
 2. **Дві паралельні методики боргу.** `mart_debt_flat`/`mart_debt_aging` рахують борг як `initial_debt`; `mart_debt_alena` — як `debt_balance − paid_amount`. Обидві живуть одночасно, не узгоджено яка канонічна для дашборду. **Відкладено до аудиту фінансового дашборду** (не блокує Фазу 1) — фінансові view вже побудовані акуратно, але додатковий аудит перед dbt-міграцією не завадить.
-3. **`mart_payment_rates` vs `mart_payments_rate`.** Два різні view з майже ідентичними назвами (відрізняються однією літерою) — `mart_payment_rates` (grain: приміщення × послуга) зараз **актуальний**, `mart_payments_rate` (grain: агрегат по ЖК × місяць) — **legacy**, більше не використовується. Через схожість назв легко звернутись не до того при пошуку. ⚠️ Реєстр метрик v0.1 (FIN-005, "Природний рівень оплат") зараз посилається на legacy `mart_payments_rate` — виправити на `mart_payment_rates` при переході на v1.0.
-4. **Прихована логіка в Looker Studio.** Стр.2 (Активація), Стр.3 (Активність/модулі), Стр.4 (North Star/STAR), Стр.5 (Здоров'я продукту) — логіка НЕ існує як BigQuery view, живе як custom SQL всередині джерел даних Looker Studio. `INFORMATION_SCHEMA` її не бачить. **Це головна невідома зона — Фаза 1 закриває саме її.**
+3. ✅ **Закрито (реєстр v0.2).** `mart_payment_rates` vs `mart_payments_rate` — `mart_payment_rates` (grain: приміщення × послуга) **актуальний**, `mart_payments_rate` (grain: ЖК × місяць) — **legacy**. FIN-005 у реєстрі виправлено на `mart_payment_rates`. Ризик плутанини через схожі назви лишається — тримати в голові при пошуку.
+4. ✅ **Закрито на рівні вилучення (Фаза 1).** Прихована логіка Looker (Стр.2-5) відновлена з BigQuery job history — див. `looker_extracted/`. **Усі** джерела даних Looker виявились custom SQL (не таблиці): продуктовий дашборд (`report_id c2180c98`) = 27 джерел, 23 custom на `EVENTS_407641` (активація/ретеншен/core-events/phone-auth). Логіка більше не «невідома». **Лишилось:** підтвердити з Артемом прив'язку конкретний datasource_id ↔ метрика/сторінка (layout Looker у BQ не зберігається) і винести в `fact_*`. Спосіб вилучення й застереження — у `looker_extracted/_index.md`.
 5. ✅ **Закрито:** `iban` у джерелі `dim_llc` (`tascombank_merchants WHERE purpose='payment'`) унікальний — перевірено запитом, fan-out ризику при джойнах немає.
 6. ✅ **Закрито:** `postgresql` емпірично підтверджений мертвим (останній sync 2025-04-29 проти сьогоднішнього sync `postgresqldim9000`).
 7. ✅ **Закрито.** Рішення по `amlitude_EU`, `postgresql` і view `users_objects_complexes`: не мігрувати, не видаляти — лишаються в BigQuery як є, свідомо ігноруємо. Якщо десь у Looker щось досі на них посилається — не чіпати, поки не зʼявиться конкретна причина.
 
 ## 5. Реєстр метрик
 
-Файл `UrbanStack_metrics_registry.xlsx` (перенести в репозиторій, напр. `docs/metrics_registry.xlsx`, або конвертувати в git-friendly markdown/YAML — рекомендовано для diff-friendly роботи і подальшої генерації dbt `schema.yml`).
+✅ Конвертовано в git-friendly markdown: **`docs/metrics_registry.md`** (джерело правди). Оригінал `UrbanStack_metrics_registry.xlsx` збережено поруч як бекап.
 
-Поточний стан v0.1: 13 метрик Product, 7 Financial, 0 Operational (ще не аудували).
+Поточний стан **v0.2**: 13 Product, 7 Financial, 1 Operational-заглушка. Зміни v0.1→v0.2: FIN-005 виправлено (`mart_payment_rates`); PROD-008/009/010 (Стр.2/3/4) переведено з «Потребує аудиту» в «Витягнуто, потребує мапінгу» — джерело тепер указує на `looker_extracted/product/`.
 
 Колонки: `ID` · `Домен` · `Метрика` · `Визначення` · `Формула/логіка` · `Grain` · `Джерело (dataset.view)` · `Сторінка дашборду` · `dbt target (план)` · `Власник методології` · `Статус` · `Нотатки/відомі проблеми`.
 
@@ -58,26 +59,29 @@ Project: `analytics-454817`
 | `vw_dm_apartment_occupancy_monthly` | house × month | заселеність, не бачив на дашборді |
 | `vw_dm_objects_filter` | complex × object_type × month | розбивка по типу об'єкта — **містить баг #1** |
 | `dm_company_churn_monthly` | month (вся компанія) | churn, не бачив на дашборді |
-| Стр.2, 3, 4, 5 | ? | **невідомо — Looker custom SQL, дивись Фазу 1** |
+| Стр.2, 3, 4, 5 | — | ✅ **витягнуто** — `looker_extracted/product/` (report `c2180c98`, 23 custom SQL). Точна прив'язка sql↔сторінка потребує підтвердження Артема. |
+
+**report_id дашбордів у Looker Studio** (для майбутніх вилучень з job history): продуктовий = `c2180c98-0cf4-49af-a1d0-0ad3364cb599`, фінансовий = `ca96cfac-6fac-475f-b467-42ea4c4eaf6f`, операційний = `1a8ae601-9542-4198-be93-8ed41ca39d4f`.
 
 ## 7. Roadmap
 
 | Фаза | Що | Статус |
 |---|---|---|
 | 0 | Аудит схеми, lineage, знайдені баги, реєстр v0.1 | ✅ закрито |
-| 1 | Витягнути Looker custom SQL (Стр.2-5), аудит операційного дашборду, реєстр → v1.0 | 🔲 **зараз тут** |
+| 1 | Витягнути Looker custom SQL (Стр.2-5), аудит операційного дашборду, реєстр → v1.0 | 🔶 **зараз тут** — Looker SQL витягнуто ✅, схема EU сдамплена ✅, реєстр→v0.2 ✅; лишилось: мапінг sql↔метрика з Артемом, аудит опердашборду, → v1.0 |
 | 2 | dbt на поточних даних: seeds → staging → intermediate → marts | 🔲 |
 | 3 | Новий продуктовий дашборд: Bklit UI + shadcn/ui поверх чистих marts | 🔲 |
 | 4 | Перенос уроків у мультитенантний дизайн для UrbanStack SaaS | 🔲 |
 
 ## 8. Наступні кроки (Фаза 1)
 
-- [ ] Витягнути custom SQL для Стр.2/3/4/5 з Looker Studio: `Resource → Manage added data sources → [джерело] → Edit Connection`
-- [ ] Створити `ref_deactivated_houses` view (canonical список, 11 записів — звір повноту перед створенням) і переключити всі 5 view на нього замість дубльованого UNNEST
-- [ ] Такий самий `INFORMATION_SCHEMA` дамп (TABLES/COLUMNS/VIEWS) для джерел операційного дашборду
-- [ ] Аудит `dim9000_fast` (алертна система) і `dim9000_analytics` (masterbuh-дашборд) — schema/lineage поки невідомі
-- [ ] Виправити джерело FIN-005 у реєстрі метрик: `mart_payment_rates` (не legacy `mart_payments_rate`)
-- [ ] Дозаповнити реєстр метрик до v1.0 (Product повністю + Operational)
+- [x] ✅ Витягнути custom SQL Стр.2-5 — зроблено інакше, ніж планувалось: не з Looker UI, а з BigQuery job history (мітка `requestor=looker_studio`). Результат у `looker_extracted/`.
+- [x] ✅ Дамп `INFORMATION_SCHEMA` (EU marts + US `bigquery`) → `schema/`.
+- [x] ✅ Виправлено FIN-005 у реєстрі (`mart_payment_rates`), реєстр → markdown v0.2.
+- [x] ✅ `dim9000_fast` / `dim9000_analytics` — рішення: окремі внутрішні продукти, не джерела дашбордів, аудит не потрібен (план: перенести в EU).
+- [ ] **Наступне:** з Артемом підтвердити прив'язку конкретний `datasource_id` (файл у `looker_extracted/product/`) ↔ метрика/сторінка Стр.2-5; заповнити реєстр до v1.0.
+- [ ] Аудит операційного дашборду — вхід готовий: `looker_extracted/operational/` (report `1a8ae601`, 13 custom SQL на orders/order_tasks).
+- [ ] Створити `ref_deactivated_houses` view (canonical список, 11 записів — звір повноту) і переключити всі 5 view на нього. Дані під рукою: `schema/eu_views.csv`.
 
 ## 9. Вже прийняті рішення
 
@@ -128,3 +132,22 @@ UNION ALL
 SELECT 'dataset_b', MAX(_sdc_received_at)
 FROM `analytics-454817.dataset_b.table`;
 ```
+
+```sql
+-- Регенерувати Looker custom SQL з історії завдань (як у Фазі 1).
+-- Кожен джерело даних Looker = looker_studio_datasource_id. Looker обгортає
+-- custom SQL у SELECT ... FROM (<custom>) — розгортання робить looker_extracted/_raw/extract_looker.py
+SELECT
+  (SELECT value FROM UNNEST(labels) WHERE key='looker_studio_report_id')     AS report_id,
+  (SELECT value FROM UNNEST(labels) WHERE key='looker_studio_datasource_id') AS datasource_id,
+  COUNT(*) AS runs,
+  ANY_VALUE(query HAVING MAX LENGTH(query)) AS longest_query,
+  ANY_VALUE(ARRAY(SELECT CONCAT(rt.dataset_id,'.',rt.table_id) FROM UNNEST(referenced_tables) rt)) AS refs
+FROM `region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+  AND job_type='QUERY' AND statement_type='SELECT' AND state='DONE' AND error_result IS NULL
+  AND EXISTS (SELECT 1 FROM UNNEST(labels) WHERE key='requestor' AND value='looker_studio')
+GROUP BY report_id, datasource_id;
+```
+
+**Сервісні аккаунти в job history** (щоб не плутати): `id-000-analytics-service-accou@analytics-454817.iam.gserviceaccount.com` — це **Stitch** (реплікація, тільки метадані-опити EVENTS_407641/primary keys), НЕ Looker. Запити дашбордів Looker ідуть під OAuth-аккаунтом власника (`nikitabulatnikov07@gmail.com`) і мітяться `requestor=looker_studio`. Ретенція JOBS_BY_PROJECT ~180 днів.
