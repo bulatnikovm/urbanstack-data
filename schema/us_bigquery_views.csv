@@ -1,0 +1,325 @@
+dataset,table_name,view_definition
+bigquery,Event Return Rate,"WITH first_usage AS (
+  -- Визначаємо перший раз, коли кожен користувач використав певний функціонал (event_type)
+  SELECT 
+    amplitude_id AS user_identifier,
+    event_type,
+    MIN(DATE(client_upload_time)) AS first_usage_date
+  FROM `analytics-454817.bigquery.EVENTS_407641`
+  GROUP BY user_identifier, event_type
+),
+subsequent_usage AS (
+  -- Для кожного користувача та функціоналу знаходимо дату наступного використання після першого
+  SELECT 
+    e.amplitude_id AS user_identifier,
+    e.event_type,
+    MIN(DATE(client_upload_time)) AS second_usage_date
+  FROM `analytics-454817.bigquery.EVENTS_407641` e
+  JOIN first_usage f 
+    ON e.amplitude_id = f.user_identifier 
+   AND e.event_type = f.event_type
+  WHERE DATE(client_upload_time) > f.first_usage_date
+  GROUP BY e.amplitude_id, e.event_type
+)
+SELECT 
+  f.event_type,
+  COUNT(DISTINCT f.user_identifier) AS first_users,
+  COUNT(DISTINCT s.user_identifier) AS returning_users,
+  AVG(DATE_DIFF(s.second_usage_date, f.first_usage_date, DAY)) AS avg_return_offset_days
+FROM first_usage f
+LEFT JOIN subsequent_usage s 
+  ON f.user_identifier = s.user_identifier 
+ AND f.event_type = s.event_type
+GROUP BY f.event_type
+ORDER BY returning_users DESC;"
+bigquery,Events_Phones,"-- 1) Всі події, де є phone_number
+WITH phone_events AS (
+  SELECT
+    amplitude_id,
+    JSON_EXTRACT_SCALAR(user_properties, '$.phone_number') AS phone,
+    client_upload_time
+  FROM `analytics-454817.bigquery.EVENTS_407641`
+  WHERE
+    JSON_EXTRACT_SCALAR(user_properties, '$.phone_number') IS NOT NULL
+    AND JSON_EXTRACT_SCALAR(user_properties, '$.phone_number') != ''
+),
+
+-- 2) Для кожного amplitude_id отримуємо тільки останню телефонну подію
+latest_phone_per_user AS (
+  SELECT
+    amplitude_id,
+    phone
+  FROM (
+    SELECT
+      amplitude_id,
+      phone,
+      ROW_NUMBER() OVER(
+        PARTITION BY amplitude_id
+        ORDER BY client_upload_time DESC
+      ) AS rn
+    FROM phone_events
+  )
+  WHERE rn = 1
+),
+
+-- 3) Для кожного phone знаходимо канонічний amplitude_id
+canonical_map AS (
+  SELECT
+    phone,
+    MIN(amplitude_id) AS canonical_amplitude_id
+  FROM latest_phone_per_user
+  GROUP BY phone
+),
+
+-- 4) Мапа: кожному amplitude_id зі списку latest_phone_per_user даємо unified_amplitude_id
+mapped_users AS (
+  SELECT
+    lpu.amplitude_id,
+    cm.canonical_amplitude_id,
+    lpu.phone
+  FROM latest_phone_per_user AS lpu
+  JOIN canonical_map AS cm
+    ON lpu.phone = cm.phone
+)
+
+-- 5) Фінальний вибір: додаємо два стовпці до оригінальних подій
+SELECT
+  -- якщо для амплітюди є mapped — підставляємо canonical, інакше залишаємо оригінал
+  IFNULL(mu.canonical_amplitude_id, e.amplitude_id) AS unified_amplitude_id,
+  mu.phone                                                  AS phone,
+  e.*  -- всі інші поля з таблиці подій
+FROM `analytics-454817.bigquery.EVENTS_407641` AS e
+LEFT JOIN mapped_users AS mu
+  ON e.amplitude_id = mu.amplitude_id;"
+bigquery,Most Used Events,"SELECT 
+  event_type,
+  COUNT(*) AS event_count,
+  COUNT(DISTINCT amplitude_id) AS unique_users
+FROM `analytics-454817.bigquery.EVENTS_407641`
+GROUP BY event_type
+ORDER BY event_count DESC;"
+bigquery,New Users Daily,"WITH user_events AS (
+  SELECT 
+    amplitude_id AS user_identifier,
+    DATE(client_upload_time) AS event_date
+  FROM `analytics-454817.bigquery.EVENTS_407641`
+),
+cohorts AS (
+  SELECT 
+    user_identifier,
+    MIN(event_date) AS cohort_date
+  FROM user_events
+  GROUP BY user_identifier
+)
+SELECT 
+  cohort_date AS event_date,
+  COUNT(*) AS new_users
+FROM cohorts
+GROUP BY cohort_date
+ORDER BY cohort_date DESC"
+bigquery,Phone Authorisation Count,"WITH events AS (
+  SELECT
+    JSON_EXTRACT_SCALAR(user_properties, '$.phone_number') AS phone,
+    event_type,
+    version_name,
+    client_event_time
+  FROM `analytics-454817.bigquery.EVENTS_407641`
+  WHERE JSON_EXTRACT_SCALAR(user_properties, '$.phone_number') IS NOT NULL
+),
+
+sequence_events AS (
+  SELECT
+    phone,
+    event_type,
+    LAG(event_type) OVER (
+      PARTITION BY phone
+      ORDER BY client_event_time
+    ) AS prev_event
+  FROM events
+),
+
+sequence_counts AS (
+  SELECT
+    phone,
+    COUNT(*) AS sequence_count
+  FROM sequence_events
+  WHERE prev_event = 'auth_pin_create_scrn_repeat_view'
+    AND event_type = 'news_scrn__view'
+  GROUP BY phone
+),
+
+last_versions AS (
+  SELECT
+    phone,
+    version_name AS last_version
+  FROM (
+    SELECT
+      phone,
+      version_name,
+      ROW_NUMBER() OVER (
+        PARTITION BY phone
+        ORDER BY client_event_time DESC
+      ) AS rn
+    FROM events
+  )
+  WHERE rn = 1
+)
+
+SELECT
+  sc.phone,
+  sc.sequence_count,
+  lv.last_version
+FROM sequence_counts AS sc
+LEFT JOIN last_versions AS lv
+  ON sc.phone = lv.phone
+ORDER BY sc.sequence_count DESC;"
+bigquery,Retention Day 14,"WITH user_events AS (
+  SELECT 
+    amplitude_id AS user_identifier,
+    DATE(client_upload_time) AS event_date
+  FROM `analytics-454817.bigquery.EVENTS_407641`
+),
+cohorts AS (
+  SELECT 
+    user_identifier,
+    MIN(event_date) AS cohort_date
+  FROM user_events
+  GROUP BY user_identifier
+),
+activity AS (
+  SELECT 
+    u.user_identifier,
+    u.event_date,
+    DATE_DIFF(u.event_date, c.cohort_date, DAY) AS day_offset,
+    c.cohort_date
+  FROM user_events u
+  JOIN cohorts c ON u.user_identifier = c.user_identifier
+)
+SELECT
+  cohort_date,
+  COUNT(DISTINCT CASE WHEN day_offset = 0 THEN user_identifier END) AS D0,
+  COUNT(DISTINCT CASE WHEN day_offset = 1 THEN user_identifier END) AS D1,
+  COUNT(DISTINCT CASE WHEN day_offset = 2 THEN user_identifier END) AS D2,
+  COUNT(DISTINCT CASE WHEN day_offset = 3 THEN user_identifier END) AS D3,
+  COUNT(DISTINCT CASE WHEN day_offset = 4 THEN user_identifier END) AS D4,
+  COUNT(DISTINCT CASE WHEN day_offset = 5 THEN user_identifier END) AS D5,
+  COUNT(DISTINCT CASE WHEN day_offset = 6 THEN user_identifier END) AS D6,
+  COUNT(DISTINCT CASE WHEN day_offset = 7 THEN user_identifier END) AS D7,
+  COUNT(DISTINCT CASE WHEN day_offset = 8 THEN user_identifier END) AS D8,
+  COUNT(DISTINCT CASE WHEN day_offset = 9 THEN user_identifier END) AS D9,
+  COUNT(DISTINCT CASE WHEN day_offset = 10 THEN user_identifier END) AS D10,
+  COUNT(DISTINCT CASE WHEN day_offset = 11 THEN user_identifier END) AS D11,
+  COUNT(DISTINCT CASE WHEN day_offset = 12 THEN user_identifier END) AS D12,
+  COUNT(DISTINCT CASE WHEN day_offset = 13 THEN user_identifier END) AS D13
+FROM activity
+WHERE day_offset BETWEEN 0 AND 13
+GROUP BY cohort_date
+ORDER BY cohort_date DESC;"
+bigquery,Retention Day 28,"WITH user_events AS (
+  SELECT 
+    amplitude_id AS user_identifier,
+    DATE(client_upload_time) AS event_date
+  FROM `analytics-454817.bigquery.EVENTS_407641`
+),
+cohorts AS (
+  SELECT 
+    user_identifier,
+    MIN(event_date) AS cohort_date
+  FROM user_events
+  GROUP BY user_identifier
+),
+activity AS (
+  SELECT 
+    u.user_identifier,
+    u.event_date,
+    DATE_DIFF(u.event_date, c.cohort_date, DAY) AS day_offset,
+    c.cohort_date
+  FROM user_events u
+  JOIN cohorts c ON u.user_identifier = c.user_identifier
+)
+SELECT
+  cohort_date,
+  COUNT(DISTINCT CASE WHEN day_offset = 0 THEN user_identifier END) AS D0,
+  COUNT(DISTINCT CASE WHEN day_offset = 1 THEN user_identifier END) AS D1,
+  COUNT(DISTINCT CASE WHEN day_offset = 2 THEN user_identifier END) AS D2,
+  COUNT(DISTINCT CASE WHEN day_offset = 3 THEN user_identifier END) AS D3,
+  COUNT(DISTINCT CASE WHEN day_offset = 4 THEN user_identifier END) AS D4,
+  COUNT(DISTINCT CASE WHEN day_offset = 5 THEN user_identifier END) AS D5,
+  COUNT(DISTINCT CASE WHEN day_offset = 6 THEN user_identifier END) AS D6,
+  COUNT(DISTINCT CASE WHEN day_offset = 7 THEN user_identifier END) AS D7,
+  COUNT(DISTINCT CASE WHEN day_offset = 8 THEN user_identifier END) AS D8,
+  COUNT(DISTINCT CASE WHEN day_offset = 9 THEN user_identifier END) AS D9,
+  COUNT(DISTINCT CASE WHEN day_offset = 10 THEN user_identifier END) AS D10,
+  COUNT(DISTINCT CASE WHEN day_offset = 11 THEN user_identifier END) AS D11,
+  COUNT(DISTINCT CASE WHEN day_offset = 12 THEN user_identifier END) AS D12,
+  COUNT(DISTINCT CASE WHEN day_offset = 13 THEN user_identifier END) AS D13,
+  COUNT(DISTINCT CASE WHEN day_offset = 14 THEN user_identifier END) AS D14,
+  COUNT(DISTINCT CASE WHEN day_offset = 15 THEN user_identifier END) AS D15,
+  COUNT(DISTINCT CASE WHEN day_offset = 16 THEN user_identifier END) AS D16,
+  COUNT(DISTINCT CASE WHEN day_offset = 17 THEN user_identifier END) AS D17,
+  COUNT(DISTINCT CASE WHEN day_offset = 18 THEN user_identifier END) AS D18,
+  COUNT(DISTINCT CASE WHEN day_offset = 19 THEN user_identifier END) AS D19,
+  COUNT(DISTINCT CASE WHEN day_offset = 20 THEN user_identifier END) AS D20,
+  COUNT(DISTINCT CASE WHEN day_offset = 21 THEN user_identifier END) AS D21,
+  COUNT(DISTINCT CASE WHEN day_offset = 22 THEN user_identifier END) AS D22,
+  COUNT(DISTINCT CASE WHEN day_offset = 23 THEN user_identifier END) AS D23,
+  COUNT(DISTINCT CASE WHEN day_offset = 24 THEN user_identifier END) AS D24,
+  COUNT(DISTINCT CASE WHEN day_offset = 25 THEN user_identifier END) AS D25,
+  COUNT(DISTINCT CASE WHEN day_offset = 26 THEN user_identifier END) AS D26,
+  COUNT(DISTINCT CASE WHEN day_offset = 27 THEN user_identifier END) AS D27
+FROM activity
+WHERE day_offset BETWEEN 0 AND 27
+GROUP BY cohort_date
+ORDER BY cohort_date DESC;"
+bigquery,Retention Day 7,"WITH user_events AS (
+    SELECT 
+      amplitude_id AS user_identifier,
+      DATE(client_upload_time) AS event_date
+    FROM `analytics-454817.bigquery.EVENTS_407641`
+  ),
+  cohorts AS (
+    SELECT 
+      user_identifier,
+      MIN(event_date) AS cohort_date
+    FROM user_events
+    GROUP BY user_identifier
+  ),
+  activity AS (
+    SELECT 
+      u.user_identifier,
+      u.event_date,
+      DATE_DIFF(u.event_date, c.cohort_date, DAY) AS day_offset,
+      c.cohort_date
+    FROM user_events u
+    JOIN cohorts c ON u.user_identifier = c.user_identifier
+  )
+  SELECT
+    cohort_date,
+    COUNT(DISTINCT CASE WHEN day_offset = 0 THEN user_identifier END) AS D0,
+    COUNT(DISTINCT CASE WHEN day_offset = 1 THEN user_identifier END) AS D1,
+    COUNT(DISTINCT CASE WHEN day_offset = 2 THEN user_identifier END) AS D2,
+    COUNT(DISTINCT CASE WHEN day_offset = 3 THEN user_identifier END) AS D3,
+    COUNT(DISTINCT CASE WHEN day_offset = 4 THEN user_identifier END) AS D4,
+    COUNT(DISTINCT CASE WHEN day_offset = 5 THEN user_identifier END) AS D5,
+    COUNT(DISTINCT CASE WHEN day_offset = 6 THEN user_identifier END) AS D6
+  FROM activity
+  WHERE day_offset BETWEEN 0 AND 6
+  GROUP BY cohort_date
+  ORDER BY cohort_date DESC
+"
+bigquery,Users with Phone Numbers,"WITH users_with_phone AS (
+  SELECT DISTINCT 
+    amplitude_id,
+    JSON_EXTRACT_SCALAR(user_properties, '$.phone_number') AS phone_number
+  FROM `analytics-454817.bigquery.EVENTS_407641`
+  WHERE 
+    JSON_EXTRACT_SCALAR(user_properties, '$.phone_number') IS NOT NULL
+    AND JSON_EXTRACT_SCALAR(user_properties, '$.phone_number') != ''
+)
+
+SELECT 
+  e.*, 
+  u.phone_number
+FROM `analytics-454817.bigquery.EVENTS_407641` e
+JOIN users_with_phone u
+ON e.amplitude_id = u.amplitude_id"

@@ -1,0 +1,139 @@
+project,dataset,table_name,table_type
+analytics-454817,amlitude_EU,EVENTS_407641,BASE TABLE
+analytics-454817,amlitude_EU,users_objects_complexes,VIEW
+analytics-454817,finance_dash,dim_building,VIEW
+analytics-454817,finance_dash,dim_customer,VIEW
+analytics-454817,finance_dash,dim_llc,VIEW
+analytics-454817,finance_dash,dim_residential_complex,VIEW
+analytics-454817,finance_dash,dim_service,VIEW
+analytics-454817,finance_dash,dim_space,VIEW
+analytics-454817,finance_dash,fact_billing,VIEW
+analytics-454817,finance_dash,fact_debt,VIEW
+analytics-454817,finance_dash,fact_payments,VIEW
+analytics-454817,finance_dash,mart_billing_flat,VIEW
+analytics-454817,finance_dash,mart_debt_aging,VIEW
+analytics-454817,finance_dash,mart_debt_alena,VIEW
+analytics-454817,finance_dash,mart_debt_flat,VIEW
+analytics-454817,finance_dash,mart_debt_years,VIEW
+analytics-454817,finance_dash,mart_payment_rates,VIEW
+analytics-454817,finance_dash,mart_payment_rates_cohort,VIEW
+analytics-454817,finance_dash,mart_payments_flat,VIEW
+analytics-454817,finance_dash,mart_payments_rate,VIEW
+analytics-454817,postgresql,_sdc_primary_keys,BASE TABLE
+analytics-454817,postgresql,_sdc_rejected,BASE TABLE
+analytics-454817,postgresql,citizen_join_requests,BASE TABLE
+analytics-454817,postgresql,complexes,BASE TABLE
+analytics-454817,postgresql,contact_concierges,BASE TABLE
+analytics-454817,postgresql,contact_suppliers,BASE TABLE
+analytics-454817,postgresql,contacts,BASE TABLE
+analytics-454817,postgresql,doctrine_migration_versions,BASE TABLE
+analytics-454817,postgresql,employee_complex,BASE TABLE
+analytics-454817,postgresql,gadget_tokens,BASE TABLE
+analytics-454817,postgresql,gadgets,BASE TABLE
+analytics-454817,postgresql,history_order_updates,BASE TABLE
+analytics-454817,postgresql,history_paid_order_updates,BASE TABLE
+analytics-454817,postgresql,history_paid_task_updates,BASE TABLE
+analytics-454817,postgresql,history_task_updates,BASE TABLE
+analytics-454817,postgresql,history_user_updates,BASE TABLE
+analytics-454817,postgresql,houses,BASE TABLE
+analytics-454817,postgresql,locations,BASE TABLE
+analytics-454817,postgresql,master_buh_information,BASE TABLE
+analytics-454817,postgresql,master_buh_service,BASE TABLE
+analytics-454817,postgresql,master_buh_service_payment,BASE TABLE
+analytics-454817,postgresql,master_buh_synchronization_event,BASE TABLE
+analytics-454817,postgresql,news_announce,BASE TABLE
+analytics-454817,postgresql,news_area,BASE TABLE
+analytics-454817,postgresql,notification_user,BASE TABLE
+analytics-454817,postgresql,notifications,BASE TABLE
+analytics-454817,postgresql,oauth2_access_token,BASE TABLE
+analytics-454817,postgresql,oauth2_refresh_token,BASE TABLE
+analytics-454817,postgresql,operations,BASE TABLE
+analytics-454817,postgresql,order_prices,BASE TABLE
+analytics-454817,postgresql,order_reviews,BASE TABLE
+analytics-454817,postgresql,order_tasks,BASE TABLE
+analytics-454817,postgresql,orders,BASE TABLE
+analytics-454817,postgresql,paid_order_name_complex,BASE TABLE
+analytics-454817,postgresql,paid_order_names,BASE TABLE
+analytics-454817,postgresql,paid_order_reviews,BASE TABLE
+analytics-454817,postgresql,paid_order_tasks,BASE TABLE
+analytics-454817,postgresql,paid_orders,BASE TABLE
+analytics-454817,postgresql,paid_task_comments,BASE TABLE
+analytics-454817,postgresql,paid_tasks_locations,BASE TABLE
+analytics-454817,postgresql,sections,BASE TABLE
+analytics-454817,postgresql,space_apartments,BASE TABLE
+analytics-454817,postgresql,space_commercials,BASE TABLE
+analytics-454817,postgresql,space_user,BASE TABLE
+analytics-454817,postgresql,spaces,BASE TABLE
+analytics-454817,postgresql,statistic_citizen,BASE TABLE
+analytics-454817,postgresql,statistic_employee,BASE TABLE
+analytics-454817,postgresql,statistic_house,BASE TABLE
+analytics-454817,postgresql,statistic_order,BASE TABLE
+analytics-454817,postgresql,survey_answers,BASE TABLE
+analytics-454817,postgresql,survey_options,BASE TABLE
+analytics-454817,postgresql,surveys,BASE TABLE
+analytics-454817,postgresql,task_comments,BASE TABLE
+analytics-454817,postgresql,tasks_locations,BASE TABLE
+analytics-454817,postgresql,transactions,BASE TABLE
+analytics-454817,postgresql,user_employees,BASE TABLE
+analytics-454817,postgresql,users,BASE TABLE
+analytics-454817,postgresqldim9000,EVENTS_407641,BASE TABLE
+analytics-454817,postgresqldim9000,Phone_Complex,VIEW
+analytics-454817,postgresqldim9000,_sdc_primary_keys,BASE TABLE
+analytics-454817,postgresqldim9000,_sdc_rejected,BASE TABLE
+analytics-454817,postgresqldim9000,complexes,BASE TABLE
+analytics-454817,postgresqldim9000,contacts,BASE TABLE
+analytics-454817,postgresqldim9000,dm_company_churn_monthly,BASE TABLE
+analytics-454817,postgresqldim9000,employee_complex,BASE TABLE
+analytics-454817,postgresqldim9000,gadgets,BASE TABLE
+analytics-454817,postgresqldim9000,history_order_updates,BASE TABLE
+analytics-454817,postgresqldim9000,history_paid_order_updates,BASE TABLE
+analytics-454817,postgresqldim9000,history_paid_task_updates,BASE TABLE
+analytics-454817,postgresqldim9000,history_task_updates,BASE TABLE
+analytics-454817,postgresqldim9000,history_user_updates,BASE TABLE
+analytics-454817,postgresqldim9000,houses,BASE TABLE
+analytics-454817,postgresqldim9000,locations,BASE TABLE
+analytics-454817,postgresqldim9000,master_buh_information,BASE TABLE
+analytics-454817,postgresqldim9000,master_buh_service,BASE TABLE
+analytics-454817,postgresqldim9000,master_buh_service_payment,BASE TABLE
+analytics-454817,postgresqldim9000,messenger_messages,BASE TABLE
+analytics-454817,postgresqldim9000,news_announce,BASE TABLE
+analytics-454817,postgresqldim9000,news_area,BASE TABLE
+analytics-454817,postgresqldim9000,notification_space_blacklist,BASE TABLE
+analytics-454817,postgresqldim9000,notifications,BASE TABLE
+analytics-454817,postgresqldim9000,operations,BASE TABLE
+analytics-454817,postgresqldim9000,order_prices,BASE TABLE
+analytics-454817,postgresqldim9000,order_reviews,BASE TABLE
+analytics-454817,postgresqldim9000,order_tasks,BASE TABLE
+analytics-454817,postgresqldim9000,orders,BASE TABLE
+analytics-454817,postgresqldim9000,paid_order_name_complex,BASE TABLE
+analytics-454817,postgresqldim9000,paid_order_names,BASE TABLE
+analytics-454817,postgresqldim9000,paid_order_reviews,BASE TABLE
+analytics-454817,postgresqldim9000,paid_order_tasks,BASE TABLE
+analytics-454817,postgresqldim9000,paid_orders,BASE TABLE
+analytics-454817,postgresqldim9000,paid_task_comments,BASE TABLE
+analytics-454817,postgresqldim9000,paid_tasks_locations,BASE TABLE
+analytics-454817,postgresqldim9000,sections,BASE TABLE
+analytics-454817,postgresqldim9000,space_apartments,BASE TABLE
+analytics-454817,postgresqldim9000,space_commercials,BASE TABLE
+analytics-454817,postgresqldim9000,space_user,BASE TABLE
+analytics-454817,postgresqldim9000,spaces,BASE TABLE
+analytics-454817,postgresqldim9000,statistic_citizen,BASE TABLE
+analytics-454817,postgresqldim9000,statistic_employee,BASE TABLE
+analytics-454817,postgresqldim9000,statistic_house,BASE TABLE
+analytics-454817,postgresqldim9000,statistic_order,BASE TABLE
+analytics-454817,postgresqldim9000,survey_answers,BASE TABLE
+analytics-454817,postgresqldim9000,survey_areas,BASE TABLE
+analytics-454817,postgresqldim9000,survey_options,BASE TABLE
+analytics-454817,postgresqldim9000,surveys,BASE TABLE
+analytics-454817,postgresqldim9000,tascombank_merchants,BASE TABLE
+analytics-454817,postgresqldim9000,task_comments,BASE TABLE
+analytics-454817,postgresqldim9000,tasks_locations,BASE TABLE
+analytics-454817,postgresqldim9000,transactions,BASE TABLE
+analytics-454817,postgresqldim9000,user_employees,BASE TABLE
+analytics-454817,postgresqldim9000,users,BASE TABLE
+analytics-454817,postgresqldim9000,view_monthly_active_residents,VIEW
+analytics-454817,postgresqldim9000,vw_dm_apartment_occupancy_monthly,VIEW
+analytics-454817,postgresqldim9000,vw_dm_complex_user_segments_monthly,VIEW
+analytics-454817,postgresqldim9000,vw_dm_nsm_categories_monthly,VIEW
+analytics-454817,postgresqldim9000,vw_dm_objects_filter,VIEW
+analytics-454817,postgresqldim9000,vw_dm_operations_monthly,VIEW

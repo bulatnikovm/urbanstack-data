@@ -1,0 +1,11 @@
+dataset,table_name,table_type
+bigquery,EVENTS_407641,BASE TABLE
+bigquery,Event Return Rate,VIEW
+bigquery,Events_Phones,VIEW
+bigquery,Most Used Events,VIEW
+bigquery,New Users Daily,VIEW
+bigquery,Phone Authorisation Count,VIEW
+bigquery,Retention Day 14,VIEW
+bigquery,Retention Day 28,VIEW
+bigquery,Retention Day 7,VIEW
+bigquery,Users with Phone Numbers,VIEW

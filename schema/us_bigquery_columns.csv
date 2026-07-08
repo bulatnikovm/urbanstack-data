@@ -1,0 +1,212 @@
+dataset,table_name,column_name,data_type,ordinal_position
+bigquery,EVENTS_407641,adid,STRING,1
+bigquery,EVENTS_407641,amplitude_attribution_ids,ARRAY<STRING>,2
+bigquery,EVENTS_407641,amplitude_event_type,STRING,3
+bigquery,EVENTS_407641,amplitude_id,BIGNUMERIC,4
+bigquery,EVENTS_407641,app,INT64,5
+bigquery,EVENTS_407641,city,STRING,6
+bigquery,EVENTS_407641,client_event_time,TIMESTAMP,7
+bigquery,EVENTS_407641,client_upload_time,TIMESTAMP,8
+bigquery,EVENTS_407641,country,STRING,9
+bigquery,EVENTS_407641,data,JSON,10
+bigquery,EVENTS_407641,device_brand,STRING,11
+bigquery,EVENTS_407641,device_carrier,STRING,12
+bigquery,EVENTS_407641,device_family,STRING,13
+bigquery,EVENTS_407641,device_id,STRING,14
+bigquery,EVENTS_407641,device_manufacturer,STRING,15
+bigquery,EVENTS_407641,device_model,STRING,16
+bigquery,EVENTS_407641,device_type,STRING,17
+bigquery,EVENTS_407641,dma,STRING,18
+bigquery,EVENTS_407641,event_id,INT64,19
+bigquery,EVENTS_407641,event_properties,JSON,20
+bigquery,EVENTS_407641,event_time,TIMESTAMP,21
+bigquery,EVENTS_407641,event_type,STRING,22
+bigquery,EVENTS_407641,followed_an_identify,BOOL,23
+bigquery,EVENTS_407641,group_properties,JSON,24
+bigquery,EVENTS_407641,groups,JSON,25
+bigquery,EVENTS_407641,idfa,STRING,26
+bigquery,EVENTS_407641,ip_address,STRING,27
+bigquery,EVENTS_407641,is_attribution_event,BOOL,28
+bigquery,EVENTS_407641,language,STRING,29
+bigquery,EVENTS_407641,library,STRING,30
+bigquery,EVENTS_407641,location_lat,FLOAT64,31
+bigquery,EVENTS_407641,location_lng,FLOAT64,32
+bigquery,EVENTS_407641,os_name,STRING,33
+bigquery,EVENTS_407641,os_version,STRING,34
+bigquery,EVENTS_407641,paying,STRING,35
+bigquery,EVENTS_407641,platform,STRING,36
+bigquery,EVENTS_407641,processed_time,TIMESTAMP,37
+bigquery,EVENTS_407641,region,STRING,38
+bigquery,EVENTS_407641,sample_rate,BIGNUMERIC,39
+bigquery,EVENTS_407641,server_received_time,TIMESTAMP,40
+bigquery,EVENTS_407641,server_upload_time,TIMESTAMP,41
+bigquery,EVENTS_407641,session_id,BIGNUMERIC,42
+bigquery,EVENTS_407641,start_version,STRING,43
+bigquery,EVENTS_407641,user_creation_time,TIMESTAMP,44
+bigquery,EVENTS_407641,user_id,STRING,45
+bigquery,EVENTS_407641,user_properties,JSON,46
+bigquery,EVENTS_407641,uuid,STRING,47
+bigquery,EVENTS_407641,version_name,STRING,48
+bigquery,Event Return Rate,event_type,STRING,1
+bigquery,Event Return Rate,first_users,INT64,2
+bigquery,Event Return Rate,returning_users,INT64,3
+bigquery,Event Return Rate,avg_return_offset_days,FLOAT64,4
+bigquery,Events_Phones,unified_amplitude_id,BIGNUMERIC,1
+bigquery,Events_Phones,phone,STRING,2
+bigquery,Events_Phones,adid,STRING,3
+bigquery,Events_Phones,amplitude_attribution_ids,ARRAY<STRING>,4
+bigquery,Events_Phones,amplitude_event_type,STRING,5
+bigquery,Events_Phones,amplitude_id,BIGNUMERIC,6
+bigquery,Events_Phones,app,INT64,7
+bigquery,Events_Phones,city,STRING,8
+bigquery,Events_Phones,client_event_time,TIMESTAMP,9
+bigquery,Events_Phones,client_upload_time,TIMESTAMP,10
+bigquery,Events_Phones,country,STRING,11
+bigquery,Events_Phones,data,JSON,12
+bigquery,Events_Phones,device_brand,STRING,13
+bigquery,Events_Phones,device_carrier,STRING,14
+bigquery,Events_Phones,device_family,STRING,15
+bigquery,Events_Phones,device_id,STRING,16
+bigquery,Events_Phones,device_manufacturer,STRING,17
+bigquery,Events_Phones,device_model,STRING,18
+bigquery,Events_Phones,device_type,STRING,19
+bigquery,Events_Phones,dma,STRING,20
+bigquery,Events_Phones,event_id,INT64,21
+bigquery,Events_Phones,event_properties,JSON,22
+bigquery,Events_Phones,event_time,TIMESTAMP,23
+bigquery,Events_Phones,event_type,STRING,24
+bigquery,Events_Phones,followed_an_identify,BOOL,25
+bigquery,Events_Phones,group_properties,JSON,26
+bigquery,Events_Phones,groups,JSON,27
+bigquery,Events_Phones,idfa,STRING,28
+bigquery,Events_Phones,ip_address,STRING,29
+bigquery,Events_Phones,is_attribution_event,BOOL,30
+bigquery,Events_Phones,language,STRING,31
+bigquery,Events_Phones,library,STRING,32
+bigquery,Events_Phones,location_lat,FLOAT64,33
+bigquery,Events_Phones,location_lng,FLOAT64,34
+bigquery,Events_Phones,os_name,STRING,35
+bigquery,Events_Phones,os_version,STRING,36
+bigquery,Events_Phones,paying,STRING,37
+bigquery,Events_Phones,platform,STRING,38
+bigquery,Events_Phones,processed_time,TIMESTAMP,39
+bigquery,Events_Phones,region,STRING,40
+bigquery,Events_Phones,sample_rate,BIGNUMERIC,41
+bigquery,Events_Phones,server_received_time,TIMESTAMP,42
+bigquery,Events_Phones,server_upload_time,TIMESTAMP,43
+bigquery,Events_Phones,session_id,BIGNUMERIC,44
+bigquery,Events_Phones,start_version,STRING,45
+bigquery,Events_Phones,user_creation_time,TIMESTAMP,46
+bigquery,Events_Phones,user_id,STRING,47
+bigquery,Events_Phones,user_properties,JSON,48
+bigquery,Events_Phones,uuid,STRING,49
+bigquery,Events_Phones,version_name,STRING,50
+bigquery,Most Used Events,event_type,STRING,1
+bigquery,Most Used Events,event_count,INT64,2
+bigquery,Most Used Events,unique_users,INT64,3
+bigquery,New Users Daily,event_date,DATE,1
+bigquery,New Users Daily,new_users,INT64,2
+bigquery,Phone Authorisation Count,phone,STRING,1
+bigquery,Phone Authorisation Count,sequence_count,INT64,2
+bigquery,Phone Authorisation Count,last_version,STRING,3
+bigquery,Retention Day 14,cohort_date,DATE,1
+bigquery,Retention Day 14,D0,INT64,2
+bigquery,Retention Day 14,D1,INT64,3
+bigquery,Retention Day 14,D2,INT64,4
+bigquery,Retention Day 14,D3,INT64,5
+bigquery,Retention Day 14,D4,INT64,6
+bigquery,Retention Day 14,D5,INT64,7
+bigquery,Retention Day 14,D6,INT64,8
+bigquery,Retention Day 14,D7,INT64,9
+bigquery,Retention Day 14,D8,INT64,10
+bigquery,Retention Day 14,D9,INT64,11
+bigquery,Retention Day 14,D10,INT64,12
+bigquery,Retention Day 14,D11,INT64,13
+bigquery,Retention Day 14,D12,INT64,14
+bigquery,Retention Day 14,D13,INT64,15
+bigquery,Retention Day 28,cohort_date,DATE,1
+bigquery,Retention Day 28,D0,INT64,2
+bigquery,Retention Day 28,D1,INT64,3
+bigquery,Retention Day 28,D2,INT64,4
+bigquery,Retention Day 28,D3,INT64,5
+bigquery,Retention Day 28,D4,INT64,6
+bigquery,Retention Day 28,D5,INT64,7
+bigquery,Retention Day 28,D6,INT64,8
+bigquery,Retention Day 28,D7,INT64,9
+bigquery,Retention Day 28,D8,INT64,10
+bigquery,Retention Day 28,D9,INT64,11
+bigquery,Retention Day 28,D10,INT64,12
+bigquery,Retention Day 28,D11,INT64,13
+bigquery,Retention Day 28,D12,INT64,14
+bigquery,Retention Day 28,D13,INT64,15
+bigquery,Retention Day 28,D14,INT64,16
+bigquery,Retention Day 28,D15,INT64,17
+bigquery,Retention Day 28,D16,INT64,18
+bigquery,Retention Day 28,D17,INT64,19
+bigquery,Retention Day 28,D18,INT64,20
+bigquery,Retention Day 28,D19,INT64,21
+bigquery,Retention Day 28,D20,INT64,22
+bigquery,Retention Day 28,D21,INT64,23
+bigquery,Retention Day 28,D22,INT64,24
+bigquery,Retention Day 28,D23,INT64,25
+bigquery,Retention Day 28,D24,INT64,26
+bigquery,Retention Day 28,D25,INT64,27
+bigquery,Retention Day 28,D26,INT64,28
+bigquery,Retention Day 28,D27,INT64,29
+bigquery,Retention Day 7,cohort_date,DATE,1
+bigquery,Retention Day 7,D0,INT64,2
+bigquery,Retention Day 7,D1,INT64,3
+bigquery,Retention Day 7,D2,INT64,4
+bigquery,Retention Day 7,D3,INT64,5
+bigquery,Retention Day 7,D4,INT64,6
+bigquery,Retention Day 7,D5,INT64,7
+bigquery,Retention Day 7,D6,INT64,8
+bigquery,Users with Phone Numbers,adid,STRING,1
+bigquery,Users with Phone Numbers,amplitude_attribution_ids,ARRAY<STRING>,2
+bigquery,Users with Phone Numbers,amplitude_event_type,STRING,3
+bigquery,Users with Phone Numbers,amplitude_id,BIGNUMERIC,4
+bigquery,Users with Phone Numbers,app,INT64,5
+bigquery,Users with Phone Numbers,city,STRING,6
+bigquery,Users with Phone Numbers,client_event_time,TIMESTAMP,7
+bigquery,Users with Phone Numbers,client_upload_time,TIMESTAMP,8
+bigquery,Users with Phone Numbers,country,STRING,9
+bigquery,Users with Phone Numbers,data,JSON,10
+bigquery,Users with Phone Numbers,device_brand,STRING,11
+bigquery,Users with Phone Numbers,device_carrier,STRING,12
+bigquery,Users with Phone Numbers,device_family,STRING,13
+bigquery,Users with Phone Numbers,device_id,STRING,14
+bigquery,Users with Phone Numbers,device_manufacturer,STRING,15
+bigquery,Users with Phone Numbers,device_model,STRING,16
+bigquery,Users with Phone Numbers,device_type,STRING,17
+bigquery,Users with Phone Numbers,dma,STRING,18
+bigquery,Users with Phone Numbers,event_id,INT64,19
+bigquery,Users with Phone Numbers,event_properties,JSON,20
+bigquery,Users with Phone Numbers,event_time,TIMESTAMP,21
+bigquery,Users with Phone Numbers,event_type,STRING,22
+bigquery,Users with Phone Numbers,followed_an_identify,BOOL,23
+bigquery,Users with Phone Numbers,group_properties,JSON,24
+bigquery,Users with Phone Numbers,groups,JSON,25
+bigquery,Users with Phone Numbers,idfa,STRING,26
+bigquery,Users with Phone Numbers,ip_address,STRING,27
+bigquery,Users with Phone Numbers,is_attribution_event,BOOL,28
+bigquery,Users with Phone Numbers,language,STRING,29
+bigquery,Users with Phone Numbers,library,STRING,30
+bigquery,Users with Phone Numbers,location_lat,FLOAT64,31
+bigquery,Users with Phone Numbers,location_lng,FLOAT64,32
+bigquery,Users with Phone Numbers,os_name,STRING,33
+bigquery,Users with Phone Numbers,os_version,STRING,34
+bigquery,Users with Phone Numbers,paying,STRING,35
+bigquery,Users with Phone Numbers,platform,STRING,36
+bigquery,Users with Phone Numbers,processed_time,TIMESTAMP,37
+bigquery,Users with Phone Numbers,region,STRING,38
+bigquery,Users with Phone Numbers,sample_rate,BIGNUMERIC,39
+bigquery,Users with Phone Numbers,server_received_time,TIMESTAMP,40
+bigquery,Users with Phone Numbers,server_upload_time,TIMESTAMP,41
+bigquery,Users with Phone Numbers,session_id,BIGNUMERIC,42
+bigquery,Users with Phone Numbers,start_version,STRING,43
+bigquery,Users with Phone Numbers,user_creation_time,TIMESTAMP,44
+bigquery,Users with Phone Numbers,user_id,STRING,45
+bigquery,Users with Phone Numbers,user_properties,JSON,46
+bigquery,Users with Phone Numbers,uuid,STRING,47
+bigquery,Users with Phone Numbers,version_name,STRING,48
+bigquery,Users with Phone Numbers,phone_number,STRING,49

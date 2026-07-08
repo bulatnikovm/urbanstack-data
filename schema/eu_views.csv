@@ -1,0 +1,1511 @@
+dataset,table_name,view_definition
+amlitude_EU,users_objects_complexes,"WITH mapping AS (
+  SELECT 
+    u.phone,
+    c.name AS complex_name
+  FROM `analytics-454817.postgresql.users` AS u
+  JOIN `analytics-454817.postgresql.space_user` AS su 
+    ON u.id = su.user_id
+  JOIN `analytics-454817.postgresql.spaces` AS s 
+    ON su.space_id = s.id
+  JOIN `analytics-454817.postgresql.sections` AS sec 
+    ON s.section_id = sec.id
+  JOIN `analytics-454817.postgresql.houses` AS h 
+    ON sec.house_id = h.id
+  JOIN `analytics-454817.postgresql.complexes` AS c 
+    ON h.complex_id = c.id
+)
+SELECT
+  e.amplitude_id,
+  event_type,
+  JSON_VALUE(e.user_properties, ""$.phone_number"") as phone_number,
+  JSON_VALUE(e.user_properties, ""$.object_selected"") as object_selected,
+  m.complex_name
+FROM `analytics-454817.amlitude_EU.EVENTS_407641` AS e
+LEFT JOIN mapping m
+  ON JSON_EXTRACT_SCALAR(e.user_properties, '$.phone_number') = m.phone;"
+finance_dash,dim_building,"WITH section_agg AS (
+    SELECT
+        house_id,
+        COUNT(*)                                    AS section_count,
+        MIN(base_floor)                             AS min_floor,
+        MAX(base_floor + COALESCE(floors, 1) - 1)  AS max_floor,
+        STRING_AGG(
+            CASE WHEN name NOT IN ('-', '') THEN name ELSE NULL END,
+            ', ' ORDER BY name
+        )                                           AS named_sections
+    FROM `analytics-454817.postgresqldim9000.sections`
+    GROUP BY house_id
+)
+SELECT
+    h.id                            AS building_id,
+    h.number                        AS building_number,
+    h.complex_id,
+    c.name                          AS complex_name,
+    COALESCE(h.status, 'active')    AS building_status,
+    h.use_complex_payment_provider,
+    s.section_count,
+    s.min_floor,
+    s.max_floor,
+    s.named_sections,
+    h.location_id,
+    h.created_at                    AS building_created_at
+FROM `analytics-454817.postgresqldim9000.houses` h
+LEFT JOIN `analytics-454817.postgresqldim9000.complexes` c ON c.id = h.complex_id
+LEFT JOIN section_agg s ON s.house_id = h.id"
+finance_dash,dim_customer,"SELECT
+    id                      AS user_id,
+    last_name,
+    first_name,
+    patronymic,
+    CONCAT(
+        last_name, ' ', first_name,
+        CASE WHEN patronymic IS NOT NULL AND patronymic != ''
+             THEN CONCAT(' ', patronymic) ELSE '' END
+    )                       AS full_name,
+    phone,
+    verified                AS is_verified,
+    role                    AS user_role,
+    created_at              AS registered_at
+FROM `analytics-454817.postgresqldim9000.users`"
+finance_dash,dim_llc,"SELECT
+    iban,
+    recipient_name                                  AS llc_name,
+    merchant_id,
+    CAST(mfo AS STRING)                             AS bank_mfo,
+    commission_profile_id,
+    REPLACE(REPLACE(recipient_name, '""""', '""'), '""', '') AS llc_name_clean
+FROM `analytics-454817.postgresqldim9000.tascombank_merchants`
+WHERE purpose = 'payment'"
+finance_dash,dim_residential_complex,"SELECT
+    id                  AS complex_id,
+    name                AS complex_name,
+    payment_provider    AS complex_payment_provider,
+    CASE
+        WHEN STARTS_WITH(name, 'БЦ') THEN 'business_centre'
+        WHEN STARTS_WITH(name, 'ЖК') THEN 'residential_complex'
+        ELSE 'other'
+    END                 AS complex_type,
+    created_at          AS complex_created_at
+FROM `analytics-454817.postgresqldim9000.complexes`"
+finance_dash,dim_service,"SELECT
+    CAST(service_id AS INT64)       AS service_type_code,
+    ARRAY_AGG(name ORDER BY updated_at DESC LIMIT 1)[OFFSET(0)] AS service_name,
+    COUNT(DISTINCT id)              AS account_service_count
+FROM `analytics-454817.postgresqldim9000.master_buh_service`
+GROUP BY 1"
+finance_dash,dim_space,"SELECT
+    -- ── ОРИГІНАЛЬНІ КЛЮЧІ ТА ГЕО-ЛАНЦЮЖОК ──────────────────────────────
+    sp.id AS space_id,
+    sp.section_id,
+    sec.house_id,
+    sec.name AS section_name,
+    h.number AS building_number,
+    h.complex_id,
+    c.name AS complex_name,
+    CASE
+        WHEN STARTS_WITH(c.name, 'БЦ') THEN 'business_centre'
+        WHEN STARTS_WITH(c.name, 'ЖК') THEN 'residential_complex'
+        ELSE 'other'
+    END AS complex_type,
+
+    -- ── АТРИБУТИ ПРИМІЩЕННЯ ───────────────────────────────────────────
+    sp.number AS space_number,
+    sp.floor,
+    sp.kind AS property_kind,
+    
+    -- ★ ОНОВЛЕНА ЛОГИКА (Дивимось у підтипи комерції)
+    CASE 
+        WHEN sp.kind = 'apartment' THEN 'Квартира'
+        WHEN sp.kind = 'commercial' AND sc.type = 'parking' THEN 'Паркінг'
+        WHEN sp.kind = 'commercial' AND sc.type = 'storeroom' THEN 'Комора'
+        WHEN sp.kind = 'commercial' THEN 'Комерційне'
+        ELSE sp.kind
+    END AS property_kind_ua,
+
+    -- ── ВЛАСНИК ТА БОРГ ───────────────────────────────────────────────
+    sp.owner_id,
+    sp.cached_debt,
+
+    -- ── ДЕТАЛІЗАЦІЯ (Квартири та Комерція) ────────────────────────────
+    sa.account AS apartment_account_code, 
+    sa.account AS personal_account,       
+    sc.type AS commercial_type,
+    sc.dabi AS commercial_dabi_code,      
+    
+    -- ── АУДИТ ─────────────────────────────────────────────────────────
+    sp.updated_at AS space_updated_at     
+FROM `analytics-454817.postgresqldim9000.spaces` sp
+LEFT JOIN `analytics-454817.postgresqldim9000.sections` sec ON sec.id = sp.section_id
+LEFT JOIN `analytics-454817.postgresqldim9000.houses` h ON h.id = sec.house_id
+LEFT JOIN `analytics-454817.postgresqldim9000.complexes` c ON c.id = h.complex_id
+LEFT JOIN `analytics-454817.postgresqldim9000.space_apartments` sa ON sa.id = sp.id
+LEFT JOIN `analytics-454817.postgresqldim9000.space_commercials` sc ON sc.id = sp.id"
+finance_dash,fact_billing,"SELECT
+    msp.id                                          AS billing_id,
+    SAFE.PARSE_DATE('%Y%m', msp.period)             AS billing_month, -- Исправлено здесь
+    msp.service_id                                  AS service_uuid,
+    CAST(mbs.service_id AS INT64)                   AS service_type_code,
+    mbi.space_id,
+    msp.iban,
+    msp.okpo,
+    CAST(msp.amount_of_charges AS NUMERIC)          AS amount_of_charges,
+    CAST(msp.paid_amount       AS NUMERIC)          AS paid_amount,
+    CAST(msp.initial_debt      AS NUMERIC)          AS initial_debt,
+    CAST(msp.price_to_pay      AS NUMERIC)          AS price_to_pay,
+    GREATEST(
+        CAST(msp.amount_of_charges AS NUMERIC)
+        - CAST(msp.paid_amount     AS NUMERIC),
+        0
+    )                                               AS unpaid_charges,
+    msp.is_paid,
+    msp.is_preview,
+    msp.synced_at,
+    msp.created_at                                  AS record_created_at
+FROM `analytics-454817.postgresqldim9000.master_buh_service_payment` msp
+LEFT JOIN `analytics-454817.postgresqldim9000.master_buh_service` mbs ON mbs.id = msp.service_id
+LEFT JOIN `analytics-454817.postgresqldim9000.master_buh_information` mbi ON mbi.id = mbs.master_buh_information_id"
+finance_dash,fact_debt,"SELECT
+    msp.id                                          AS billing_id,
+    SAFE.PARSE_DATE('%Y%m', msp.period)             AS snapshot_month, -- Исправлено здесь
+    LAST_DAY(SAFE.PARSE_DATE('%Y%m', msp.period))   AS snapshot_month_end, -- Исправлено здесь
+    msp.service_id                                  AS service_uuid,
+    CAST(mbs.service_id AS INT64)                   AS service_type_code,
+    mbi.space_id,
+    msp.iban,
+    msp.okpo,
+    CAST(msp.initial_debt      AS NUMERIC)          AS debt_balance,
+    CAST(msp.amount_of_charges AS NUMERIC)          AS current_month_charges,
+    CAST(msp.paid_amount       AS NUMERIC)          AS paid_amount,
+    GREATEST(
+        CAST(msp.initial_debt      AS NUMERIC)
+        - CAST(msp.amount_of_charges AS NUMERIC),
+        0
+    )                                               AS prior_debt_carryover,
+    CAST(msp.initial_debt AS NUMERIC) > 0           AS is_debtor,
+    CASE
+        WHEN CAST(msp.initial_debt AS NUMERIC) <= 0    THEN 'no_debt'
+        WHEN CAST(msp.initial_debt AS NUMERIC) <= 1000 THEN '≤1000'
+        ELSE '>1000'
+    END                                             AS debt_bucket,
+    msp.is_preview,
+    msp.synced_at
+FROM `analytics-454817.postgresqldim9000.master_buh_service_payment` msp
+LEFT JOIN `analytics-454817.postgresqldim9000.master_buh_service` mbs ON mbs.id = msp.service_id
+LEFT JOIN `analytics-454817.postgresqldim9000.master_buh_information` mbi ON mbi.id = mbs.master_buh_information_id
+WHERE CAST(msp.amount_of_charges AS NUMERIC) > 0 OR CAST(msp.initial_debt AS NUMERIC) > 0"
+finance_dash,fact_payments,"SELECT
+    op.id                                           AS operation_id,
+    op.transaction_id,
+    op.service_payment_id                           AS billing_id,
+    DATE(op.created_at, 'Europe/Kiev')              AS payment_date,
+    DATE_TRUNC(DATE(op.created_at, 'Europe/Kiev'), MONTH) AS payment_month,
+    tx.payer_id,
+    op.amount / 100.0                               AS payment_amount,
+    CAST(op.commission AS NUMERIC)                  AS commission_amount,
+    tx.payment_provider,
+    tx.type                                         AS transaction_type,
+    tx.payment_id                                   AS bank_payment_reference,
+    op.status                                       AS operation_status,
+    tx.status                                       AS transaction_status
+FROM `analytics-454817.postgresqldim9000.operations` op
+JOIN `analytics-454817.postgresqldim9000.transactions` tx ON tx.id = op.transaction_id
+WHERE op.status = 'accepted' AND tx.status = 'accepted' AND op.paid_order_id IS NULL"
+finance_dash,mart_billing_flat,"SELECT
+    f.billing_id,
+    f.billing_month,
+    f.amount_of_charges,
+    f.paid_amount,
+    f.unpaid_charges,
+    f.initial_debt,
+    f.price_to_pay,
+    f.is_paid,
+    f.synced_at,
+    f.record_created_at,
+    f.space_id,
+    
+    -- Географія та атрибути
+    COALESCE(s.complex_name,     'Невідомий ЖК')       AS complex_name,
+    COALESCE(s.building_number,  'Невідомий будинок')  AS building_number,
+    s.section_name,
+    s.space_number,
+    
+    -- ★ ТУТ ВІДБУВАЄТЬСЯ МАГІЯ РОЗДІЛЕННЯ (тягнемо нову логіку з dim_space)
+    COALESCE(s.property_kind_ua, 'Тип не вказано')     AS property_kind_ua,
+    s.property_kind,
+    s.complex_type,
+    
+    -- Особові рахунки (додали personal_account для синхронізації з боргами)
+    s.personal_account,       
+    s.apartment_account_code, 
+    
+    -- Фінанси та послуги
+    f.iban,
+    COALESCE(l.llc_name_clean,   'Невідоме ТОВ')       AS llc_name,
+    f.okpo,
+    f.service_type_code,
+    COALESCE(sv.service_name,    'Невідома послуга')   AS service_name
+
+FROM `analytics-454817.finance_dash.fact_billing` f
+LEFT JOIN `analytics-454817.finance_dash.dim_space` s  ON s.space_id = f.space_id
+LEFT JOIN `analytics-454817.finance_dash.dim_llc` l  ON l.iban = f.iban
+LEFT JOIN `analytics-454817.finance_dash.dim_service` sv ON sv.service_type_code = f.service_type_code
+WHERE f.is_preview = FALSE"
+finance_dash,mart_debt_aging,"WITH current_debts AS (
+    SELECT
+        snapshot_month,
+        space_id,
+        service_type_code,
+        MAX(complex_name)     AS complex_name,
+        MAX(llc_name)         AS llc_name,
+        MAX(iban)             AS iban,
+        MAX(building_number)  AS building_number,
+        MAX(property_kind_ua) AS property_kind_ua,
+        MAX(service_name)     AS service_name,
+        -- >>> ЗМІНА 1: борг за методикою Аліони (мінус оплати)
+        SUM(debt_balance) - SUM(paid_amount) AS total_debt
+    FROM `analytics-454817.finance_dash.mart_debt_flat`
+    GROUP BY 1, 2, 3
+    -- >>> ЗМІНА 2: лишаємо лише позитивний нетто-борг
+    HAVING SUM(debt_balance) - SUM(paid_amount) > 0
+),
+historical_charges AS (
+    SELECT
+        space_id,
+        service_type_code,
+        billing_month,
+        SUM(amount_of_charges) AS monthly_billed
+    FROM `analytics-454817.finance_dash.mart_billing_flat`
+    GROUP BY 1, 2, 3
+    HAVING monthly_billed > 0
+),
+allocated_debts AS (
+    SELECT
+        c.snapshot_month,
+        c.space_id,
+        c.complex_name,
+        c.llc_name,
+        c.iban,
+        c.building_number,
+        c.property_kind_ua,
+        c.service_name,
+        c.total_debt,
+        h.billing_month,
+        COALESCE(h.monthly_billed, 0) AS monthly_billed,
+        SUM(COALESCE(h.monthly_billed, 0)) OVER (
+            PARTITION BY c.snapshot_month, c.space_id, c.service_type_code
+            ORDER BY h.billing_month DESC
+        ) AS running_total_charges,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.snapshot_month, c.space_id, c.service_type_code
+            ORDER BY h.billing_month ASC
+        ) AS is_oldest_row
+    FROM current_debts c
+    LEFT JOIN historical_charges h
+           ON c.space_id = h.space_id
+          AND c.service_type_code = h.service_type_code
+          -- >>> ЗМІНА 3: СТРОГО менше — поточний місяць не бере участі в розподілі
+          AND h.billing_month < c.snapshot_month
+),
+aged_chunks AS (
+    SELECT
+        *,
+        CASE
+            WHEN billing_month IS NULL THEN total_debt
+            WHEN is_oldest_row = 1 AND total_debt > running_total_charges
+                THEN monthly_billed + (total_debt - running_total_charges)
+            WHEN running_total_charges <= total_debt THEN monthly_billed
+            WHEN (running_total_charges - monthly_billed) < total_debt
+                THEN total_debt - (running_total_charges - monthly_billed)
+            ELSE 0
+        END AS allocated_debt
+    FROM allocated_debts
+),
+aged_with_buckets AS (
+    SELECT
+        snapshot_month,
+        space_id,
+        complex_name,
+        llc_name,
+        iban,
+        building_number,
+        property_kind_ua,
+        service_name,
+        allocated_debt,
+        -- >>> ЗМІНА 4: вік рахуємо в МІСЯЦЯХ (а не днях). Інакше «сусідній місяць»
+        --     = 91 день і перестрибує корзину 61-90, лишаючи її порожньою.
+        COALESCE(DATE_DIFF(snapshot_month, billing_month, MONTH), 999) AS months_old
+    FROM aged_chunks
+    WHERE allocated_debt > 0
+)
+SELECT
+    snapshot_month,
+    complex_name,
+    llc_name,
+    iban,
+    building_number,
+    property_kind_ua,
+    service_name,
+    -- Корзина 0-30 (поточний місяць) відсутня за побудовою (billing_month < snapshot_month)
+    CASE
+        WHEN months_old <= 1 THEN '2. 31–60 днів'
+        WHEN months_old = 2  THEN '3. 61–90 днів'
+        WHEN months_old <= 6 THEN '4. 91–180 днів'
+        ELSE '5. 180+ днів'
+    END AS aging_bucket,
+    CASE
+        WHEN months_old <= 1 THEN 2
+        WHEN months_old = 2  THEN 3
+        WHEN months_old <= 6 THEN 4
+        ELSE 5
+    END AS aging_sort_order,
+    COUNT(DISTINCT space_id)  AS accounts_in_bucket,
+    SUM(allocated_debt)       AS debt_in_bucket
+FROM aged_with_buckets
+GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9"
+finance_dash,mart_debt_alena,"WITH per_space AS (
+    SELECT
+        fd.space_id,
+        fd.snapshot_month,
+        SUM(fd.debt_balance)  AS saldo_poch,
+        SUM(fd.paid_amount)   AS paid,
+        SUM(fd.debt_balance) - SUM(fd.paid_amount) AS overdue_debt,
+        SUM(fd.current_month_charges) AS current_month_charges,   -- ★ НОВЕ: нарахування за місяць
+        MAX(fd.iban)          AS iban
+    FROM `analytics-454817.finance_dash.fact_debt` fd
+    WHERE fd.is_preview = FALSE
+    GROUP BY fd.space_id, fd.snapshot_month
+)
+SELECT
+    ps.space_id,
+    ps.snapshot_month,
+    ps.saldo_poch,
+    ps.paid,
+    ps.overdue_debt,
+
+    -- Прапорці
+    CASE WHEN ps.overdue_debt > 0 THEN 1 ELSE 0 END AS is_debtor,
+    CASE WHEN ps.overdue_debt < 0 THEN 1 ELSE 0 END AS is_overpaid,
+
+    -- debt_bucket на основі НОВОЇ формули (overdue_debt, а не старого initial_debt)
+    CASE
+        WHEN ps.overdue_debt <= 0    THEN 'no_debt'
+        WHEN ps.overdue_debt <= 1000 THEN '≤1000'
+        ELSE '>1000'
+    END AS debt_bucket,
+
+    -- Атрибути для фільтрів і розрізів
+    s.complex_name,
+    s.complex_type,
+    s.building_number,
+    s.property_kind_ua,
+    s.personal_account,
+    s.space_number,
+    COALESCE(l.llc_name_clean, 'Невідоме ТОВ') AS llc_name,
+
+    -- ★ НОВЕ ПОЛЕ (в кінці, щоб не зсувати наявні): нарахування за місяць
+    ps.current_month_charges
+FROM per_space ps
+LEFT JOIN `analytics-454817.finance_dash.dim_space` s ON s.space_id = ps.space_id
+LEFT JOIN `analytics-454817.finance_dash.dim_llc` l ON l.iban = ps.iban"
+finance_dash,mart_debt_flat,"SELECT
+    fd.billing_id,
+    fd.snapshot_month,
+    fd.snapshot_month_end,
+    fd.debt_balance,
+    fd.paid_amount,
+    fd.prior_debt_carryover,
+    fd.is_debtor,
+    fd.debt_bucket,
+    fd.space_id,
+    fd.okpo,
+    fd.service_type_code,
+    fd.synced_at,
+    s.personal_account,
+    s.space_number,
+    s.property_kind,
+    s.property_kind_ua,
+    s.complex_name,
+    s.building_number,
+    s.complex_type,
+    fd.prior_debt_carryover  AS overdue_debt_on_1st,
+    fd.current_month_charges AS current_month_charges,
+    fd.debt_balance          AS total_debt,
+ 
+    -- ★ НОВЕ ПОЛЕ: дебіторка за методикою Аліони (СальдоКін − Нараховано)
+    (fd.debt_balance - fd.current_month_charges) AS overdue_debt_alena,
+ 
+    -- ★ НОВЕ ПОЛЕ (для задачі 4): питома вага боргу від нарахувань
+    -- рахується в Looker через SUM, тут просто сирі компоненти
+    -- (див. calculated field нижче)
+ 
+    COALESCE(l.llc_name_clean, 'Невідоме ТОВ') AS llc_name,
+    COALESCE(sv.service_name, 'Невідома послуга') AS service_name,
+    fd.iban
+FROM `analytics-454817.finance_dash.fact_debt` fd
+LEFT JOIN `analytics-454817.finance_dash.dim_space` s ON s.space_id = fd.space_id
+LEFT JOIN `analytics-454817.finance_dash.dim_llc` l ON l.iban = fd.iban
+LEFT JOIN `analytics-454817.finance_dash.dim_service` sv ON sv.service_type_code = fd.service_type_code
+WHERE fd.is_preview = FALSE
+  AND fd.debt_balance >= 0.01"
+finance_dash,mart_debt_years,"WITH current_debts AS (
+    SELECT
+        space_id,
+        service_type_code,
+        MAX(complex_name)    AS complex_name,
+        MAX(llc_name)        AS llc_name,
+        MAX(building_number) AS building_number,
+        SUM(debt_balance)    AS total_debt
+    FROM `analytics-454817.finance_dash.mart_debt_flat`
+    WHERE snapshot_month = (
+        SELECT MAX(snapshot_month)
+        FROM `analytics-454817.finance_dash.mart_debt_flat`
+    )
+    GROUP BY 1, 2
+    HAVING SUM(debt_balance) > 0
+),
+historical_charges AS (
+    SELECT
+        space_id,
+        service_type_code,
+        billing_month,
+        SUM(amount_of_charges) AS monthly_billed
+    FROM `analytics-454817.finance_dash.mart_billing_flat`
+    GROUP BY 1, 2, 3
+    HAVING monthly_billed > 0
+),
+allocated_debts AS (
+    SELECT
+        c.space_id,
+        c.complex_name,
+        c.llc_name,
+        c.building_number,
+        c.total_debt,
+        h.billing_month,
+        COALESCE(h.monthly_billed, 0) AS monthly_billed,
+        SUM(COALESCE(h.monthly_billed, 0)) OVER (
+            PARTITION BY c.space_id, c.service_type_code
+            ORDER BY h.billing_month DESC
+        ) AS running_total_charges,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.space_id, c.service_type_code
+            ORDER BY h.billing_month ASC
+        ) AS is_oldest_row,
+        -- Вік боргу в днях від кінця останнього snapshot_month
+        COALESCE(
+            DATE_DIFF(
+                LAST_DAY((SELECT MAX(snapshot_month) FROM `analytics-454817.finance_dash.mart_debt_flat`)),
+                billing_month,
+                DAY
+            ),
+            999
+        ) AS age_days
+    FROM current_debts c
+    LEFT JOIN historical_charges h
+           ON c.space_id = h.space_id
+          AND c.service_type_code = h.service_type_code
+),
+aged_chunks AS (
+    SELECT
+        *,
+        CASE
+            WHEN billing_month IS NULL THEN total_debt
+            WHEN is_oldest_row = 1 AND total_debt > running_total_charges
+                THEN monthly_billed + (total_debt - running_total_charges)
+            WHEN running_total_charges <= total_debt THEN monthly_billed
+            WHEN (running_total_charges - monthly_billed) < total_debt
+                THEN total_debt - (running_total_charges - monthly_billed)
+            ELSE 0
+        END AS allocated_debt
+    FROM allocated_debts
+)
+SELECT
+    complex_name,
+    llc_name,
+    building_number,
+    COALESCE(
+        CAST(EXTRACT(YEAR FROM billing_month) AS STRING),
+        'Без історії'
+    ) AS debt_year,
+    SUM(allocated_debt) AS debt_amount
+FROM aged_chunks
+WHERE allocated_debt > 0
+  AND age_days > 30   -- ← виключаємо 0-30 днів (поточний місяць)
+GROUP BY 1, 2, 3, 4"
+finance_dash,mart_payment_rates,"WITH space_flag AS (
+    SELECT
+        f.space_id,
+        f.billing_month,
+        -- >>> ЗМІНА 1: борг = вхідний борг - оплати (БЕЗ поточних нарахувань,
+        --     бо нарахування цього місяця ще не є простроченим боргом)
+        CASE WHEN SUM(f.initial_debt) - SUM(f.paid_amount) <= 0
+             THEN 1 ELSE 0 END AS is_natural
+    FROM `analytics-454817.finance_dash.fact_billing` f
+    WHERE f.is_preview = FALSE
+        AND f.billing_month IS NOT NULL
+        AND f.space_id IS NOT NULL
+    GROUP BY f.space_id, f.billing_month
+    -- >>> ЗМІНА 2: лишаємо лише квартири з нарахуваннями (прибираємо без договору)
+    HAVING SUM(f.amount_of_charges) > 0
+)
+
+-- 2. Детальний рівень: рядок = (квартира, місяць, послуга), з прапорцем квартири
+SELECT
+    f.space_id,
+    f.billing_month,
+    s.complex_name,
+    s.complex_type,
+    s.property_kind_ua,
+    s.building_number,
+    COALESCE(l.llc_name_clean, 'Невідоме ТОВ')   AS llc_name,
+    COALESCE(sv.service_name, 'Невідома послуга') AS service_name,
+
+    -- Гроші — деталізовані по послузі (можна фільтрувати, дробляться коректно)
+    f.amount_of_charges AS charges,
+    f.paid_amount       AS payments,
+
+    -- Прапорець природності квартири (однаковий для всіх рядків цієї квартири)
+    sf.is_natural,
+
+    -- Оплати від природних — для чистого рівня
+    CASE WHEN sf.is_natural = 1
+         THEN f.paid_amount ELSE 0
+    END AS payment_if_natural,
+
+    -- Поле залишено для зворотної сумісності дешборду (стара метрика природного).
+    -- Рекомендовано перевести природній на формулу Артема (блок МЕТРИКИ нижче),
+    -- після чого це поле можна прибрати.
+    CASE WHEN f.paid_amount >= f.amount_of_charges
+         THEN f.amount_of_charges
+         ELSE f.paid_amount
+    END AS payment_for_current
+
+FROM `analytics-454817.finance_dash.fact_billing` f
+-- >>> ЗМІНА 3: INNER (а не LEFT) — відсікає квартири з нульовими нарахуваннями
+INNER JOIN space_flag sf
+    ON sf.space_id = f.space_id AND sf.billing_month = f.billing_month
+LEFT JOIN `analytics-454817.finance_dash.dim_space` s
+    ON s.space_id = f.space_id
+LEFT JOIN `analytics-454817.finance_dash.dim_llc` l
+    ON l.iban = f.iban
+LEFT JOIN `analytics-454817.finance_dash.dim_service` sv
+    ON sv.service_type_code = f.service_type_code
+WHERE f.is_preview = FALSE
+    AND f.billing_month IS NOT NULL
+    AND f.space_id IS NOT NULL"
+finance_dash,mart_payment_rates_cohort,"WITH space_month AS (
+    -- Нарахування/оплати/вхідний борг на рівні (квартира, місяць), по всіх послугах
+    SELECT
+        space_id,
+        billing_month,
+        SUM(amount_of_charges) AS charges,
+        SUM(paid_amount)       AS paid,
+        SUM(initial_debt)      AS opening_debt
+    FROM `analytics-454817.finance_dash.fact_billing`
+    WHERE is_preview = FALSE AND space_id IS NOT NULL
+    GROUP BY 1, 2
+    HAVING SUM(amount_of_charges) <> 0   -- прибираємо квартири без договору
+),
+flag AS (
+    -- Прапорець ""дисциплінований"" на місяць n: чи погашено вхідний борг оплатами цього місяця
+    SELECT
+        space_id,
+        billing_month,
+        paid,
+        CASE WHEN (opening_debt - paid) <= 0 THEN 1 ELSE 0 END AS is_natural
+    FROM space_month
+)
+SELECT
+    c.space_id,
+    -- Перейменовано з charge_month -> billing_month для сумісності зі старими
+    -- вітринами/фільтрами (mart_payment_rates, mart_billing_flat теж звуть це
+    -- поле billing_month). Це ""місяць, за який нараховано"" — саме його треба
+    -- ставити як Date Range Dimension в Looker, щоб обраний місяць у фільтрі
+    -- відповідав місяцю нарахування, а не місяцю надходження оплат.
+    c.billing_month                        AS billing_month,
+    DATE_ADD(c.billing_month, INTERVAL 1 MONTH) AS payment_month, -- місяць, коли ці оплати надійшли
+    s.complex_name,
+    s.complex_type,
+    s.property_kind_ua,
+    s.building_number,
+
+    c.charges                              AS charges,            -- нарахування місяця X
+    n.paid                                  AS payments,           -- оплати місяця X+1 (когортні)
+    n.is_natural,                                                  -- дисципліна за станом на X+1
+    CASE WHEN n.is_natural = 1 THEN n.paid ELSE 0 END AS payment_if_natural,
+
+    -- ★ Погашення боргу минулих періодів (за пропозицією Артема): скільки з оплат
+    --   ЦЬОГО (X) місяця пішло понад поточне нарахування X, тобто на старий борг.
+    --   Рахується на рівні квартири і floor(...,0) — щоб переплата однієї квартири
+    --   не ""компенсувала"" недоплату іншої при агрегації (сказано на дзвінку).
+    GREATEST(c.paid - c.charges, 0)        AS repaid_old_debt_this_month
+
+FROM space_month c
+-- >>> ЗМІНА: LEFT (а не INNER) JOIN на ""X+1"". repaid_old_debt_this_month рахується
+--     з ЦЬОГО Ж місяця (c.paid − c.charges), тому не потребує даних наступного
+--     місяця і має бути доступний одразу. Рівні оплат (payments/is_natural/
+--     payment_if_natural) і далі будуть NULL для найостаннішого місяця, поки
+--     не прийдуть дані X+1 — це коректно, не ламати нічого.
+LEFT JOIN flag n
+    ON n.space_id = c.space_id
+   AND n.billing_month = DATE_ADD(c.billing_month, INTERVAL 1 MONTH)
+LEFT JOIN `analytics-454817.finance_dash.dim_space` s ON s.space_id = c.space_id"
+finance_dash,mart_payments_flat,"SELECT
+    fp.operation_id,
+    fp.transaction_id,
+    fp.billing_id,
+    fp.payment_date,
+    fp.payment_month,
+    fb.billing_month,
+    fp.payment_amount,
+    fp.commission_amount,
+    fp.payment_provider,
+    fp.transaction_type,
+    fp.bank_payment_reference,
+    COALESCE(s.complex_name, 'Невідомий ЖК') AS complex_name,
+    COALESCE(s.building_number, 'Невідомий будинок') AS building_number,
+    
+    -- Поділ на Фіз. осіб, Юр. осіб та Паркінги
+    CASE 
+        WHEN s.property_kind = 'apartment' THEN 'Квартира'
+        WHEN s.property_kind = 'commercial' THEN 'Комерція'
+        WHEN s.property_kind = 'parking' THEN 'Паркінг'
+        ELSE 'Тип не вказано'
+    END AS property_kind_ua,
+    
+    s.complex_type,
+    fb.iban,
+    COALESCE(l.llc_name_clean, 'Невідоме ТОВ') AS llc_name,
+    fb.service_type_code,
+    COALESCE(sv.service_name, 'Невідома послуга') AS service_name,
+    fb.amount_of_charges
+FROM `analytics-454817.finance_dash.fact_payments` fp
+LEFT JOIN `analytics-454817.finance_dash.fact_billing` fb ON fb.billing_id = fp.billing_id
+LEFT JOIN `analytics-454817.finance_dash.dim_space` s ON s.space_id = fb.space_id
+LEFT JOIN `analytics-454817.finance_dash.dim_llc` l ON l.iban = fb.iban
+LEFT JOIN `analytics-454817.finance_dash.dim_service` sv ON sv.service_type_code = fb.service_type_code
+WHERE fb.is_preview = FALSE"
+finance_dash,mart_payments_rate,"WITH billing_totals AS (
+    -- Нарахування по місяцях
+    SELECT 
+        billing_month,
+        complex_name,
+        COALESCE(MAX(complex_type), 'other') AS complex_type,
+        SUM(amount_of_charges) AS total_billed
+    FROM `analytics-454817.finance_dash.mart_billing_flat`
+    GROUP BY 1, 2
+),
+payments_totals AS (
+    -- Усі оплати, що надійшли у конкретному місяці
+    SELECT 
+        fp.payment_month,
+        s.complex_name,
+        SUM(fp.payment_amount) AS total_received
+    FROM `analytics-454817.finance_dash.fact_payments` fp
+    JOIN `analytics-454817.finance_dash.fact_billing` fb 
+        ON fb.billing_id = fp.billing_id 
+        AND fb.is_preview = FALSE
+    JOIN `analytics-454817.finance_dash.dim_space` s 
+        ON s.space_id = fb.space_id
+    GROUP BY 1, 2
+),
+base_grid AS (
+    -- Створюємо єдиний календарний каркас, щоб не загубити дані, 
+    -- якщо в якомусь місяці були тільки нарахування або тільки оплати
+    SELECT DISTINCT billing_month AS report_month, complex_name FROM billing_totals
+    UNION DISTINCT
+    SELECT DISTINCT payment_month AS report_month, complex_name FROM payments_totals
+)
+
+SELECT 
+    g.report_month,
+    g.complex_name,
+    COALESCE(curr_b.complex_type, prev_b.complex_type, 'other') AS complex_type,
+    
+    -- Нарахування ПОТОЧНОГО місяця (залишив на випадок, якщо це потрібно для інших графіків)
+    COALESCE(curr_b.total_billed, 0) AS total_billed_current,
+    
+    -- Нарахування ПОПЕРЕДНЬОГО місяця (знаменник для формули)
+    COALESCE(prev_b.total_billed, 0) AS total_billed_previous,
+    
+    -- Оплати ПОТОЧНОГО місяця (чисельник для формули)
+    COALESCE(p.total_received, 0) AS total_payments_received,
+    
+    -- НОВА ЛОГІКА: Оплати поточного / Нарахування попереднього (без множення на 100)
+    SAFE_DIVIDE(
+        COALESCE(p.total_received, 0), 
+        NULLIF(prev_b.total_billed, 0)
+    ) AS natural_payment_rate
+    
+FROM base_grid g
+-- Підтягуємо оплати поточного місяця
+LEFT JOIN payments_totals p 
+    ON p.payment_month = g.report_month 
+    AND p.complex_name = g.complex_name
+-- Підтягуємо нарахування поточного місяця
+LEFT JOIN billing_totals curr_b 
+    ON curr_b.billing_month = g.report_month 
+    AND curr_b.complex_name = g.complex_name
+-- ГОЛОВНИЙ ТРЮК: Підтягуємо нарахування ПОПЕРЕДНЬОГО місяця (зміщуємо дату на 1 місяць вперед)
+LEFT JOIN billing_totals prev_b 
+    ON DATE_ADD(prev_b.billing_month, INTERVAL 1 MONTH) = g.report_month 
+    AND prev_b.complex_name = g.complex_name"
+postgresqldim9000,Phone_Complex,"WITH user_phones AS (
+  SELECT 
+    id AS user_id, 
+    phone as phone_number
+  FROM `analytics-454817.postgresqldim9000.users`
+  WHERE phone IS NOT NULL AND phone != ''
+),
+
+user_spaces AS (
+  SELECT 
+    space_id, 
+    user_id
+  FROM `analytics-454817.postgresqldim9000.space_user`
+),
+
+spaces_with_sections AS (
+  SELECT 
+    s.id AS space_id, 
+    s.section_id,
+    us.user_id
+  FROM `analytics-454817.postgresqldim9000.spaces` s
+  JOIN user_spaces us
+    ON s.id = us.space_id
+),
+
+sections_with_houses AS (
+  SELECT 
+    ss.section_id, 
+    ss.user_id,
+    se.house_id
+  FROM spaces_with_sections ss
+  JOIN `analytics-454817.postgresqldim9000.sections` se
+    ON ss.section_id = se.id
+),
+
+houses_with_complexes AS (
+  SELECT 
+    sh.user_id,
+    h.complex_id
+  FROM sections_with_houses sh
+  JOIN `analytics-454817.postgresqldim9000.houses` h
+    ON sh.house_id = h.id
+)
+
+SELECT 
+  u.phone_number, 
+  c.name AS complex_name
+FROM houses_with_complexes hc
+JOIN user_phones u
+  ON hc.user_id = u.user_id
+JOIN `analytics-454817.postgresqldim9000.complexes` c
+  ON hc.complex_id = c.id"
+postgresqldim9000,view_monthly_active_residents,"WITH 
+-- 1. Справочники отключений ЖК
+house_deactivation_dates AS (
+  SELECT house_id, DATE(deactivated_date) AS deactivated_date 
+  FROM UNNEST([
+    STRUCT('e898c6d1-227c-462f-aec2-d4f8949f7f6b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('a72558c9-5f78-4633-a425-b42a79ee3649' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('6017b015-6916-41db-9404-dd5b0885434b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('56d86356-cfe1-4382-b3be-d0fe2c0dba3f' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('18c381e0-afa9-4b7f-82cd-9d005dca90e1' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('ef446c3b-c38f-4fa2-a887-9633fbba4071' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('91aa654b-f87c-48fe-b144-2fa8fd9932df' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('60b3c00e-fc59-41d3-b6b2-c8deb8f508d2' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('b7953ed1-cdc6-4a3d-b731-dbfb28c5cc30' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('0c6a2fb0-979a-4ef0-9e5a-5ef0463e3e21' AS house_id, '2025-12-01' AS deactivated_date)
+  ])
+),
+excluded_complexes AS (
+  SELECT id FROM UNNEST([
+    '09c50e9a-7685-435d-ac36-4934aa7fd39c', '585e7b5b-737d-4ad9-bf25-76fdb0af015a', 'b59820ce-0548-4ade-994d-f617202ad2c5'
+  ]) AS id
+),
+
+-- 2. Каркас отчета
+calendar AS (
+  SELECT report_month FROM UNNEST(GENERATE_DATE_ARRAY(DATE('2024-01-01'), DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)) AS report_month
+),
+report_backbone AS (
+  SELECT c.report_month, comp.id AS complex_id, comp.name AS complex_name
+  FROM calendar c
+  CROSS JOIN `analytics-454817.postgresqldim9000.complexes` comp
+  WHERE comp.id NOT IN (SELECT id FROM excluded_complexes)
+),
+
+-- 3. Чистые помещения (Используем space_apartments и space_commercials)
+clean_spaces AS (
+  SELECT 
+    s.id AS space_id, h.complex_id, DATE(s.created_at) as created_at, s.owner_id, hd.deactivated_date
+  FROM `analytics-454817.postgresqldim9000.spaces` s
+  JOIN `analytics-454817.postgresqldim9000.sections` sec ON s.section_id = sec.id
+  JOIN `analytics-454817.postgresqldim9000.houses` h ON sec.house_id = h.id
+  LEFT JOIN house_deactivation_dates hd ON h.id = hd.house_id
+  WHERE h.complex_id NOT IN (SELECT id FROM excluded_complexes)
+    AND (
+      s.id IN (SELECT id FROM `analytics-454817.postgresqldim9000.space_apartments`) 
+      OR s.id IN (SELECT id FROM `analytics-454817.postgresqldim9000.space_commercials`)
+    )
+),
+
+-- 4. Все привязки пользователей (Владельцы + Арендаторы) с флагом ""Владелец ли он?""
+all_user_mappings AS (
+  SELECT owner_id AS user_id, space_id, complex_id, 1 AS is_owner 
+  FROM clean_spaces WHERE owner_id IS NOT NULL
+  UNION DISTINCT
+  SELECT su.user_id, cs.space_id, cs.complex_id, 0 AS is_owner 
+  FROM `analytics-454817.postgresqldim9000.space_user` su JOIN clean_spaces cs ON su.space_id = cs.space_id
+),
+
+-- 5. Агрегация базы CRM по месяцам
+crm_users_monthly AS (
+  SELECT 
+    rb.report_month,
+    rb.complex_id,
+    -- ПУНКТ 2: Всего пользователей в CRM для этого ЖК (Накопительно)
+    COUNT(DISTINCT aum.user_id) AS total_crm_users,
+    -- ПУНКТ 1: Подтвержденные ""настоящие"" (без инактивированных)
+    COUNT(DISTINCT CASE 
+      WHEN u.verified = TRUE AND (u.role IS NULL OR u.role != 'ROLE_INACTIVATED_CITIZEN') 
+      THEN aum.user_id 
+    END) AS active_confirmed_users,
+    -- ПУНКТ 3: Не владельцы (Арендаторы / сожители)
+    COUNT(DISTINCT CASE WHEN u.verified = TRUE AND aum.is_owner = 0 THEN aum.user_id END) AS tenant_users
+
+  FROM report_backbone rb
+  LEFT JOIN all_user_mappings aum ON rb.complex_id = aum.complex_id 
+  LEFT JOIN `analytics-454817.postgresqldim9000.users` u ON aum.user_id = u.id
+  WHERE DATE_TRUNC(DATE(u.created_at), MONTH) <= rb.report_month
+  GROUP BY 1, 2
+),
+
+-- 6. Продуктовые ивенты
+amplitude_events_mapped AS (
+  SELECT 
+    DATE(e.event_time) AS activity_date,
+    DATE_TRUNC(DATE(e.event_time), MONTH) AS activity_month,
+    aum.complex_id,
+    e.amplitude_id,
+    e.event_type,
+    CASE WHEN e.event_type IN (
+        'request_new_desc_btn_success_ok_tap', 'active_receipt_popup_payment_success_view', 
+        'active_receipt_popup_payment_fail_view', 'vote_details_active_form__tap',
+        'paid_service_description_btn_success_ok_tap', 'key_open_btn__click', 
+        'widget_home_key_btn__click', 'widget_control_center_key_btn__click', 
+        'widget_lock_key_btn__click', 'temp_key_create__success'
+      ) THEN 1 ELSE 0 END AS is_core_event
+  FROM `analytics-454817.postgresqldim9000.EVENTS_407641` e
+  JOIN (
+    SELECT DISTINCT u.phone AS phone_number, m.complex_id 
+    FROM `analytics-454817.postgresqldim9000.users` u
+    JOIN all_user_mappings m ON u.id = m.user_id
+    WHERE u.verified = TRUE AND u.phone IS NOT NULL
+  ) aum ON JSON_VALUE(e.user_properties, '$.phone_number') = aum.phone_number
+  WHERE e.amplitude_id IS NOT NULL AND DATE(e.event_time) >= '2024-01-01'
+),
+
+-- 7. Расчет DAU и MAU
+daily_active_users AS (
+  SELECT 
+    activity_month, activity_date, complex_id,
+    COUNT(DISTINCT CASE WHEN is_core_event = 1 THEN amplitude_id END) AS daily_core_active
+  FROM amplitude_events_mapped
+  GROUP BY 1, 2, 3
+),
+avg_dau_per_month AS (
+  SELECT 
+    activity_month, complex_id,
+    CAST(ROUND(AVG(daily_core_active)) AS INT64) AS avg_daily_active
+  FROM daily_active_users
+  GROUP BY 1, 2
+),
+monthly_product_metrics AS (
+  SELECT 
+    activity_month AS report_month,
+    complex_id,
+    -- ПУНКТ 6: Посетители за месяц
+    COUNT(DISTINCT amplitude_id) AS visitors_mau,
+    -- ПУНКТ 5: Активные за месяц
+    COUNT(DISTINCT CASE WHEN is_core_event = 1 THEN amplitude_id END) AS core_active_mau
+  FROM amplitude_events_mapped
+  GROUP BY 1, 2
+)
+
+-- 8. ИТОГОВАЯ СУПЕР-ВИТРИНА
+SELECT 
+  rb.report_month,
+  rb.complex_name,
+  rb.complex_id, -- Оставил ID для удобства джойнов в дашбордах
+  
+  -- CRM Метрики (Люди)
+  COALESCE(crm.total_crm_users, 0) AS total_users,
+  COALESCE(crm.active_confirmed_users, 0) AS confirmed_users,
+  COALESCE(crm.tenant_users, 0) AS non_owners,
+  
+  -- Amplitude Метрики (Активность)
+  COALESCE(pm.visitors_mau, 0) AS visitors_mau,
+  COALESCE(pm.core_active_mau, 0) AS active_monthly,
+  COALESCE(dau.avg_daily_active, 0) AS active_daily
+  
+FROM report_backbone rb
+LEFT JOIN crm_users_monthly crm ON rb.report_month = crm.report_month AND rb.complex_id = crm.complex_id
+LEFT JOIN monthly_product_metrics pm ON rb.report_month = pm.report_month AND rb.complex_id = pm.complex_id
+LEFT JOIN avg_dau_per_month dau ON rb.report_month = dau.activity_month AND rb.complex_id = dau.complex_id
+WHERE rb.report_month <= DATE_TRUNC(CURRENT_DATE(), MONTH)"
+postgresqldim9000,vw_dm_apartment_occupancy_monthly,"WITH 
+-- 1. Хронология деактивации домов
+house_deactivation_dates AS (
+  SELECT house_id, DATE(deactivated_date) AS deactivated_date 
+  FROM UNNEST([
+    STRUCT('e898c6d1-227c-462f-aec2-d4f8949f7f6b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('a72558c9-5f78-4633-a425-b42a79ee3649' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('6017b015-6916-41db-9404-dd5b0885434b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('56d86356-cfe1-4382-b3be-d0fe2c0dba3f' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('18c381e0-afa9-4b7f-82cd-9d005dca90e1' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('ef446c3b-c38f-4fa2-a887-9633fbba4071' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('91aa654b-f87c-48fe-b144-2fa8fd9932df' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('60b3c00e-fc59-41d3-b6b2-c8deb8f508d2' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('b7953ed1-cdc6-4a3d-b731-dbfb28c5cc30' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('0c6a2fb0-979a-4ef0-9e5a-5ef0463e3e21' AS house_id, '2025-12-01' AS deactivated_date),
+    STRUCT('f94470ce-61a5-4454-8951-c70be8531e57' AS house_id, '2025-12-01' AS deactivated_date) 
+  ])
+),
+excluded_complexes AS (
+  SELECT id FROM UNNEST(['09c50e9a-7685-435d-ac36-4934aa7fd39c', '585e7b5b-737d-4ad9-bf25-76fdb0af015a', 'b59820ce-0548-4ade-994d-f617202ad2c5']) AS id
+),
+calendar AS (
+  SELECT report_month FROM UNNEST(GENERATE_DATE_ARRAY(DATE('2024-01-01'), DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)) AS report_month
+),
+
+-- 2. База квартир с расшифровкой адреса дома из таблицы locations
+apartments_infrastructure AS (
+  SELECT 
+    s.id AS space_id,
+    h.complex_id,
+    comp.name AS complex_name,
+    h.id AS house_id,
+    -- Делаем понятную расшифровку адреса дома (Улица + Номер)
+    CONCAT(loc.street, ', ', loc.number) AS house_address,
+    s.owner_id
+  FROM `analytics-454817.postgresqldim9000.spaces` s
+  JOIN `analytics-454817.postgresqldim9000.sections` sec ON s.section_id = sec.id
+  JOIN `analytics-454817.postgresqldim9000.houses` h ON sec.house_id = h.id
+  JOIN `analytics-454817.postgresqldim9000.complexes` comp ON h.complex_id = comp.id
+  -- Подтягиваем локацию для расшифровки адреса
+  LEFT JOIN `analytics-454817.postgresqldim9000.locations` loc ON h.location_id = loc.id
+  JOIN `analytics-454817.postgresqldim9000.space_apartments` sa ON s.id = sa.id
+  WHERE h.complex_id NOT IN (SELECT id FROM excluded_complexes)
+),
+
+-- 3. Связи жителей с квартирами
+apartment_user_links AS (
+  SELECT space_id, owner_id AS user_id FROM apartments_infrastructure WHERE owner_id IS NOT NULL
+  UNION DISTINCT
+  SELECT su.space_id, su.user_id FROM `analytics-454817.postgresqldim9000.space_user` su
+  JOIN apartments_infrastructure ai ON su.space_id = ai.space_id
+),
+
+users_status AS (
+  SELECT id AS user_id, created_at, verified, role
+  FROM `analytics-454817.postgresqldim9000.users`
+),
+
+-- 4. Ежемесячный статус квартир
+apartment_monthly_status AS (
+  SELECT 
+    c.report_month,
+    ai.complex_name,
+    ai.house_id,
+    ai.house_address,
+    ai.space_id,
+    MAX(CASE WHEN DATE_TRUNC(DATE(u.created_at), MONTH) <= c.report_month THEN 1 ELSE 0 END) AS has_resident,
+    MAX(CASE WHEN DATE_TRUNC(DATE(u.created_at), MONTH) <= c.report_month 
+                  AND u.verified = TRUE 
+                  AND u.role != 'ROLE_INACTIVATED_CITIZEN' THEN 1 ELSE 0 END) AS has_confirmed_resident
+  FROM calendar c
+  CROSS JOIN apartments_infrastructure ai
+  LEFT JOIN house_deactivation_dates hd ON ai.house_id = hd.house_id
+  LEFT JOIN apartment_user_links l ON ai.space_id = l.space_id
+  LEFT JOIN users_status u ON l.user_id = u.user_id
+  WHERE (hd.deactivated_date IS NULL OR c.report_month < hd.deactivated_date)
+  GROUP BY 1, 2, 3, 4, 5
+)
+
+-- 5. Финальный вывод сырых агрегатов для Лукера
+SELECT 
+  report_month,
+  complex_name,
+  house_id,
+  house_address, -- Текстовое название дома для Drill-down уровня
+  COUNT(DISTINCT space_id) AS total_apartments,
+  SUM(has_resident) AS occupied_apartments,
+  SUM(has_confirmed_resident) AS occupied_by_confirmed_apartments
+FROM apartment_monthly_status
+GROUP BY 1, 2, 3, 4"
+postgresqldim9000,vw_dm_complex_user_segments_monthly,"WITH 
+-- 1. Базовые справочники
+house_deactivation_dates AS (
+  SELECT house_id, DATE(deactivated_date) AS deactivated_date 
+  FROM UNNEST([
+    STRUCT('e898c6d1-227c-462f-aec2-d4f8949f7f6b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('a72558c9-5f78-4633-a425-b42a79ee3649' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('6017b015-6916-41db-9404-dd5b0885434b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('56d86356-cfe1-4382-b3be-d0fe2c0dba3f' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('18c381e0-afa9-4b7f-82cd-9d005dca90e1' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('ef446c3b-c38f-4fa2-a887-9633fbba4071' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('91aa654b-f87c-48fe-b144-2fa8fd9932df' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('60b3c00e-fc59-41d3-b6b2-c8deb8f508d2' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('b7953ed1-cdc6-4a3d-b731-dbfb28c5cc30' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('0c6a2fb0-979a-4ef0-9e5a-5ef0463e3e21' AS house_id, '2025-12-01' AS deactivated_date)
+  ])
+),
+excluded_complexes AS (
+  SELECT id FROM UNNEST(['09c50e9a-7685-435d-ac36-4934aa7fd39c', '585e7b5b-737d-4ad9-bf25-76fdb0af015a', 'b59820ce-0548-4ade-994d-f617202ad2c5']) AS id
+),
+calendar AS (
+  SELECT report_month FROM UNNEST(GENERATE_DATE_ARRAY(DATE('2024-01-01'), DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)) AS report_month
+),
+report_backbone AS (
+  SELECT c.report_month, comp.id AS complex_id, comp.name AS complex_name
+  FROM calendar c
+  CROSS JOIN `analytics-454817.postgresqldim9000.complexes` comp
+  WHERE comp.id NOT IN (SELECT id FROM excluded_complexes)
+),
+
+-- 2. Чистые помещения и маппинг жильцов
+clean_spaces AS (
+  SELECT s.id AS space_id, h.complex_id, s.owner_id
+  FROM `analytics-454817.postgresqldim9000.spaces` s
+  JOIN `analytics-454817.postgresqldim9000.sections` sec ON s.section_id = sec.id
+  JOIN `analytics-454817.postgresqldim9000.houses` h ON sec.house_id = h.id
+  WHERE h.complex_id NOT IN (SELECT id FROM excluded_complexes)
+    AND (s.id IN (SELECT id FROM `analytics-454817.postgresqldim9000.space_apartments`) OR s.id IN (SELECT id FROM `analytics-454817.postgresqldim9000.space_commercials`))
+),
+all_user_mappings AS (
+  SELECT owner_id AS user_id, complex_id FROM clean_spaces WHERE owner_id IS NOT NULL
+  UNION DISTINCT
+  SELECT su.user_id, cs.complex_id FROM `analytics-454817.postgresqldim9000.space_user` su JOIN clean_spaces cs ON su.space_id = cs.space_id
+),
+
+-- 3. Продуктовая активность (телефон как STRING)
+user_monthly_activity AS (
+  SELECT DISTINCT
+    JSON_VALUE(e.user_properties, '$.phone_number') AS phone_number,
+    DATE_TRUNC(DATE(e.event_time), MONTH) AS activity_month
+  FROM `analytics-454817.postgresqldim9000.EVENTS_407641` e
+  WHERE e.amplitude_id IS NOT NULL AND session_id IS NOT NULL
+    AND JSON_VALUE(e.user_properties, '$.phone_number') IS NOT NULL
+    AND e.event_type IN ('request_new_desc_btn_success_ok_tap', 'active_receipt_popup_payment_success_view', 'active_receipt_popup_payment_fail_view', 'vote_details_active_form__tap', 'paid_service_description_btn_success_ok_tap', 'key_open_btn__click', 'widget_home_key_btn__click', 'widget_control_center_key_btn__click', 'widget_lock_key_btn__click', 'temp_key_create__success')
+),
+
+-- 4. Историческая матрица статусов пользователей
+user_history_matrix AS (
+  SELECT 
+    rb.report_month,
+    rb.complex_name,
+    rb.complex_id,
+    u.id AS user_id,
+    u.phone AS phone_number,
+    
+    -- Проверка верификации и деактивации на отчетный месяц
+    CASE WHEN u.verified = TRUE THEN 1 ELSE 0 END AS is_verified,
+    CASE WHEN u.role = 'ROLE_INACTIVATED_CITIZEN' THEN 1 ELSE 0 END AS is_deactivated_now,
+    
+    -- Проверяем совпадение телефонов
+    CASE WHEN act_curr.phone_number IS NOT NULL THEN 1 ELSE 0 END AS act_0,
+    CASE WHEN act_prev.phone_number IS NOT NULL THEN 1 ELSE 0 END AS act_1
+  FROM report_backbone rb
+  JOIN all_user_mappings m ON rb.complex_id = m.complex_id
+  JOIN `analytics-454817.postgresqldim9000.users` u ON m.user_id = u.id
+  -- Привязываем активность
+  LEFT JOIN user_monthly_activity act_curr ON u.phone = act_curr.phone_number AND rb.report_month = act_curr.activity_month
+  LEFT JOIN user_monthly_activity act_prev ON u.phone = act_prev.phone_number AND DATE_SUB(rb.report_month, INTERVAL 1 MONTH) = act_prev.activity_month
+  WHERE DATE_TRUNC(DATE(u.created_at), MONTH) <= rb.report_month
+)
+
+-- 5. Финальная сборка метрик сегментации
+SELECT 
+  report_month,
+  complex_name,
+  complex_id,
+  
+  -- Базовые метрики CRM
+  COUNT(DISTINCT user_id) AS total_users,
+  
+  -- Деактивированные пользователи УК (ROLE_INACTIVATED_CITIZEN)
+  COUNT(DISTINCT CASE WHEN is_deactivated_now = 1 THEN user_id END) AS deactivated_users,
+  
+  -- Живые подтвержденные пользователи (База)
+  COUNT(DISTINCT CASE WHEN is_verified = 1 AND is_deactivated_now = 0 THEN user_id END) AS confirmed_users,
+  
+  -- 1. Активные в этом месяце
+  COUNT(DISTINCT CASE WHEN is_verified = 1 AND is_deactivated_now = 0 AND act_0 = 1 THEN user_id END) AS segment_active,
+  
+  -- 2. Спящие (Не зашли в этом, но были в прошлом)
+  COUNT(DISTINCT CASE WHEN is_verified = 1 AND is_deactivated_now = 0 AND act_0 = 0 AND act_1 = 1 THEN user_id END) AS segment_sleeping,
+  
+  -- 3. Просто неактивные (Продуктовый отток: молчат больше 2 месяцев)
+  COUNT(DISTINCT CASE WHEN is_verified = 1 AND is_deactivated_now = 0 AND act_0 = 0 AND act_1 = 0 THEN user_id END) AS segment_simply_inactive
+
+FROM user_history_matrix
+GROUP BY 1, 2, 3"
+postgresqldim9000,vw_dm_nsm_categories_monthly,"WITH 
+-- 1. Справочник исторических деактиваций домов
+house_deactivation_dates AS (
+  SELECT house_id, DATE(deactivated_date) AS deactivated_date 
+  FROM UNNEST([
+    STRUCT('e898c6d1-227c-462f-aec2-d4f8949f7f6b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('a72558c9-5f78-4633-a425-b42a79ee3649' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('6017b015-6916-41db-9404-dd5b0885434b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('56d86356-cfe1-4382-b3be-d0fe2c0dba3f' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('18c381e0-afa9-4b7f-82cd-9d005dca90e1' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('ef446c3b-c38f-4fa2-a887-9633fbba4071' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('91aa654b-f87c-48fe-b144-2fa8fd9932df' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('60b3c00e-fc59-41d3-b6b2-c8deb8f508d2' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('b7953ed1-cdc6-4a3d-b731-dbfb28c5cc30' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('0c6a2fb0-979a-4ef0-9e5a-5ef0463e3e21' AS house_id, '2025-12-01' AS deactivated_date),
+    STRUCT('f94470ce-61a5-4454-8951-c70be8531e57' AS house_id, '2025-12-01' AS deactivated_date) 
+  ])
+),
+excluded_complexes AS (
+  SELECT id FROM UNNEST(['09c50e9a-7685-435d-ac36-4934aa7fd39c', '585e7b5b-737d-4ad9-bf25-76fdb0af015a', 'b59820ce-0548-4ade-994d-f617202ad2c5']) AS id
+),
+calendar AS (
+  SELECT report_month FROM UNNEST(GENERATE_DATE_ARRAY(DATE('2024-01-01'), DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)) AS report_month
+),
+report_backbone AS (
+  SELECT c.report_month, comp.id AS complex_id, comp.name AS complex_name
+  FROM calendar c
+  CROSS JOIN (
+    SELECT id, name FROM `analytics-454817.postgresqldim9000.complexes` WHERE id NOT IN (SELECT id FROM excluded_complexes)
+    UNION ALL
+    SELECT '00000000-0000-0000-0000-000000000000' AS id, 'Відтік (ЖК не вказано / Архів)' AS name
+  ) comp
+),
+
+-- 2. База квартир и маппинг
+clean_spaces AS (
+  SELECT s.id AS space_id, h.complex_id, s.owner_id
+  FROM `analytics-454817.postgresqldim9000.spaces` s
+  JOIN `analytics-454817.postgresqldim9000.sections` sec ON s.section_id = sec.id
+  JOIN `analytics-454817.postgresqldim9000.houses` h ON sec.house_id = h.id
+  LEFT JOIN house_deactivation_dates hd ON h.id = hd.house_id
+  WHERE h.complex_id NOT IN (SELECT id FROM excluded_complexes)
+),
+all_user_mappings AS (
+  SELECT owner_id AS user_id, complex_id FROM clean_spaces WHERE owner_id IS NOT NULL
+  UNION DISTINCT
+  SELECT su.user_id, cs.complex_id FROM `analytics-454817.postgresqldim9000.space_user` su JOIN clean_spaces cs ON su.space_id = cs.space_id
+),
+user_base AS (
+  SELECT 
+    u.id AS user_id, u.phone, u.created_at, u.verified, u.role,
+    COALESCE(m.complex_id, CASE WHEN u.role = 'ROLE_INACTIVATED_CITIZEN' AND u.verified = TRUE THEN '00000000-0000-0000-0000-000000000000' END) AS complex_id
+  FROM `analytics-454817.postgresqldim9000.users` u
+  LEFT JOIN (
+     SELECT user_id, complex_id FROM all_user_mappings GROUP BY 1, 2
+  ) m ON u.id = m.user_id
+  WHERE m.complex_id IS NOT NULL OR (u.role = 'ROLE_INACTIVATED_CITIZEN' AND u.verified = TRUE)
+),
+
+-- 3. События Amplitude (Категоризация)
+raw_events AS (
+  SELECT 
+    JSON_VALUE(user_properties, '$.phone_number') AS phone,
+    DATE_TRUNC(DATE(event_time), MONTH) AS activity_month,
+    CASE 
+      WHEN event_type = 'request_new_desc_btn_success_ok_tap' THEN '1. Заявки'
+      WHEN event_type = 'active_receipt_popup_payment_success_view' THEN '2. Оплата (Успіх)'
+      WHEN event_type = 'active_receipt_popup_payment_fail_view' THEN '2. Оплата (Помилка)'
+      WHEN event_type = 'vote_details_active_form__tap' THEN '3. Голосування'
+      WHEN event_type = 'paid_service_description_btn_success_ok_tap' THEN '4. Платні заявки'
+      WHEN event_type IN ('key_open_btn__click', 'widget_home_key_btn__click', 'widget_control_center_key_btn__click', 'widget_lock_key_btn__click') THEN '5. СКД'
+      WHEN event_type = 'temp_key_create__success' THEN '6. Тимчасові доступи'
+    END AS action_category
+  FROM `analytics-454817.postgresqldim9000.EVENTS_407641`
+  WHERE event_time >= '2024-01-01'
+    AND JSON_VALUE(user_properties, '$.phone_number') IS NOT NULL
+),
+
+-- 4. Джойним логи только с живыми верифицированными юзерами
+valid_user_events AS (
+  SELECT 
+    rb.report_month,
+    rb.complex_name,
+    ub.user_id,
+    re.action_category
+  FROM report_backbone rb
+  JOIN user_base ub ON rb.complex_id = ub.complex_id
+  JOIN raw_events re ON ub.phone = re.phone AND rb.report_month = re.activity_month
+  WHERE DATE_TRUNC(DATE(ub.created_at), MONTH) <= rb.report_month
+    AND ub.verified = TRUE
+    AND ub.role != 'ROLE_INACTIVATED_CITIZEN'
+    AND re.action_category IS NOT NULL
+),
+
+-- 5. Агрегация по категориям + создание строки ""0. Всього активних""
+category_agg AS (
+  -- Считаем уникальных юзеров по каждой категории
+  SELECT 
+    report_month,
+    complex_name,
+    action_category,
+    COUNT(DISTINCT user_id) AS unique_users
+  FROM valid_user_events
+  GROUP BY 1, 2, 3
+  
+  UNION ALL
+  
+  -- Строка ""0. Всього активних"". Считаем уникальных юзеров, сделавших ХОТЯ БЫ ОДНО целевое действие в месяце
+  SELECT 
+    report_month,
+    complex_name,
+    '0. Всього активних' AS action_category,
+    COUNT(DISTINCT user_id) AS unique_users
+  FROM valid_user_events
+  GROUP BY 1, 2
+),
+
+-- 6. Знаменатель (Общее число подтвержденных пользователей) для расчета %
+potential_users AS (
+  SELECT 
+    rb.report_month,
+    rb.complex_name,
+    COUNT(DISTINCT ub.user_id) AS count_potential
+  FROM report_backbone rb
+  JOIN user_base ub ON rb.complex_id = ub.complex_id
+  WHERE DATE_TRUNC(DATE(ub.created_at), MONTH) <= rb.report_month
+    AND ub.verified = TRUE
+    AND ub.role != 'ROLE_INACTIVATED_CITIZEN'
+  GROUP BY 1, 2
+)
+
+-- 7. Финальный вывод
+SELECT 
+  c.report_month,
+  c.complex_name,
+  c.action_category,
+  c.unique_users,
+  COALESCE(p.count_potential, 0) AS count_potential_users,
+  SAFE_DIVIDE(c.unique_users, p.count_potential) AS penetration_rate
+FROM category_agg c
+LEFT JOIN potential_users p ON c.report_month = p.report_month AND c.complex_name = p.complex_name"
+postgresqldim9000,vw_dm_objects_filter,"WITH 
+house_deactivation_dates AS (
+  SELECT house_id, DATE(deactivated_date) AS deactivated_date 
+  FROM UNNEST([
+    STRUCT('e898c6d1-227c-462f-aec2-d4f8949f7f6b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('a72558c9-5f78-4633-a425-b42a79ee3649' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('0c6a2fb0-979a-4ef0-9e5a-5ef0463e3e21' AS house_id, '2025-12-01' AS deactivated_date) -- и остальные...
+  ])
+),
+excluded_complexes AS (
+  SELECT id FROM UNNEST(['09c50e9a-7685-435d-ac36-4934aa7fd39c', '585e7b5b-737d-4ad9-bf25-76fdb0af015a', 'b59820ce-0548-4ade-994d-f617202ad2c5']) AS id
+),
+calendar AS (
+  SELECT report_month FROM UNNEST(GENERATE_DATE_ARRAY(DATE('2024-01-01'), DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)) AS report_month
+),
+report_backbone AS (
+  SELECT c.report_month, comp.id AS complex_id, comp.name AS complex_name, obj.object_type
+  FROM calendar c
+  CROSS JOIN (
+    SELECT id, name FROM `analytics-454817.postgresqldim9000.complexes` WHERE id NOT IN (SELECT id FROM excluded_complexes)
+  ) comp
+  CROSS JOIN (
+    SELECT 'Квартира' AS object_type UNION ALL SELECT 'Паркінг' UNION ALL SELECT 'Комерція'
+  ) obj
+),
+clean_spaces AS (
+  SELECT 
+    s.id AS space_id, h.complex_id, h.id AS house_id, s.owner_id,
+    CASE 
+      WHEN sa.id IS NOT NULL THEN 'Квартира'
+      WHEN sc.id IS NOT NULL AND sc.type = 'parking' THEN 'Паркінг'
+      WHEN sc.id IS NOT NULL AND (sc.type != 'parking' OR sc.type IS NULL) THEN 'Комерція'
+      ELSE 'Квартира'
+    END AS object_type
+  FROM `analytics-454817.postgresqldim9000.spaces` s
+  JOIN `analytics-454817.postgresqldim9000.sections` sec ON s.section_id = sec.id
+  JOIN `analytics-454817.postgresqldim9000.houses` h ON sec.house_id = h.id
+  LEFT JOIN `analytics-454817.postgresqldim9000.space_apartments` sa ON s.id = sa.id
+  LEFT JOIN `analytics-454817.postgresqldim9000.space_commercials` sc ON s.id = sc.id
+  WHERE h.complex_id NOT IN (SELECT id FROM excluded_complexes)
+),
+infrastructure AS (
+  SELECT 
+    rb.report_month, rb.complex_id, rb.object_type,
+    COUNT(DISTINCT cs.house_id) AS count_houses,
+    COUNT(DISTINCT cs.space_id) AS active_accounts
+  FROM report_backbone rb
+  JOIN clean_spaces cs ON rb.complex_id = cs.complex_id AND rb.object_type = cs.object_type
+  LEFT JOIN house_deactivation_dates hd ON cs.house_id = hd.house_id
+  WHERE (hd.deactivated_date IS NULL OR rb.report_month < hd.deactivated_date)
+  GROUP BY 1, 2, 3
+),
+all_user_mappings AS (
+  SELECT owner_id AS user_id, complex_id, object_type FROM clean_spaces WHERE owner_id IS NOT NULL
+  UNION DISTINCT
+  SELECT su.user_id, cs.complex_id, cs.object_type FROM `analytics-454817.postgresqldim9000.space_user` su 
+  JOIN clean_spaces cs ON su.space_id = cs.space_id
+),
+users_snapshot AS (
+  SELECT 
+    c.report_month, m.complex_id, m.object_type,
+    COUNT(DISTINCT CASE WHEN u.verified = TRUE AND u.role != 'ROLE_INACTIVATED_CITIZEN' THEN u.id END) AS confirmed_users
+  FROM calendar c
+  CROSS JOIN `analytics-454817.postgresqldim9000.users` u
+  JOIN all_user_mappings m ON u.id = m.user_id
+  WHERE DATE_TRUNC(DATE(u.created_at), MONTH) <= c.report_month
+  GROUP BY 1, 2, 3
+)
+SELECT 
+  rb.report_month,
+  rb.complex_name,
+  rb.object_type,
+  COALESCE(MAX(inf.count_houses), 0) AS count_houses,
+  COALESCE(MAX(inf.active_accounts), 0) AS active_accounts,
+  COALESCE(MAX(usr.confirmed_users), 0) AS confirmed_users
+FROM report_backbone rb
+LEFT JOIN infrastructure inf ON rb.report_month = inf.report_month AND rb.complex_id = inf.complex_id AND rb.object_type = inf.object_type
+LEFT JOIN users_snapshot usr ON rb.report_month = usr.report_month AND rb.complex_id = usr.complex_id AND rb.object_type = usr.object_type
+GROUP BY 1, 2, 3"
+postgresqldim9000,vw_dm_operations_monthly,"WITH 
+house_deactivation_dates AS (
+  SELECT house_id, DATE(deactivated_date) AS deactivated_date 
+  FROM UNNEST([
+    STRUCT('e898c6d1-227c-462f-aec2-d4f8949f7f6b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('a72558c9-5f78-4633-a425-b42a79ee3649' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('6017b015-6916-41db-9404-dd5b0885434b' AS house_id, '2025-08-01' AS deactivated_date),
+    STRUCT('56d86356-cfe1-4382-b3be-d0fe2c0dba3f' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('18c381e0-afa9-4b7f-82cd-9d005dca90e1' AS house_id, '2025-09-01' AS deactivated_date),
+    STRUCT('ef446c3b-c38f-4fa2-a887-9633fbba4071' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('91aa654b-f87c-48fe-b144-2fa8fd9932df' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('60b3c00e-fc59-41d3-b6b2-c8deb8f508d2' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('b7953ed1-cdc6-4a3d-b731-dbfb28c5cc30' AS house_id, '2025-10-01' AS deactivated_date),
+    STRUCT('0c6a2fb0-979a-4ef0-9e5a-5ef0463e3e21' AS house_id, '2025-12-01' AS deactivated_date),
+    STRUCT('f94470ce-61a5-4454-8951-c70be8531e57' AS house_id, '2025-12-01' AS deactivated_date) 
+  ])
+),
+excluded_complexes AS (
+  SELECT id FROM UNNEST(['09c50e9a-7685-435d-ac36-4934aa7fd39c', '585e7b5b-737d-4ad9-bf25-76fdb0af015a', 'b59820ce-0548-4ade-994d-f617202ad2c5']) AS id
+),
+calendar AS (
+  SELECT report_month FROM UNNEST(GENERATE_DATE_ARRAY(DATE('2024-01-01'), DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)) AS report_month
+),
+report_backbone AS (
+  SELECT c.report_month, comp.id AS complex_id, comp.name AS complex_name
+  FROM calendar c
+  CROSS JOIN (
+    SELECT id, name FROM `analytics-454817.postgresqldim9000.complexes` WHERE id NOT IN (SELECT id FROM excluded_complexes)
+    UNION ALL
+    SELECT '00000000-0000-0000-0000-000000000000' AS id, 'Відтік (ЖК не вказано / Архів)' AS name
+  ) comp
+),
+infrastructure AS (
+  SELECT 
+    rb.report_month,
+    rb.complex_id,
+    COUNT(DISTINCT CASE WHEN (s.id IN (SELECT id FROM `analytics-454817.postgresqldim9000.space_apartments`) OR s.id IN (SELECT id FROM `analytics-454817.postgresqldim9000.space_commercials` WHERE type != 'parking' OR type IS NULL)) THEN h.id END) AS houses_count,
+    COUNT(DISTINCT CASE WHEN s.id IN (SELECT id FROM `analytics-454817.postgresqldim9000.space_apartments`) THEN s.id END) AS apartments_count,
+    COUNT(DISTINCT CASE WHEN s.id IN (SELECT id FROM `analytics-454817.postgresqldim9000.space_commercials` WHERE type != 'parking' OR type IS NULL) THEN s.id END) AS commercials_count,
+    COUNT(DISTINCT CASE WHEN s.id IN (SELECT id FROM `analytics-454817.postgresqldim9000.space_commercials` WHERE type = 'parking') THEN s.id END) AS parkings_count
+  FROM report_backbone rb
+  JOIN `analytics-454817.postgresqldim9000.houses` h ON rb.complex_id = h.complex_id
+  LEFT JOIN house_deactivation_dates hd ON h.id = hd.house_id
+  LEFT JOIN `analytics-454817.postgresqldim9000.sections` sec ON h.id = sec.house_id
+  LEFT JOIN `analytics-454817.postgresqldim9000.spaces` s ON sec.id = s.section_id
+  WHERE (hd.deactivated_date IS NULL OR rb.report_month < hd.deactivated_date)
+  GROUP BY 1, 2
+),
+clean_spaces AS (
+  SELECT s.id AS space_id, h.complex_id, s.owner_id
+  FROM `analytics-454817.postgresqldim9000.spaces` s
+  JOIN `analytics-454817.postgresqldim9000.sections` sec ON s.section_id = sec.id
+  JOIN `analytics-454817.postgresqldim9000.houses` h ON sec.house_id = h.id
+  WHERE h.complex_id NOT IN (SELECT id FROM excluded_complexes)
+),
+all_user_mappings AS (
+  SELECT owner_id AS user_id, complex_id, 1 AS is_owner FROM clean_spaces WHERE owner_id IS NOT NULL
+  UNION DISTINCT
+  SELECT su.user_id, cs.complex_id, 0 AS is_owner FROM `analytics-454817.postgresqldim9000.space_user` su JOIN clean_spaces cs ON su.space_id = cs.space_id
+),
+user_base AS (
+  SELECT 
+    u.id AS user_id, u.phone, u.created_at, u.verified, u.role,
+    -- ФОРСИРОВАННАЯ АРХИВАЦИЯ:
+    -- Если роль деактивирована ИЛИ человек потерял связь с квартирой (complex_id IS NULL) -> в Архив
+    CASE 
+      WHEN u.role = 'ROLE_INACTIVATED_CITIZEN' THEN '00000000-0000-0000-0000-000000000000'
+      WHEN m.complex_id IS NULL THEN '00000000-0000-0000-0000-000000000000'
+      ELSE m.complex_id
+    END AS complex_id
+  FROM `analytics-454817.postgresqldim9000.users` u
+  LEFT JOIN (
+     SELECT user_id, complex_id, MAX(is_owner) AS is_owner
+     FROM all_user_mappings
+     GROUP BY 1, 2
+  ) m ON u.id = m.user_id
+  -- Оставляем ВСЕХ жильцов с квартирами. А ""бездомных"" берем ТОЛЬКО верифицированных.
+  WHERE m.complex_id IS NOT NULL OR u.verified = TRUE
+),
+user_activity_flags AS (
+  SELECT 
+    JSON_VALUE(e.user_properties, '$.phone_number') AS phone_number,
+    DATE_TRUNC(DATE(e.event_time), MONTH) AS activity_month,
+    1 AS is_visitor,
+    MAX(CASE WHEN e.event_type IN (
+      'request_new_desc_btn_success_ok_tap', 'active_receipt_popup_payment_success_view', 
+      'active_receipt_popup_payment_fail_view', 'vote_details_active_form__tap', 
+      'paid_service_description_btn_success_ok_tap', 'key_open_btn__click', 
+      'widget_home_key_btn__click', 'widget_control_center_key_btn__click', 
+      'widget_lock_key_btn__click', 'temp_key_create__success'
+    ) THEN 1 ELSE 0 END) AS is_target_active
+  FROM `analytics-454817.postgresqldim9000.EVENTS_407641` e
+  WHERE e.amplitude_id IS NOT NULL AND session_id IS NOT NULL AND JSON_VALUE(e.user_properties, '$.phone_number') IS NOT NULL
+  GROUP BY 1, 2
+),
+user_history AS (
+  SELECT 
+    rb.report_month, 
+    rb.complex_id, 
+    ub.user_id, 
+    ub.verified,
+    COALESCE(MAX(CASE WHEN act.activity_month = rb.report_month THEN act.is_visitor END), 0) AS is_visitor_1m,
+    COALESCE(MAX(CASE WHEN act.activity_month = rb.report_month THEN act.is_target_active END), 0) AS is_target_active_1m,
+    COALESCE(MAX(CASE WHEN act.activity_month >= DATE_SUB(rb.report_month, INTERVAL 2 MONTH) THEN act.is_visitor END), 0) AS is_visitor_3m,
+    COALESCE(MAX(act.is_visitor), 0) AS is_visitor_12m
+  FROM report_backbone rb
+  JOIN user_base ub ON rb.complex_id = ub.complex_id
+  LEFT JOIN user_activity_flags act 
+    ON ub.phone = act.phone_number 
+    AND act.activity_month BETWEEN DATE_SUB(rb.report_month, INTERVAL 11 MONTH) AND rb.report_month
+  WHERE DATE_TRUNC(DATE(ub.created_at), MONTH) <= rb.report_month
+  GROUP BY 1, 2, 3, 4
+)
+SELECT 
+  rb.report_month,
+  rb.complex_name,
+  
+  COALESCE(MAX(inf.houses_count), 0) AS count_houses,
+  COALESCE(MAX(inf.apartments_count), 0) AS count_apartments,
+  COALESCE(MAX(inf.commercials_count), 0) AS count_commercials,
+  COALESCE(MAX(inf.parkings_count), 0) AS count_parkings,
+  
+  COUNT(DISTINCT uh.user_id) AS total_users,
+  -- Обрати внимание: мы убрали фильтр is_deactivated_now, теперь считаются все верифицированные!
+  COUNT(DISTINCT CASE WHEN uh.verified = TRUE THEN uh.user_id END) AS confirmed_users, 
+  
+  COUNT(DISTINCT CASE WHEN uh.verified = TRUE AND uh.is_visitor_3m = 1 THEN uh.user_id END) AS alive_users,
+  COUNT(DISTINCT CASE WHEN uh.verified = TRUE AND uh.is_visitor_3m = 0 AND uh.is_visitor_12m = 1 THEN uh.user_id END) AS sleeping_users,
+  COUNT(DISTINCT CASE WHEN uh.verified = TRUE AND uh.is_visitor_12m = 0 THEN uh.user_id END) AS dead_users,
+  
+  COUNT(DISTINCT CASE WHEN uh.verified = TRUE AND uh.is_visitor_1m = 1 THEN uh.user_id END) AS mau_visitors,
+  COUNT(DISTINCT CASE WHEN uh.verified = TRUE AND uh.is_target_active_1m = 1 THEN uh.user_id END) AS mau_target_active
+
+FROM report_backbone rb
+LEFT JOIN infrastructure inf ON rb.report_month = inf.report_month AND rb.complex_id = inf.complex_id
+LEFT JOIN user_history uh ON rb.report_month = uh.report_month AND rb.complex_id = uh.complex_id
+GROUP BY 1, 2"
