@@ -31,13 +31,14 @@ Project: `analytics-454817`
 
 ## 4. Знайдені проблеми (Фаза 0 audit)
 
-1. **`deactivated_houses` drift.** Хардкод-список задубльований у 4+ views з розбіжністю: 10 записів у `view_monthly_active_residents`/`vw_dm_complex_user_segments_monthly`, 11 у `vw_dm_apartment_occupancy_monthly`/`vw_dm_operations_monthly`, і лише **3 з 11** у `vw_dm_objects_filter` — з коментарем у самому коді `-- и остальные...` (незавершений копіпаст). Наслідок: підрахунки в `vw_dm_objects_filter` не виключають 8 деактивованих будинків, які виключають інші view. **Фікс:** винести список в окремий reference view `ref_deactivated_houses`, всі 5 view джойняться на нього замість дублювання UNNEST — див. пункт у розділі 8.
+1. **`deactivated_houses` drift — виявився ширшим, ніж у Фазі 0.** Початково: хардкод-список задубльований у 4+ product views з розбіжністю (10 записів у `view_monthly_active_residents`/`vw_dm_complex_user_segments_monthly`, 11 у `vw_dm_apartment_occupancy_monthly`/`vw_dm_operations_monthly`, лише **3 з 11** у `vw_dm_objects_filter`). Аудит операційного дашборду (Фаза 1) показав ще гірше: у Looker custom SQL співіснують **4 різні механізми** виключення домів/ЖК одночасно — (a) той самий статичний список 10 UUID, (b) повна відсутність фільтра у 2 запитах, (c) окремий список 3 ЖК-UUID спільний із продуктовою стороною, (d) окремий рядковий механізм по назві ЖК+номеру будинку лише в одному запиті. Плюс покинутий чернетковий запит фільтрував через **живе поле `houses.status = 'deactivated'`** замість хардкоду — потенційно найкращий шлях фіксу, якщо поле надійне (не підтверджено). **Рішення (Микита, 2026-07-09): фікс відкладено до dbt-фази** — проміжний `ref_deactivated_houses` view робити не будемо, щоб не переробляти двічі. Деталі — `looker_extracted/operational/AUDIT.md`.
 2. **Дві паралельні методики боргу.** `mart_debt_flat`/`mart_debt_aging` рахують борг як `initial_debt`; `mart_debt_alena` — як `debt_balance − paid_amount`. Обидві живуть одночасно, не узгоджено яка канонічна для дашборду. **Відкладено до аудиту фінансового дашборду** (не блокує Фазу 1) — фінансові view вже побудовані акуратно, але додатковий аудит перед dbt-міграцією не завадить.
 3. ✅ **Закрито (реєстр v0.2).** `mart_payment_rates` vs `mart_payments_rate` — `mart_payment_rates` (grain: приміщення × послуга) **актуальний**, `mart_payments_rate` (grain: ЖК × місяць) — **legacy**. FIN-005 у реєстрі виправлено на `mart_payment_rates`. Ризик плутанини через схожі назви лишається — тримати в голові при пошуку.
-4. ✅ **Закрито на рівні вилучення (Фаза 1).** Прихована логіка Looker (Стр.2-5) відновлена з BigQuery job history — див. `looker_extracted/`. **Усі** джерела даних Looker виявились custom SQL (не таблиці): продуктовий дашборд (`report_id c2180c98`) = 27 джерел, 23 custom на `EVENTS_407641` (активація/ретеншен/core-events/phone-auth). Логіка більше не «невідома». **Лишилось:** підтвердити з Артемом прив'язку конкретний datasource_id ↔ метрика/сторінка (layout Looker у BQ не зберігається) і винести в `fact_*`. Спосіб вилучення й застереження — у `looker_extracted/_index.md`.
+4. ✅ **Закрито повністю (Фаза 1).** Прихована логіка Looker (Стр.2-5) відновлена з BigQuery job history — див. `looker_extracted/`. **Усі** джерела даних Looker виявились custom SQL (не таблиці): продуктовий дашборд (`report_id c2180c98`) = 27 джерел, 23 custom на `EVENTS_407641` (активація/ретеншен/core-events/phone-auth). Прив'язка sql↔сторінка підтверджена (PDF-експорт + Микита як автор дашборду, не Артем — питання про *вміст дашборду* адресуються Микиті, Артем лише методолог бізнес-визначень). Деталі — `looker_extracted/product/_index.md`.
 5. ✅ **Закрито:** `iban` у джерелі `dim_llc` (`tascombank_merchants WHERE purpose='payment'`) унікальний — перевірено запитом, fan-out ризику при джойнах немає.
 6. ✅ **Закрито:** `postgresql` емпірично підтверджений мертвим (останній sync 2025-04-29 проти сьогоднішнього sync `postgresqldim9000`).
 7. ✅ **Закрито.** Рішення по `amlitude_EU`, `postgresql` і view `users_objects_complexes`: не мігрувати, не видаляти — лишаються в BigQuery як є, свідомо ігноруємо. Якщо десь у Looker щось досі на них посилається — не чіпати, поки не зʼявиться конкретна причина.
+8. ✅ **Закрито (Фаза 1, аудит операційного дашборду).** Прочитано всі 18 Looker-джерел (`report_id 1a8ae601`) — див. `looker_extracted/operational/AUDIT.md`. Знахідки, окрім розширення бага #1 (п.1): ЖК "Севен" має захардкожені числа (518/2100 юзерів) прямо в найбільш використовуваному запиті — undocumented workaround, контекст втратиться без пояснення Микити перед dbt-міграцією; словник перекладу категорій заявок задубльовано **тричі** з розбіжністю (`intercom_and_video`) — кандидат на dbt seed `dim_order_category`; третя (окрім двох продуктових) паралельна методика "confirmed/active user" знайдена в покинутому запиті — не критично, не на дашборді.
 
 ## 5. Реєстр метрик
 
@@ -58,8 +59,8 @@ Project: `analytics-454817`
 | `vw_dm_operations_monthly` | complex × month | Стр.1/4, найбільший view |
 | `vw_dm_apartment_occupancy_monthly` | house × month | заселеність, не бачив на дашборді |
 | `vw_dm_objects_filter` | complex × object_type × month | розбивка по типу об'єкта — **містить баг #1** |
-| `dm_company_churn_monthly` | month (вся компанія) | churn, не бачив на дашборді |
-| Стр.2, 3, 4, 5 | — | ✅ **витягнуто** — `looker_extracted/product/` (report `c2180c98`, 23 custom SQL). Точна прив'язка sql↔сторінка потребує підтвердження Артема. |
+| `dm_company_churn_monthly` | month (вся компанія) | churn — **графік був на дашборді, прибраний** (підтверджено Микитою); джерело лишилось підключеним у Looker |
+| Стр.2, 3, 4, 5 | — | ✅ **витягнуто й прив'язка підтверджена** — `looker_extracted/product/` (report `c2180c98`, 27 джерел, 23 custom SQL). Метод і повна таблиця — `looker_extracted/product/_index.md`. |
 
 **report_id дашбордів у Looker Studio** (для майбутніх вилучень з job history): продуктовий = `c2180c98-0cf4-49af-a1d0-0ad3364cb599`, фінансовий = `ca96cfac-6fac-475f-b467-42ea4c4eaf6f`, операційний = `1a8ae601-9542-4198-be93-8ed41ca39d4f`.
 
@@ -68,7 +69,7 @@ Project: `analytics-454817`
 | Фаза | Що | Статус |
 |---|---|---|
 | 0 | Аудит схеми, lineage, знайдені баги, реєстр v0.1 | ✅ закрито |
-| 1 | Витягнути Looker custom SQL (Стр.2-5), аудит операційного дашборду, реєстр → v1.0 | 🔶 **зараз тут** — Looker SQL витягнуто ✅, схема EU сдамплена ✅, реєстр→v0.2 ✅; лишилось: мапінг sql↔метрика з Артемом, аудит опердашборду, → v1.0 |
+| 1 | Витягнути Looker custom SQL (Стр.2-5), аудит операційного дашборду, реєстр → v1.0 | 🔶 **зараз тут** — Looker SQL витягнуто й прив'язку підтверджено ✅, схема EU сдамплена ✅, реєстр→v0.3 ✅, аудит операційного дашборду ✅; лишилось: реєстр → v1.0 (заповнити Operational-розділ, зараз лише заглушка) |
 | 2 | dbt на поточних даних: seeds → staging → intermediate → marts | 🔲 |
 | 3 | Новий продуктовий дашборд: Bklit UI + shadcn/ui поверх чистих marts | 🔲 |
 | 4 | Перенос уроків у мультитенантний дизайн для UrbanStack SaaS | 🔲 |
@@ -79,14 +80,16 @@ Project: `analytics-454817`
 - [x] ✅ Дамп `INFORMATION_SCHEMA` (EU marts + US `bigquery`) → `schema/`.
 - [x] ✅ Виправлено FIN-005 у реєстрі (`mart_payment_rates`), реєстр → markdown v0.2.
 - [x] ✅ `dim9000_fast` / `dim9000_analytics` — рішення: окремі внутрішні продукти, не джерела дашбордів, аудит не потрібен (план: перенести в EU).
-- [ ] **Наступне:** з Артемом підтвердити прив'язку конкретний `datasource_id` (файл у `looker_extracted/product/`) ↔ метрика/сторінка Стр.2-5; заповнити реєстр до v1.0.
-- [ ] Аудит операційного дашборду — вхід готовий: `looker_extracted/operational/` (report `1a8ae601`, 13 custom SQL на orders/order_tasks).
-- [ ] Створити `ref_deactivated_houses` view (canonical список, 11 записів — звір повноту) і переключити всі 5 view на нього. Дані під рукою: `schema/eu_views.csv`.
+- [x] ✅ Прив'язка sql↔сторінка для Стр.2-5 підтверджена (PDF-експорт + Микита), реєстр → v0.3.
+- [x] ✅ Аудит операційного дашборду завершено — `looker_extracted/operational/AUDIT.md`. Фікс знахідок (баг #1 у ширшому вигляді, хардкод "Севен", дрейф словника категорій) свідомо відкладено до dbt-фази.
+- [ ] **Наступне:** заповнити реєстр метрик до v1.0 (розділ Operational зараз лише заглушка OPS-001 — узяти показники з `looker_extracted/operational/AUDIT.md`).
+- [ ] Фаза 2 (dbt): `ref_deactivated_houses`/`excluded_complexes` як seed або фільтр по `houses.status` (перевірити надійність поля) — вирішувати разом з `int_space_geo` і `dim_order_category`.
 
 ## 9. Вже прийняті рішення
 
-- Хардкод-списки (`excluded_complexes`, `deactivated_houses`, список "core events") → **dbt seeds**, не copy-paste між моделями — структурно унеможливлює баг #1. Проміжний крок до dbt: `ref_deactivated_houses` як звичайний BigQuery view вже зараз.
-- Спільний intermediate `int_space_geo` для ланцюжка `spaces → sections → houses → complexes`, який зараз повторюється практично в кожному запиті (і в finance_dash, і в продуктових views).
+- Хардкод-списки (`excluded_complexes`, `deactivated_houses`, список "core events", `dim_order_category`/`dim_order_type`) → **dbt seeds**, не copy-paste між моделями — структурно унеможливлює баг #1 та його операційний аналог (словник категорій заявок, 3 копії з розбіжністю). **Рішення 2026-07-09: жодного проміжного BigQuery view (`ref_deactivated_houses`) до dbt не робимо** — фікс лише в dbt-фазі, щоб не переробляти двічі. Перевірити при цьому, чи `houses.status = 'deactivated'` — надійне живе поле (знайдено в покинутому Looker-запиті), тоді фільтр по ньому може бути кращим за статичний seed.
+- Спільний intermediate `int_space_geo` для ланцюжка `spaces → sections → houses → complexes`, який зараз повторюється практично в кожному запиті (і в finance_dash, і в продуктових views, і в операційних Looker custom SQL).
+- ЖК "Севен" має захардкожені числа (518/2100 юзерів за вер-жовт 2025) прямо в Looker SQL операційного дашборду — перед dbt-міграцією уточнити в Микити контекст (перехід/часткове відключення будинків), інакше цифри загубляться без пояснення.
 - `finance_dash` переноситься в dbt майже 1:1 (найменший ризик, хороший перший PR — вже має правильну dim/fact/mart конвенцію).
 - Продуктова сторона (`vw_dm_*` монолiти) потребує повного рефакторингу в `fact_user_lifecycle` / `fact_activation_events` / `fact_module_usage`.
 - Фаза 3: **Bklit UI + shadcn/ui разом**, не тільки Bklit — взяти найкраще з обох.

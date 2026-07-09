@@ -10,7 +10,7 @@
 | `passthrough_vw_dm_operations_monthly__c9b60582.sql` | passthrough | 505 | 2026-07-08 | Стр.1 | Confirmed (passthrough) |
 | `custom_version_os__9661205a.sql` | custom | 288 | 2026-07-08 | Стр.1 (OS/версії) | Confirmed (exact match) |
 | `custom_retention__aa9975c4.sql` | custom | 288 | 2026-06-01 | Стр.1 (% підтверджених, MAU%) | Confirmed |
-| `custom_active_users__4738bf74.sql` | custom | 20 | 2026-06-01 | Стр.1? (альт. "Відвідувачі") | Candidate — потребує уточнення в Микити |
+| `custom_active_users__4738bf74.sql` | custom | 20 | 2026-06-01 | Стр.1 (альт. "Відвідувачі") | Confirmed (Микита) |
 | `custom_citizen_stat__45b8b948.sql` | custom | 25 | 2026-06-01 | — | ❌ **Підтверджено невірний** (Микита) — методика розрахунку через `statistic_citizen` хибна. НЕ використовувати як джерело для dbt/реєстру. |
 | `custom_retention_2__17fe7429.sql` | custom | 250 | 2026-07-08 | **Стр.2** (New/Activated/Passively Activated + Відсоток активованих + Конверсія) | Confirmed (exact match) |
 | `custom_new_users__d303fc10.sql` | custom | 26 | 2026-07-08 | **Стр.2** (Медіанна к-сть годин до цінної дії) | Confirmed (exact match: 39,5) |
@@ -27,12 +27,12 @@
 | `custom_retention_5__00b07e7a.sql` | custom | 93 | 2026-07-08 | **Стр.3** (Активні/Сплячі/Ризик відтоку/Загублені/Мертві душі + Стара/Актуальна версія) | Confirmed (exact match) |
 | `custom_retention_4__f5c03f68.sql` | custom | 105 | 2026-07-08 | **Стр.3** (% відвалу модуля / Днів між сесіями / Днів до відвалу) — PROD-010 | Confirmed (exact match) |
 | `custom_core_events__e242ceed.sql` | custom | 206 | 2026-07-06 | **Стр.4** (категорії + STAR = `nsm_penetration_rate`) — PROD-009 | Confirmed (exact match, актуальна версія) |
-| `custom_core_events_2__da7f1d65.sql` | custom | 162 | 2026-06-12 | Стр.4 — **дублікат** попереднього, старіша версія запиту (SUPERSEDED) | Confirmed (superseded) |
+| `custom_core_events_2__da7f1d65.sql` | custom | 162 | 2026-06-12 | Стр.4 — **дублікат** попереднього, старіша версія запиту (SUPERSEDED) | Confirmed (superseded, підтверджено Микитою) |
 | `passthrough_vw_dm_nsm_categories_monthly__e9e10a96.sql` | passthrough | 24 | 2026-07-08 | Стр.4? (паралельне/старе джерело тієї ж категоризації) | Candidate |
 | `custom_phone_auth__29eaf862.sql` | custom | 147 | 2026-07-08 | **Стр.5** (Відсоток логаутів, по ОС/версії) | Confirmed (exact match) |
 | `custom_retention_3__b3c2e647.sql` | custom | 117 | 2026-07-08 | **Стр.5** (моніторинг багів біометрії) | Confirmed (Микита) — можливо частковий/старіший зріз, див. нотатку |
 | `custom_phone_auth_3__63b36903.sql` | custom | 38 | 2026-07-08 | **Стр.5** (моніторинг багів біометрії) | Confirmed (Микита) — 3 метрики замість 2, ймовірно повніша версія |
-| `passthrough_dm_company_churn_monthly__72a3cb14.sql` | passthrough | 41 | 2026-06-11 | ⚠️ **не побачено на жодній з 5 сторінок PDF** | Суперечність — див. нижче |
+| `passthrough_dm_company_churn_monthly__72a3cb14.sql` | passthrough | 41 | 2026-06-11 | — | Confirmed (Микита): графік прибрано з дашборду, джерело лишилось підключеним |
 
 ## Метод підтвердження
 
@@ -42,10 +42,11 @@ PDF-експорт дашборду (`Продуктовий_дешборд.pdf`
 
 - **PROD-008/009/010 закриті на рівні точної прив'язки**, а не лише "десь у папці": Стр.2 = `custom_retention_2__17fe7429.sql` + `custom_new_users__d303fc10.sql`; Стр.4/STAR = `custom_core_events__e242ceed.sql`; Стр.3/модулі = `custom_phone_auth_2__bc3b2d0d.sql` + `custom_retention_4__f5c03f68.sql`.
 - **`custom_core_events_2__da7f1d65.sql` — застарілий дублікат** `custom_core_events__e242ceed.sql` (та сама логіка STAR, дрібна відмінність у JOIN, `last_seen` на місяць старіше). Ігнорувати при dbt-міграції, канонічна версія — `e242ceed`.
-- ⚠️ **Суперечність з реєстром метрик.** PROD-013 (Churn компанії) у реєстрі позначено «не бачив на дашборді», але `dm_company_churn_monthly` **фактично є активним джерелом даних продуктового репорту** (`c2180c98`, 41 запуск за 90 днів, останній — 2026-06-11). Уточнити з Микитою (не з Артемом — див. нижче).
-- **Підтверджено Микитою (2026-07-09), автором дашборду:**
+- **Підтверджено Микитою (2026-07-09), автором дашборду — усі раніше відкриті питання закрито:**
   - `custom_citizen_stat__45b8b948.sql` — методика через `statistic_citizen` **хибна**, відкинути повністю (не кандидат навіть на legacy-джерело).
   - `custom_events_usage_4__ea2219dc.sql` (funnel оплати квитанції) і `custom_events_usage_3__f05a1e35.sql` (бакети суми платежу) — **навмисно приховані**, більше не потрібні. Looker source лишається підключеним, але графіка на дашборді немає.
-  - `custom_retention_3__b3c2e647.sql` і `custom_phone_auth_3__63b36903.sql` — обидва це **моніторинг багів біометрії на Стр.5** (не окрема "компаньйон"-метрика, як я спершу написав). Однакова гранулярність (event_week × platform × version_name), та сама подієва логіка. `63b36903` рахує 3 метрики (`total_bio_users`, `technical_friction_users`, `biometric_fallback_users`) — по одній на кожен з 3 scorecard на Стр.5 ("Всього користувачів з біометрією" / "% відвалу" / "% вильоту біометрії"); `b3c2e647` рахує лише 2 (`loyal_bio_users_active`, `technical_friction_users`) — схоже на старішу/часткову версію того самого запиту (як case da7f1d65→e242ceed). Не підтверджено які саме компоненти дашборд реально бере з кожного — не критично для dbt (моніторинговий, не бізнес-критичний функціонал).
-  - `custom_active_users__4738bf74.sql` (альт. "Відвідувачі" на Стр.1) — **ще не уточнено**.
+  - `custom_retention_3__b3c2e647.sql` і `custom_phone_auth_3__63b36903.sql` — обидва це **моніторинг багів біометрії на Стр.5** (не окрема "компаньйон"-метрика, як я спершу написав). Однакова гранулярність (event_week × platform × version_name), та сама подієва логіка. `63b36903` рахує 3 метрики (`total_bio_users`, `technical_friction_users`, `biometric_fallback_users`) — по одній на кожен з 3 scorecard на Стр.5; `b3c2e647` рахує лише 2 — схоже на старішу/часткову версію (як case da7f1d65→e242ceed). Не критично для dbt (моніторинговий, не бізнес-критичний функціонал).
+  - `custom_active_users__4738bf74.sql` (альт. "Відвідувачі" на Стр.1) — підтверджено, робив сам Микита.
+  - `custom_core_events_2__da7f1d65.sql` — підтверджено як застарілий дублікат, ігнорувати.
+  - `dm_company_churn_monthly` (PROD-013) — підтверджено: графік був на дашборді й **прибраний**, джерело лишилось підключеним у Looker (тому й з'являється в job history).
 - **Важливо для майбутніх сесій:** питання «що показано на дашборді / яке SQL-джерело за що відповідає» — до **Микити** (він сам будував і веде дашборд), НЕ до Артема. Артем — власник методології бізнес-визначень (формула STAR, що таке "core event", канонічність спірних метрик), а не імплементаційних деталей дашборду.
