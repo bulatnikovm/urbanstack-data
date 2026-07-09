@@ -1,15 +1,18 @@
 # Реєстр метрик UrbanStack — Product / Operational / Financial
 
-> **v0.3** · living document · джерело правди для майбутньої dbt-документації.
+> **v1.0** · living document · джерело правди для майбутньої dbt-документації.
 > Конвертовано з `UrbanStack_metrics_registry.xlsx` у git-friendly markdown 2026-07-08.
 > Зміни v0.1→v0.2: (1) FIN-005 джерело виправлено на `mart_payment_rates`; (2) PROD-008/009/010 —
 > Looker custom SQL витягнуто у `looker_extracted/product/`, статус оновлено.
-> Зміни v0.2→v0.3: прив'язка sql↔сторінка для PROD-008/009/010 **підтверджена** (зіставлено з PDF-
-> експортом дашборду, метод і повна таблиця — `looker_extracted/product/_index.md`). Знайдено
-> суперечність: PROD-013 (churn) позначено «не бачив на дашборді», але фактично є активним джерелом
-> продуктового репорту в Looker — уточнити з Артемом.
+> Зміни v0.2→v0.3: прив'язка sql↔сторінка для PROD-008/009/010 **підтверджена** Микитою (автором
+> дашборду) — метод і повна таблиця в `looker_extracted/product/_index.md`. Усі раніше відкриті
+> питання по продуктових Looker-джерелах закрито (custom_citizen_stat — хибний, payment funnel/
+> buckets — приховані навмисно, PROD-013 churn — графік прибрано з дашборду).
+> Зміни v0.3→v1.0: **Operational-розділ заповнено** (OPS-001…009) за результатами аудиту
+> операційного дашборду (`looker_extracted/operational/AUDIT.md`, 18 Looker-джерел). Реєстр
+> закриває план Фази 1 (розділ 7 CLAUDE.md).
 
-Всього метрик: 21 · Product 13 · Financial 7 · Operational 1 (заглушка).
+Всього метрик: 29 · Product 13 · Financial 7 · Operational 9.
 
 | ID | Домен | Метрика | Визначення | Формула / логіка розрахунку | Grain | Джерело (dataset.view) | Сторінка дашборду | dbt target (план) | Власник методології | Статус | Нотатки / відомі проблеми |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -33,7 +36,15 @@
 | FIN-005 | Фінансовий | Природний рівень оплат | Оплати поточного місяця / нарахування попереднього місяця | SAFE_DIVIDE(payments_current, charges_previous) | complex × month | finance_dash.mart_payment_rates | Фінансовий деш | fact_payments | Артем | Active | **v0.2 fix:** джерело виправлено з legacy `mart_payments_rate` (grain ЖК×місяць) на актуальний `mart_payment_rates` (grain приміщення×послуга) — CLAUDE.md баг #3. ⚠️ Дві майже однакові назви, легко переплутати. |
 | FIN-006 | Фінансовий | Дисциплінований платник | Мешканець, що повністю сплатив квитанцію за попередній місяць без боргу | ще не реалізовано в марті | space × month | план: новий mart | Фінансовий деш (план) | fact_payments | Артем | Заплановано | Визначення узгоджено на дзвінку 03.07, view ще не написано |
 | FIN-007 | Фінансовий | Середній чек | Середня сума успішної оплати | AVG(payment_amount) | month | розраховується в Looker з mart_payments_flat | Фінансовий деш | — | — | Active |  |
-| OPS-001 | Операційний | (поки не заповнено) | Операційний дашборд ще не аудували | — | — | — | Операційний деш | — | — | Заплановано | Наступний крок після завершення продуктового аудиту |
+| OPS-001 | Операційний | Заявки: відкрито/виконано/скасовано + backlog | Скільки заявок відкрито/виконано/скасовано за місяць, і скільки лишається незакритих наростаючим підсумком | `count_opened`/`count_completed`/`count_canceled`; `backlog = SUM(opened-completed-canceled) OVER (running)` | complex × month (є варіанти: × space, × рік) | `looker_extracted/operational/custom_active_users__5cd58443.sql` (+ дублі іншої гранулярності: `custom_core_events_2__d7ed1d25.sql`, `custom_orders_2__e7906ec1.sql`, `custom_orders_4__712d860f.sql`) | Операційний деш | fact_order_lifecycle (план) | — | Active | 4+ майже дублюючих запити різної гранулярності — консолідувати в один fact у dbt |
+| OPS-002 | Операційний | SLA виконання заявок | Частка заявок, виконаних/скасованих від відкритих за місяць (є варіант "у тому ж місяці") | `SAFE_DIVIDE(count_completed, count_opened)` (`sla_rate`), аналогічно `cancel_rate` | complex × категорія × тип заявки × month | `looker_extracted/operational/custom_core_events__5260ec7d.sql` | Операційний деш | fact_order_lifecycle (план) | — | Active |  |
+| OPS-003 | Операційний | Категорії/типи заявок (укр. переклад) | Категорія (опалення/електрика/ліфти/…, 15 видів) і тип заявки (питання/скарга/проблема/пропозиція/послуга) | `CASE category WHEN 'heating' THEN 'Опалення' …` | довідник (order category/type → label) | `custom_core_events__5260ec7d.sql`, `custom_core_events_2__d7ed1d25.sql`, `custom_orders__2c8667f1.sql` | Операційний деш | dim_order_category / dim_order_type (план, seed) | — | Known issue | Словник задубльовано **тричі**, є розбіжність у перекладі (`intercom_and_video`: «Домофон та відеонагляд» vs «Домофон, відео, СКД»), STRUCT-версія має зайвий ключ `intercom` — див. `looker_extracted/operational/AUDIT.md` |
+| OPS-004 | Операційний | Навантаження на ЖК (проблеми/скарги) | Скільки проблем/скарг на ЖК, частка скарг серед проблем+скарг, задачі на скаргу | `load_rate = (problem+complaint)/OR_cnt`; `complaint_rate = complaint/(problem+complaint)`; `complaint_load`; `task_ratio` | complex × month | `looker_extracted/operational/custom_retention__b85eb016.sql` | Операційний деш | fact_order_lifecycle / mart_operational_load (план) | — | Active |  |
+| OPS-005 | Операційний | Заявки по будинку/типу об'єкта | Розбивка тікетів по будинку, типу об'єкта (Квартира/Комерція/Паркінг), категорії й типу заявки, з часткою в ЖК | `COUNT(o.id)` GROUP BY house/object_type/category; `share_in_complex_percent` | complex × house × object_type × категорія × month | `custom_occupancy__8677b241.sql`, `custom_orders__2c8667f1.sql` | Операційний деш | fact_order_lifecycle (план) | — | Known issue | `custom_occupancy__8677b241.sql` використовує **третій, окремий** механізм виключення ЖК/будинків (по назві+номеру, не по UUID) — може давати інші числа, ніж сусідні графіки. Див. AUDIT.md |
+| OPS-006 | Операційний | Розмір ЖК (будинки/квартири/комерція/паркінги) | Кількість будинків/квартир/комерції/паркінгів по ЖК на місяць, з урахуванням «відключення» об'єктів | `COUNT(DISTINCT …) WHERE created_at <= report_month AND (disconnect_date IS NULL OR report_month < disconnect_date)` | complex × month | `looker_extracted/operational/custom_active_users__5cd58443.sql` | Операційний деш | dim_building / fact_portfolio_size (план) | — | Known issue | Для ЖК «Севен» — захардкожені `disconnect_date` (2025-09-01/2025-10-01) і захардкожені підсумкові числа юзерів (518/2100) — undocumented workaround, потрібне пояснення Микити перед dbt-міграцією |
+| OPS-007 | Операційний | Підтверджені/активні юзери (операційна сторона) | total/confirmed/active users по ЖК на місяць — операційна версія продуктової метрики (PROD-001/002) | З `statistic_citizen` (snapshot); є покинутий чорновик з іншою методикою (`role='ROLE_CITIZEN'`, "активний" = `users.updated_at` за 3 міс) | complex × month | `custom_active_users__5cd58443.sql` (осн.); `custom_active_users_2__0e4066b4.sql` (покинутий, альт. методика) | Операційний деш | fact_user_lifecycle (план, спільний з PROD-001/002) | — | Потребує узгодження | **Третя** (окрім двох продуктових) паралельна методика "confirmed/active user" — не критично зараз (запит покинутий, не на дашборді), фіксується для уніфікації в dbt |
+| OPS-008 | Операційний | Навантаження на юніт | Проблеми+скарги (і окремо скарги) на один об'єкт у ЖК + рядок середнього по всіх ЖК | `SAFE_DIVIDE(count_ps, total_units_op)` (`load_ps_pct`), аналогічно `load_s_only_pct` | complex × month | `looker_extracted/operational/custom_orders_5__b0ffa674.sql` | Операційний деш | mart_operational_load (план) | — | Known issue | **Жодного** виключення деактивованих будинків/ЖК — "Середній показник" по всіх ЖК буде викривлений тестовими/виключеними комплексами |
+| OPS-009 | Операційний | Статуси заявок (укрупнено) | Розподіл усіх заявок за укрупненим статусом: В процесі / Виконано / Скасовано | `CASE status IN (…) THEN '1. В процесі' / '2. Виконано' / '3. Скасовано'` | вся компанія (без розрізу ЖК/місяця) | `looker_extracted/operational/custom_orders_3__a4f3efef.sql` | Операційний деш | fact_order_lifecycle (план) | — | Known issue | **Жодного** виключення деактивованих будинків/ЖК — підсумки не збігатимуться з іншими графіками того ж дашборду |
 
 ## Легенда
 
