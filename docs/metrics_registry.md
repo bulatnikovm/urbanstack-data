@@ -1,6 +1,6 @@
 # Реєстр метрик UrbanStack — Product / Operational / Financial
 
-> **v1.3** · living document · джерело правди для майбутньої dbt-документації.
+> **v1.4** · living document · джерело правди для майбутньої dbt-документації.
 > Конвертовано з `UrbanStack_metrics_registry.xlsx` у git-friendly markdown 2026-07-08.
 > Зміни v0.1→v0.2: (1) FIN-005 джерело виправлено на `mart_payment_rates`; (2) PROD-008/009/010 —
 > Looker custom SQL витягнуто у `looker_extracted/product/`, статус оновлено.
@@ -35,6 +35,17 @@
 > між `mart_debt_aging` (перейшов) і `mart_debt_years` (не перейшов); FIN-006 виявився частково
 > реалізованим (стара same-month методика в `mart_payment_rates` + нова "формула Артема" в
 > `mart_payment_rates_cohort`). Повний звіт — `looker_extracted/financial/AUDIT.md`.
+> Зміни v1.3→v1.4 (2026-08-03): **FIN-004 закрито остаточно** — Микита надав PDF-експорт
+> фінансового дашборду, математично звірено з `mart_debt_alena`/`mart_debt_aging` (точний
+> збіг карточок "Дебіторка"/"Боржників усього"/"Борг 180+") — методика Аліони підтверджена як
+> канонічна практикою дашборду, не відкрите питання. У dbt (`fct_billing_monthly`) канонічні
+> поля перейменовано на чисті імена (`debt_amount`/`is_debtor`/`debt_bucket`), стара методика
+> лишається як `debt_balance_legacy`/`debt_bucket_legacy` — довідково. Побічно підтверджено:
+> `mart_payment_rates_cohort.repaid_old_debt_this_month` ("формула Артема") реально виведений
+> на дашборд (карточка "Погашено боргів минулих періодів") — не експериментальний. Знайдено
+> окрему проблему поза методикою: **липень 2026 практично без даних** у `mart_debt_flat`
+> (1 рядок замість десятків тисяч) — це затримка синхронізації білінгу, не помилка розрахунку,
+> варто перевірити окремо зі сторони білінг-системи.
 
 Всього метрик: 38 · Product 13 · Financial 7 · Operational 18 (OPS-001…015 + OPS-006b/006c/007b).
 
@@ -55,8 +66,8 @@
 | PROD-013 | Продуктовий | Churn компанії | Частка втрачених юзерів на rolling 2-міс базі | churned_users / rolling_2m_active_base | month (вся компанія) | postgresqldim9000.dm_company_churn_monthly | прибрано з дашборду | — | — | Active | **v0.3, підтверджено Микитою:** графік був на дашборді й прибраний; Looker-джерело лишилось підключеним (звідси й з'являлось в job history, 41 запуск/90д). |
 | FIN-001 | Фінансовий | Нарахування (charges) | Сума нарахованих квитанцій за послугу/приміщення/місяць | amount_of_charges | 1 запис нарахування | finance_dash.fact_billing / mart_billing_flat | Фінансовий деш | fact_billing | Аліона | Active |  |
 | FIN-002 | Фінансовий | Оплати (payments) | Успішні транзакції оплат (status = accepted) | payment_amount, WHERE status='accepted' | 1 платіж | finance_dash.fact_payments / mart_payments_flat | Фінансовий деш | fact_payments | Аліона | Active |  |
-| FIN-003 | Фінансовий | Борг — стара методика ("flat"/initial_debt) | Вхідний борг без вирахування оплат поточного місяця | `debt_balance` | 1 запис нарахування (space×service×snapshot_month) | `finance_dash.mart_debt_flat` (з `fact_debt`) | Фінансовий деш | fact_debt | ? | Active | **v1.3:** підтверджено в коді view — `mart_debt_flat` тепер навмисно зберігає ОБИДВІ методики поруч (`debt_balance`=стара, `overdue_debt_alena`=нова) для перехідного порівняння. Це не конфлікт, а стадія міграції — див. `looker_extracted/financial/AUDIT.md` |
-| FIN-004 | Фінансовий | Борг — методика Аліони (net) | Вхідний борг мінус оплати — **нова канонічна методика**, явно позначена так у коді view | `debt_balance − paid_amount` (`overdue_debt`) | space × month | `finance_dash.mart_debt_alena` | Фінансовий деш | fact_debt | Аліона | Active | **v1.3:** коментар у самому SQL: "debt_bucket за НОВОЮ формулою (overdue_debt, а не старого initial_debt)" — методика Аліони вже прийнята як напрям, не відкрите питання. `mart_debt_aging` (розподіл по вікових корзинах) теж уже на ній. ⚠️ Але `mart_debt_years` (аналогічний розподіл, по роках) **не перейшов** — досі рахує сирий `debt_balance` без вирахування оплат, розходиться з `mart_debt_aging`. Потребує вирівнювання (dbt або прямий фікс view) |
+| FIN-003 | Фінансовий | Борг — стара методика ("flat"/initial_debt) | Вхідний борг без вирахування оплат поточного місяця | `debt_balance` | 1 запис нарахування (space×service×snapshot_month) | `finance_dash.mart_debt_flat` (з `fact_debt`) → dbt: `fct_billing_monthly.debt_balance_legacy` | Фінансовий деш | fact_debt | ? | Готово, довідкове | **v1.4 (2026-08-03):** статус змінено з "паралельна методика" на "довідкова" — див. рішення в FIN-004. У dbt (`fct_billing_monthly`) перейменовано на `debt_balance_legacy`/`debt_bucket_legacy`, щоб не плутати з канонічним боргом. |
+| FIN-004 | Фінансовий | Борг — методика Аліони (net) | Вхідний борг мінус оплати — **КАНОНІЧНА методика боргу**, підтверджено фінансовим дашбордом | `debt_balance − paid_amount` (`overdue_debt`) | space × month | `finance_dash.mart_debt_alena` → dbt: `fct_billing_monthly.debt_amount`/`is_debtor`/`debt_bucket` | Фінансовий деш | fact_debt | Аліона | ✅ Active (канонічна) | **v1.4 (2026-08-03), ПИТАННЯ ЗАКРИТО:** звірено з PDF-експортом фінансового дашборду (`Фінансовий_дешборд.pdf`) — карточки "Дебіторка"/"Боржників усього" на Стр.3 "Заборгованість" **математично точно** збігаються із `mart_debt_alena` (перевірено запитом: 0,0 грн / 0,0 — липень 2026, коли реальних даних ще не було). "Борг 180+" існує лише в `mart_debt_aging`, який теж на цій методиці. Отже методика Аліони — вже реальна практика дашборду, не відкрите рішення. У dbt `fct_billing_monthly` тепер має ЧИСТІ імена для цих полів (`debt_amount` замість `overdue_debt_alena`) — сигнал, що це канонічний бор, а не альтернатива. `mart_debt_years` (був неузгоджений з `mart_debt_aging`) — вже виправлено в dbt-порту (§8а CLAUDE.md). |
 | FIN-005 | Фінансовий | Природний рівень оплат | Оплати поточного місяця / нарахування попереднього місяця | SAFE_DIVIDE(payments_current, charges_previous) | complex × month | finance_dash.mart_payment_rates | Фінансовий деш | fact_payments | Артем | Active | **v0.2 fix:** джерело виправлено з legacy `mart_payments_rate` (grain ЖК×місяць) на актуальний `mart_payment_rates` (grain приміщення×послуга) — CLAUDE.md баг #3. ⚠️ Дві майже однакові назви, легко переплутати. |
 | FIN-006 | Фінансовий | Дисциплінований платник | Мешканець, що погасив вхідний борг оплатами | **v1.3, частково реалізовано** (не "0%", як думали): `mart_payment_rates.is_natural` — стара версія (борг погашено в тому ж місяці); `mart_payment_rates_cohort.is_natural` — **нова, "формула Артема"** (борг місяця X погашено оплатами місяця X+1, когортний підхід) | space × month | `finance_dash.mart_payment_rates` (стара) / `finance_dash.mart_payment_rates_cohort` (нова) | Фінансовий деш (план) | fact_payments | Артем | Потребує узгодження | Коментар у `mart_payment_rates`: "Рекомендовано перевести природній на формулу Артема, після чого це поле можна прибрати" — міграція в процесі, стара версія позначена як deprecated самим автором |
 | FIN-007 | Фінансовий | Середній чек | Середня сума успішної оплати | AVG(payment_amount) | month | розраховується в Looker з mart_payments_flat | Фінансовий деш | — | — | Active |  |

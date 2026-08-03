@@ -4,8 +4,10 @@ models:
   - name: fct_billing_monthly
     description: >
       Головний факт для payment scoring моделі. Grain: space_id × billing_month.
-      Обидві методики боргу (legacy/Аліона) і природності оплат (same-month/cohort)
-      представлені явно, поруч.
+      `debt_amount`/`is_debtor`/`debt_bucket` — КАНОНІЧНИЙ борг (методика Аліони,
+      підтверджено фінансовим дашбордом 2026-08-03). `debt_balance_legacy`/
+      `debt_bucket_legacy` — стара методика, лише довідково. Природність оплат
+      (FIN-006) — обидві версії явно поруч (`is_natural_same_month`/`is_natural_cohort`).
     columns:
       - name: space_id
         tests:
@@ -13,8 +15,15 @@ models:
       - name: billing_month
         tests:
           - not_null
+      - name: debt_amount
+        description: Канонічний борг (методика Аліони) — використовувати як основний для scoring
+        tests:
+          - not_null
+      - name: debt_balance_legacy
+        description: Стара методика (сирий initial_debt) — лише для порівняння/сумісності
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - space_id
-            - billing_month
+          arguments:
+            combination_of_columns:
+              - space_id
+              - billing_month

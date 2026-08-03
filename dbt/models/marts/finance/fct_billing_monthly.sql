@@ -1,10 +1,20 @@
 -- Головний факт для payment scoring: грануляція приміщення (space) × місяць.
--- Агрегує білінг/оплати/борг (ОБИДВІ методики) з дрібнішого рівня
--- space×service×month до одного рядка на приміщення на місяць — саме та
--- гранулярність, яка потрібна для тренування моделі.
+-- Агрегує білінг/оплати/борг з дрібнішого рівня space×service×month до
+-- одного рядка на приміщення на місяць — саме та гранулярність, яка
+-- потрібна для тренування моделі.
 --
 -- Чистий факт (агрегація), без ML-фіч (лагів/z-скорів тощо) — це лишається
 -- на стороні Python/notebook.
+--
+-- ★ РІШЕННЯ (2026-08-03, підтверджено фінансовим дашбордом): методика Аліони
+-- (debt_balance − paid_amount) — КАНОНІЧНА цифра боргу, не альтернатива.
+-- Перевірено математично: карточки "Дебіторка"/"Боржників усього" на
+-- дашборді (Стр.3 "Заборгованість") точно збігаються з mart_debt_alena
+-- (0,0 грн / 0,0 — липень 2026, звірено запитом). "Борг 180+" існує лише
+-- в mart_debt_aging, яка теж на методиці Аліони. Тому канонічні поля тут
+-- мають ЧИСТІ імена (debt_amount/is_debtor/debt_bucket), а стара методика
+-- лишається як `debt_balance_legacy`/`debt_bucket_legacy` — довідково, не
+-- як рівноправна альтернатива.
 
 with monthly_billing as (
     select
@@ -62,18 +72,20 @@ select
     mb.total_charges,
     mb.total_paid,
 
-    -- стара методика боргу (FIN-003)
+    -- КАНОНІЧНИЙ борг (FIN-004, методика Аліони) — переюзовуємо вже звірений
+    -- mart_debt_alena. Чисті імена, бо це вже не "альтернатива", а те, що
+    -- реально показано резидентам на дашборді.
+    coalesce(da.overdue_debt, 0)                as debt_amount,
+    coalesce(da.is_debtor, 0)                   as is_debtor,
+    coalesce(da.debt_bucket, 'no_debt')         as debt_bucket,
+
+    -- стара методика (FIN-003) — лише довідково, для порівняння/сумісності
     coalesce(dl.debt_balance_legacy, 0) as debt_balance_legacy,
     case
         when coalesce(dl.debt_balance_legacy, 0) <= 0    then 'no_debt'
         when coalesce(dl.debt_balance_legacy, 0) <= 1000 then '≤1000'
         else '>1000'
     end as debt_bucket_legacy,
-
-    -- нова методика Аліони (FIN-004) — переюзовуємо вже звірений mart_debt_alena
-    coalesce(da.overdue_debt, 0) as overdue_debt_alena,
-    coalesce(da.is_debtor, 0)    as is_debtor_alena,
-    da.debt_bucket               as debt_bucket_alena,
 
     -- природність оплат — обидві версії (FIN-006)
     ns.is_natural_same_month,
