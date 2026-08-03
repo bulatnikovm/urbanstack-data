@@ -1,0 +1,33 @@
+version: 2
+
+sources:
+  - name: postgresqldim9000_geo
+    description: >
+      Геоієрархія нерухомості (spaces → sections → houses → complexes) з тієї ж
+      Stitch-sync Postgres БД, що й фінансові джерела. Окремий source-блок
+      (той самий фізичний датасет `postgresqldim9000`), бо ці таблиці спільні
+      для фінансового/продуктового/операційного доменів.
+    database: analytics-454817
+    schema: postgresqldim9000
+    tables:
+      - name: spaces
+        description: Приміщення (квартира/комерція) — базова одиниця нерухомості
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+      - name: sections
+        description: Під'їзди/секції будинку
+      - name: houses
+        description: >
+          Будинки. Має і `status` (текстовий статус, включно з 'deactivated'),
+          і `deactivated_at` (timestamp) — обидва поля збережено 1:1,
+          рішення яке з них канонічне для виключення — питання Фази 2
+          продуктового/операційного доменів, не фінансового.
+      - name: complexes
+        description: ЖК (житлові комплекси)
+      - name: space_apartments
+        description: Деталізація приміщень типу "квартира" (особовий рахунок)
+      - name: space_commercials
+        description: Деталізація приміщень типу "комерція" (підтипи parking/storeroom/commercial)

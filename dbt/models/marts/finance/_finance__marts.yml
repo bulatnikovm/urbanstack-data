@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: mart_billing_flat
+    description: Порт finance_dash.mart_billing_flat — нарахування з повним геоконтекстом
+    columns:
+      - name: billing_id
+        tests:
+          - not_null
+          - unique
+
+  - name: mart_payments_flat
+    description: Порт finance_dash.mart_payments_flat — оплати з повним геоконтекстом
+    columns:
+      - name: operation_id
+        tests:
+          - not_null
+          - unique
+
+  - name: mart_debt_flat
+    description: >
+      Порт finance_dash.mart_debt_flat. Зберігає ОБИДВІ методики боргу:
+      total_debt (стара, FIN-003) і overdue_debt_alena (нова, FIN-004).
+    columns:
+      - name: billing_id
+        tests:
+          - not_null
+          - unique
+
+  - name: mart_debt_alena
+    description: FIN-004, канонічна net-методика боргу (debt_balance − paid_amount)
+
+  - name: mart_debt_aging
+    description: Розподіл боргу по вікових корзинах (31-60/61-90/91-180/180+ днів), методика Аліони
+
+  - name: mart_debt_years
+    description: >
+      Розподіл боргу по роках. ⚠️ ФІКС (Фаза 1→2): переведено на методику Аліони
+      для вирівнювання з mart_debt_aging (оригінал рахував сирий debt_balance).
+      Перевірено на реальних даних: production має 1 рядок (2026, ЖК
+      "Варшавський", буд.45-Б, 1706.44 грн) — це "фантомний" борг: debt_balance
+      і paid_amount там рівні (2573.80 = 2573.80), тобто клієнт уже розрахувався.
+      Після фіксу цей рядок коректно зникає (0 рядків) — саме такої поведінки
+      й очікували.
+
+  - name: mart_payment_rates
+    description: >
+      FIN-005. is_natural тут — СТАРА методика (same-month). Канонічна —
+      mart_payment_rates_cohort.is_natural.
+
+  - name: mart_payment_rates_cohort
+    description: >
+      FIN-006, "формула Артема" — канонічна методика природності оплат
+      (когортна, X→X+1).

@@ -1,0 +1,35 @@
+version: 2
+
+sources:
+  - name: postgresqldim9000
+    description: >
+      Stitch-sync продуктової Postgres БД UrbanStack (CRM + білінг).
+      Датасет `postgresqldim9000` в BigQuery, регіон EU.
+    database: analytics-454817
+    schema: postgresqldim9000
+    tables:
+      - name: master_buh_service_payment
+        description: >
+          Сирий білінговий запис: нарахування/оплата/вхідний борг за
+          конкретну послугу в конкретному приміщенні за місяць (`period`).
+          Грошові суми зберігаються як STRING.
+        config:
+          loaded_at_field: synced_at
+        columns:
+          - name: id
+            description: Первинний ключ (billing_id у fact-шарі)
+            tests:
+              - not_null
+              - unique
+      - name: master_buh_service
+        description: Довідник послуг, прив'язаних до master_buh_information (простору)
+      - name: master_buh_information
+        description: Зв'язок service group ↔ space_id
+      - name: tascombank_merchants
+        description: >
+          Банківські мерчант-акаунти (IBAN). ⚠️ Містить `private_key` —
+          НЕ використовувати в жодній staging/mart моделі.
+      - name: operations
+        description: Платіжні операції (успішні/неуспішні спроби оплати)
+      - name: transactions
+        description: Банківські транзакції, пов'язані з operations через transaction_id

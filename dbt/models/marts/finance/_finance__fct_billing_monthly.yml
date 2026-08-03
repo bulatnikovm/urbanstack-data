@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: fct_billing_monthly
+    description: >
+      Головний факт для payment scoring моделі. Grain: space_id × billing_month.
+      Обидві методики боргу (legacy/Аліона) і природності оплат (same-month/cohort)
+      представлені явно, поруч.
+    columns:
+      - name: space_id
+        tests:
+          - not_null
+      - name: billing_month
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - space_id
+            - billing_month

@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: dim_space
+    description: Порт finance_dash.dim_space — приміщення з повним геоланцюжком
+    columns:
+      - name: space_id
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_llc
+    description: Порт finance_dash.dim_llc — банківські мерчант-акаунти (без private_key)
+    columns:
+      - name: iban
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_service
+    description: Порт finance_dash.dim_service — довідник послуг
+    columns:
+      - name: service_type_code
+        tests:
+          - not_null
+          - unique
+
+  - name: fct_billing
+    description: Порт finance_dash.fact_billing. Grain — billing_id.
+    columns:
+      - name: billing_id
+        tests:
+          - not_null
+          - unique
+      - name: space_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_space')
+                field: space_id
+              config:
+                severity: warn   # частина billing-записів може не мати мапінгу на space (сирі дані)
+
+  - name: fct_debt
+    description: Порт finance_dash.fact_debt. Grain — billing_id (стара/raw методика боргу).
+    columns:
+      - name: billing_id
+        tests:
+          - not_null
+          - unique
+
+  - name: fct_payments
+    description: Порт finance_dash.fact_payments. Grain — operation_id.
+    columns:
+      - name: operation_id
+        tests:
+          - not_null
+          - unique

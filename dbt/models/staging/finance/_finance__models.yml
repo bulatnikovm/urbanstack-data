@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: stg_finance__billing_payments
+    description: Нарахування/оплата/вхідний борг за послугу за місяць (1:1 з master_buh_service_payment)
+    columns:
+      - name: billing_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_finance__services
+    description: Довідник послуг
+    columns:
+      - name: service_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_finance__service_links
+    description: Зв'язок групи послуг ↔ space_id
+    columns:
+      - name: master_buh_information_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_finance__bank_merchants
+    description: Банківські мерчант-акаунти (IBAN), лише purpose='payment'
+    columns:
+      - name: iban
+        tests:
+          - not_null
+
+  - name: stg_finance__operations
+    description: Платіжні операції
+    columns:
+      - name: operation_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_finance__transactions
+    description: Банківські транзакції
+    columns:
+      - name: transaction_id
+        tests:
+          - not_null
+          - unique

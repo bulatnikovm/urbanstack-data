@@ -1,0 +1,50 @@
+version: 2
+
+models:
+  - name: stg_shared__spaces
+    description: Приміщення (квартира/комерція)
+    columns:
+      - name: space_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_shared__sections
+    description: Під'їзди/секції будинку
+    columns:
+      - name: section_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_shared__houses
+    description: Будинки (з обома полями деактивації — status і deactivated_at)
+    columns:
+      - name: house_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_shared__complexes
+    description: ЖК (житлові комплекси)
+    columns:
+      - name: complex_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_shared__space_apartments
+    description: Деталізація приміщень типу "квартира"
+    columns:
+      - name: space_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_shared__space_commercials
+    description: Деталізація приміщень типу "комерція"
+    columns:
+      - name: space_id
+        tests:
+          - not_null
+          - unique

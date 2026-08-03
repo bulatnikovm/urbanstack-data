@@ -1,0 +1,22 @@
+name: 'urbanstack_dbt'
+version: '1.0.0'
+config-version: 2
+
+profile: 'urbanstack'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  urbanstack_dbt:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table

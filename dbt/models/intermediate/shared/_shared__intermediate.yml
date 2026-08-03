@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: int_space_geo
+    description: >
+      Спільний геоланцюжок spaces→sections→houses→complexes + класифікація
+      типу об'єкта. Не фільтрує деактивовані будинки/виключені ЖК.
+    columns:
+      - name: space_id
+        tests:
+          - not_null
+          - unique
