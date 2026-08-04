@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: stg_dim9000__surveys
+    description: 1:1 перейменування колонок surveys.
+    columns:
+      - name: survey_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_dim9000__survey_answers
+    description: 1:1 перейменування колонок survey_answers.
+    columns:
+      - name: answer_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_dim9000__survey_areas
+    description: >
+      1:1 перейменування колонок survey_areas. ⚠️ survey_id тут НЕ унікальний
+      глобально (26 survey_id мають >1 area — переважно "question"-опитування,
+      розіслані на кілька ЖК/будинків одним survey_id; знайдено й один csat-кейс,
+      id 431, "нова хвиля Будинкова" — 10 будинків на один survey_id). Для
+      реальних (класифікованих) хвиль з survey_wave_catalog це не траплялось на
+      момент побудови — перевірено окремим тестом на int_survey_waves, не тут.
+    columns:
+      - name: area_id
+        tests:
+          - not_null
+          - unique

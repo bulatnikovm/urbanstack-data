@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: postgresqldim9000_surveys
+    description: >
+      CSAT/NPS-опитування (охорона, прибудинкова територія, обслуговування
+      будинку) з тієї ж Stitch-sync Postgres БД. Окремий source-блок за тією
+      самою конвенцією, що і postgresqldim9000_geo — фізично той самий датасет.
+    database: analytics-454817
+    schema: postgresqldim9000
+    tables:
+      - name: surveys
+        description: >
+          Один рядок = один опитувальний "лист" на будинок/ЖК/приміщення в
+          рамках однієї хвилі кампанії. Хвиля = група surveys з однаковим
+          description+startdate — саме так тут визначається "діапазон id".
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+      - name: survey_answers
+        description: Відповідь одного користувача на один survey. grade 1-5 для type='csat'.
+      - name: survey_areas
+        description: Прив'язка survey до house_id/complex_id/section_id (1 area на 1 survey).

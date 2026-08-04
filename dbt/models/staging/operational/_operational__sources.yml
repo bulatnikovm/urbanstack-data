@@ -1,0 +1,39 @@
+version: 2
+
+sources:
+  - name: postgresqldim9000_operational
+    description: >
+      Заявки/SLA/користувачі з тієї ж Stitch-sync Postgres БД. Окремий
+      source-блок за конвенцією postgresqldim9000_geo/postgresqldim9000_surveys
+      — фізично той самий датасет.
+    database: analytics-454817
+    schema: postgresqldim9000
+    tables:
+      - name: orders
+        description: >
+          Заявка мешканця. category/type — сирі enum, переклад через seed
+          dim_order_category/dim_order_type (консолідація 3-4 розбіжних CASE,
+          знайдених в аудиті Looker — OPS-003).
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+      - name: order_tasks
+        description: >
+          Внутрішня задача по заявці (order_id NOT NULL) АБО задача
+          співробітника без заявки (order_id IS NULL). category — той самий
+          enum, що і orders.category. status — ІНШИЙ enum (closed/canceled/
+          in_progress/assigned/done), не плутати з orders.status.
+      - name: history_order_updates
+        description: >
+          Event log змін заявки, before/after RECORD зі вкладеним status.
+          Джерело для event-based fact_order_events (створено/виконано/скасовано).
+      - name: history_task_updates
+        description: Аналогічний event log для order_tasks.
+      - name: statistic_citizen
+        description: Місячний снапшот користувачів по ЖК (total/confirmed/active/owner).
+      - name: users
+        description: Користувачі додатку, role визначає мешканця/співробітника.
+      - name: space_user
+        description: Зв'язка user_id × space_id (без ролі/дати — довідник прив'язки).

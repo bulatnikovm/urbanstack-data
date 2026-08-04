@@ -16,7 +16,30 @@ models:
   urbanstack_dbt:
     staging:
       +materialized: view
+      operational:
+        +schema: dbt_operational
+      surveys:
+        +schema: dbt_operational
     intermediate:
       +materialized: view
+      operational:
+        +schema: dbt_operational
+      surveys:
+        +schema: dbt_operational
     marts:
       +materialized: table
+      operational:
+        +schema: dbt_operational
+      surveys:
+        +schema: dbt_operational
+
+seeds:
+  urbanstack_dbt:
+    test_complexes:
+      +schema: dbt_operational
+    dim_order_category:
+      +schema: dbt_operational
+    dim_order_type:
+      +schema: dbt_operational
+    survey_wave_catalog:
+      +schema: dbt_operational

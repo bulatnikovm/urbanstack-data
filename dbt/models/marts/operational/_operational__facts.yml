@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: fact_orders
+    description: Grain — order_id. is_valid відсіює скасовані/відхилені, єдине визначення.
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+
+  - name: fact_order_events
+    description: Grain — подія (created/completed/canceled/... transition). Заявка може мати кілька подій одного типу.
+    columns:
+      - name: order_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('fact_orders')
+                field: order_id
+              config:
+                severity: warn   # transition-подія могла лишитись від заявки, видаленої з orders (рідкісний край)
+
+  - name: fact_order_tasks
+    description: Grain — task_id. is_employee_task = order_id IS NULL.
+    columns:
+      - name: task_id
+        tests:
+          - not_null
+          - unique
+
+  - name: fact_citizen_snapshot
+    description: Grain — complex_id × report_month.
+    columns:
+      - name: stat_id
+        tests:
+          - not_null
+          - unique
+
+  - name: fact_user_space
+    description: Grain — user_id × space_id, тільки ROLE_CITIZEN/ROLE_INACTIVATED_CITIZEN.

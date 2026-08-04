@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: stg_dim9000__orders
+    description: 1:1 перейменування колонок orders.
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_dim9000__order_tasks
+    description: 1:1 перейменування колонок order_tasks. order_id NULL = задача співробітника.
+    columns:
+      - name: task_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_dim9000__order_status_transitions
+    description: Тільки type='transition' рядки history_order_updates — надійні before/after.status.
+    columns:
+      - name: history_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_dim9000__statistic_citizen
+    description: 1:1 перейменування колонок statistic_citizen.
+    columns:
+      - name: stat_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_dim9000__users
+    description: Тільки operational-релевантні поля users (без PII).
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_dim9000__space_user
+    description: Зв'язка user_id × space_id, без ролі/дати.

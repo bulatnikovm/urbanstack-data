@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: dim_complex
+    description: ЖК/БЦ — довідник, спільний для заявок/SLA та опитувань.
+    columns:
+      - name: complex_id
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_house
+    description: Будинки з деактивацією (is_deactivated/deactivated_at) — заміна 4 різних механізмів виключення, знайдених в аудиті Looker.
+    columns:
+      - name: house_id
+        tests:
+          - not_null
+          - unique
+      - name: complex_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_complex')
+                field: complex_id
+
+  - name: dim_calendar_month
+    description: Календарний спайн по місяцях, 2021-01 → поточний.
+    columns:
+      - name: report_month
+        tests:
+          - not_null
+          - unique

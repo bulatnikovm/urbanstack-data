@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: mart_monthly_sla
+    description: >
+      Grain — complex_id × report_month. created_count перевірено проти xlsx
+      (Δ 2-6% на 6 з 7 місяців жовт.25-квіт.26, лют.26 — виняток +16.5%,
+      потребує окремого розбору).
+
+  - name: mart_status_donut
+    description: Grain — complex_id × report_month × status.
+
+  - name: mart_yearly_totals
+    description: >
+      Grain — report_year (компанія загалом). 2023-2025 збігаються з xlsx
+      в межах 1%. 2022 розходиться — той самий відомий розрив, що і в PDF
+      (різний старт колл-центру/додатку).
+
+  - name: mart_monthly_complex_overview
+    description: >
+      Grain — complex_id × report_month. n_houses_active = 110 на квіт.2026,
+      ТОЧНИЙ збіг з xlsx (аудит-знахідка #1 закрита — паркінгові будівлі без
+      квартир виключені через dim_house.is_residential).
+    columns:
+      - name: complex_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_complex')
+                field: complex_id
+
+  - name: mart_monthly_categories
+    description: Grain — complex_id × report_month × category_ua × type_ua × is_valid.
+
+  - name: mart_house_rating
+    description: >
+      Grain — house_id, поточний знімок (не історичний ряд). Знаменник —
+      n_apartments, НЕ "особові рахунки" (нерозгадана метрика з аудиту).
+    columns:
+      - name: house_id
+        tests:
+          - not_null
+          - unique

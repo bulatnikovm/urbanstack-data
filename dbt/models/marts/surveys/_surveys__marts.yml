@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: fact_survey_answers
+    description: Grain — answer_id. Тільки класифіковані ("реальні") хвилі csat-опитувань.
+    columns:
+      - name: answer_id
+        tests:
+          - not_null
+          - unique
+      - name: survey_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('int_survey_waves')
+                field: survey_id
+
+  - name: dim_survey_wave
+    description: Довідник хвиль опитувань — джерело дропдауна в Looker, документує діапазон id (min/max_survey_id).
+    columns:
+      - name: wave_label
+        tests:
+          - not_null
+          - unique
+
+  - name: mart_survey_wave_summary
+    description: >
+      Grain — wave_label × complex_id × house_id. Аналог xlsx "Дані DIM
+      9000"/"Дані Гардіан", агрегується вгору до ЖК для "Динаміка"-еквіваленту.
