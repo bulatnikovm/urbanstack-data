@@ -2,7 +2,7 @@ import {
   getPeriod,
   getSegmentsMonthly,
   getUserBaseByComplex,
-  getVersionAdoption,
+  getOsMonthly,
 } from "@/lib/data";
 import { delta, monthLabel, n, pct, pp } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
@@ -11,16 +11,15 @@ import {
   Kpi,
   PageBody,
   Panel,
-  PartialMonthNote,
   Section,
 } from "@/components/dashboard";
 import {
-  DonutChart,
   StackedBars,
   TrendAreas,
   TrendLines,
   type Series,
 } from "@/components/trend-charts";
+import { BklitDonut } from "@/components/bklit-donut";
 import {
   Table,
   TableBody,
@@ -36,8 +35,9 @@ const SEGMENT_SERIES: Series[] = [
   { key: "dead", label: "Неактивні", slot: 3 },
 ];
 
-export default function AudiencePage() {
-  const { base, cur, prev, curKey, prevKey, partialKey, minKey } = getPeriod();
+export default async function AudiencePage({ searchParams }: PageProps<"/">) {
+  const sp = await searchParams;
+  const { base, cur, prev, curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, minKey } = getPeriod(sp);
 
   // Сегменти живі/сонні/неактивні — марта по ЖК, згортаємо до компанії
   const segByMonth = new Map<
@@ -67,14 +67,13 @@ export default function AudiencePage() {
     .filter((r) => r.report_month_key === curKey)
     .sort((a, b) => b.count_potential - a.count_potential);
 
-  // Розподіл по ОС за останній повний місяць
-  const osMap = new Map<string, number>();
-  for (const r of getVersionAdoption()) {
-    if (r.report_month_key !== curKey) continue;
-    osMap.set(r.os_type, (osMap.get(r.os_type) ?? 0) + r.active_users);
-  }
-  const osRows = [...osMap.entries()]
-    .map(([label, value]) => ({ label, value }))
+  // Розподіл по ОС — з agg_os_monthly (distinct по людині).
+  // НЕ з mart_version_adoption: там грануляція міс × ОС × ВЕРСІЯ, і сума
+  // active_users по версіях рахує двічі того, хто за місяць був на двох
+  // версіях (iOS показувало 6 080 замість 5 153, +18%).
+  const osRows = getOsMonthly()
+    .filter((r) => r.report_month_key === curKey)
+    .map((r) => ({ label: r.os_type, value: r.users }))
     .sort((a, b) => b.value - a.value);
 
   return (
@@ -83,11 +82,12 @@ export default function AudiencePage() {
         title="Аудиторія"
         subtitle="Скільки нас і наскільки ця база реальна"
         monthKey={curKey}
+        partial={isPartial ? { daysElapsed, daysInMonth } : undefined}
+        range={range}
+        bounds={bounds}
       />
 
       <PageBody>
-        {partialKey && <PartialMonthNote monthLabel={monthLabel(partialKey)} />}
-
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Kpi
             label="Потенційні користувачі"
@@ -252,7 +252,7 @@ export default function AudiencePage() {
               title="Операційна система"
               note={`Активні користувачі за ${monthLabel(curKey)}.`}
             >
-              <DonutChart data={osRows} />
+              <BklitDonut data={osRows} centerLabel="Користувачів" />
             </Panel>
           </div>
         </Section>

@@ -8,8 +8,9 @@ import { PageBody, Panel } from "@/components/dashboard";
  * (`mart_app_health_weekly`, 2 416 рядків), лишилось розкласти по графіках.
  * Свідомо відкладено — Микита позначив цю сторінку як «можна на потім».
  */
-export default function HealthPage() {
-  const { curKey } = getPeriod();
+export default async function HealthPage({ searchParams }: PageProps<"/health">) {
+  const sp = await searchParams;
+  const { curKey, isPartial, daysElapsed, daysInMonth, bounds, range } = getPeriod(sp);
 
   return (
     <>
@@ -17,6 +18,9 @@ export default function HealthPage() {
         title="Стан додатку"
         subtitle="Логаути, біометрія, технічний відтік"
         monthKey={curKey}
+        partial={isPartial ? { daysElapsed, daysInMonth } : undefined}
+        range={range}
+        bounds={bounds}
       />
       <PageBody>
         <Panel

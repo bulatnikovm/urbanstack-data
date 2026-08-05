@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, Minus, TriangleAlert } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -153,24 +153,6 @@ export function Freshness({ snapshotAt }: { snapshotAt: string }) {
           {state === "stale" ? "потребує оновлення" : "застарілі"}
         </Badge>
       )}
-    </div>
-  );
-}
-
-/** Попередження про незавершений місяць */
-export function PartialMonthNote({ monthLabel }: { monthLabel: string }) {
-  return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-[var(--status-warning)]/40 bg-[var(--status-warning)]/8 px-3.5 py-2.5 text-xs leading-relaxed">
-      <TriangleAlert className="mt-px size-3.5 shrink-0 text-[var(--status-warning)]" />
-      <p className="text-muted-foreground">
-        <span className="font-medium text-foreground">
-          {monthLabel} ще не завершився.
-        </span>{" "}
-        Усі числа й порівняння рахуються по останньому{" "}
-        <span className="font-medium text-foreground">повному</span> місяцю.
-        Незавершений місяць видно на графіках, але в дельтах він не бере
-        участі — інакше щоразу виглядав би як обвал.
-      </p>
     </div>
   );
 }

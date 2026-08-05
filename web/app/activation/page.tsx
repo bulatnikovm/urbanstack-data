@@ -1,24 +1,27 @@
 import { getActivation, getPeriod, getTimeToValue } from "@/lib/data";
-import { delta, monthLabel, n, n1, pct, pp } from "@/lib/format";
+import { delta, monthLabel, n, pct, pp } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import {
   Hl,
   Kpi,
   PageBody,
   Panel,
-  PartialMonthNote,
   Section,
 } from "@/components/dashboard";
 import { StackedBars, TrendLines, type Series } from "@/components/trend-charts";
 
+// Дві категорії, не три. У марті count_activated + count_passively_activated
+// == count_new_users ТОТОЖНО (перевірено: залишок = 0 у кожному місяці), тож
+// "Без активності" — категорія, якої не існує: вона ніколи нічого не малювала.
+// "Пасивно активовані" і Є "не зробили цільової дії".
 const FUNNEL_SERIES: Series[] = [
   { key: "activated", label: "Активовані", slot: 1 },
-  { key: "passive", label: "Пасивно активовані", slot: 2 },
-  { key: "none", label: "Без активності", slot: 3 },
+  { key: "passive", label: "Не активувались", slot: 2 },
 ];
 
-export default function ActivationPage() {
-  const { curKey, prevKey, partialKey, inWindow, at } = getPeriod();
+export default async function ActivationPage({ searchParams }: PageProps<"/activation">) {
+  const sp = await searchParams;
+  const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at } = getPeriod(sp);
 
   const act = getActivation();
   const actCur = at(act, curKey)!;
@@ -31,20 +34,18 @@ export default function ActivationPage() {
   const ttvCur = at(ttv, curKey);
   const ttvPrev = at(ttv, prevKey);
 
-  const notActivated = (r: typeof actCur) =>
-    Math.max(0, r.count_new_users - r.count_activated - r.count_passively_activated);
-
   return (
     <>
       <PageHeader
         title="Активація"
         subtitle="Чи доходить новий користувач до цінності"
         monthKey={curKey}
+        partial={isPartial ? { daysElapsed, daysInMonth } : undefined}
+        range={range}
+        bounds={bounds}
       />
 
       <PageBody>
-        {partialKey && <PartialMonthNote monthLabel={monthLabel(partialKey)} />}
-
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Kpi
             label="Нові користувачі"
@@ -74,18 +75,14 @@ export default function ActivationPage() {
             }}
           />
           <Kpi
-            label="Медіана до цінної дії"
-            value={ttvCur ? `${n1(ttvCur.median_hours_to_value)} год` : "—"}
-            sub={ttvAll ? `${n1(ttvAll.median_hours_to_value)} год за весь час` : undefined}
+            label="Дійшли до цінності за добу"
+            value={ttvCur ? pct(ttvCur.rate_1d) : "—"}
+            sub={ttvAll ? `${pct(ttvAll.rate_1d)} за весь час` : undefined}
             trend={
-              ttvCur && ttvPrev && ttvPrev.median_hours_to_value > 0
+              ttvCur && ttvPrev
                 ? {
-                    text: delta(
-                      ttvCur.median_hours_to_value / ttvPrev.median_hours_to_value - 1
-                    ),
-                    // Менше — краще: напрямок «добре» інвертований.
-                    good:
-                      ttvCur.median_hours_to_value <= ttvPrev.median_hours_to_value,
+                    text: pp(ttvCur.rate_1d - ttvPrev.rate_1d),
+                    good: ttvCur.rate_1d >= ttvPrev.rate_1d,
                   }
                 : undefined
             }
@@ -101,15 +98,14 @@ export default function ActivationPage() {
               <Hl>{n(actCur.count_activated)}</Hl> —{" "}
               <Hl>{pct(actCur.activation_rate)}</Hl> проти{" "}
               {pct(actPrev.activation_rate)} місяцем раніше. Ще{" "}
-              <Hl>{n(actCur.count_passively_activated)}</Hl> активувались
-              пасивно: зайшли в додаток, але цільової дії не зробили.{" "}
-              <Hl>{n(notActivated(actCur))}</Hl> не зробили нічого.
+              <Hl>{n(actCur.count_passively_activated)}</Hl> зайшли в додаток,
+              але цільової дії так і не зробили.
             </>
           }
         >
           <Panel
             title="Нові користувачі за станом активації"
-            note="Активований — зробив цільову дію (оплата, заявка, голосування, платна послуга) у місяць першого входу."
+            note="Висота стовпчика — усі нові користувачі місяця. Активований — зробив цільову дію (оплата, заявка, голосування, платна послуга) у місяць першого входу."
           >
             <StackedBars
               className="aspect-[3/1] w-full"
@@ -117,13 +113,25 @@ export default function ActivationPage() {
                 month: r.report_month_key,
                 activated: r.count_activated,
                 passive: r.count_passively_activated,
-                none: notActivated(r),
               }))}
               series={FUNNEL_SERIES}
             />
           </Panel>
 
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-3">
+            <Panel
+              title="Нові користувачі за місяць"
+              note="Скільки людей уперше зайшли в додаток. Абсолютне число під конверсією — щоб зростання відсотка на падаючому притоці не читалось як успіх."
+            >
+              <TrendLines
+                data={inWindow(act).map((r) => ({
+                  month: r.report_month_key,
+                  new_users: r.count_new_users,
+                }))}
+                series={[{ key: "new_users", label: "Нові користувачі", slot: 1 }]}
+              />
+            </Panel>
+
             <Panel
               title="Конверсія в активацію"
               note="Активовані / усі нові користувачі місяця."
@@ -141,19 +149,21 @@ export default function ActivationPage() {
             </Panel>
 
             <Panel
-              title="Години до першої цінної дії"
-              note="Медіана й 90-й перцентиль. Нижче — краще."
+              title="Швидкість до цінної дії"
+              note="Частка нових користувачів, що зробили цінну дію за 1 годину / добу / тиждень від першого входу. Вище — краще."
             >
               <TrendLines
-                kind="num"
+                kind="pct"
                 data={inWindow(ttv).map((r) => ({
                   month: r.report_month_key,
-                  median: r.median_hours_to_value,
-                  p90: r.p90_hours_to_value,
+                  h1: r.rate_1h,
+                  d1: r.rate_1d,
+                  d7: r.rate_7d,
                 }))}
                 series={[
-                  { key: "median", label: "Медіана, год", slot: 1 },
-                  { key: "p90", label: "P90, год", slot: 2 },
+                  { key: "h1", label: "За 1 годину", slot: 1 },
+                  { key: "d1", label: "За добу", slot: 2 },
+                  { key: "d7", label: "За тиждень", slot: 3 },
                 ]}
               />
             </Panel>

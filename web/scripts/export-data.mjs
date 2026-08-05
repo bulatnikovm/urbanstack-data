@@ -35,6 +35,30 @@ const MANIFEST = {
   mart_app_health_weekly: "event_week, os_type, app_version",
 };
 
+/**
+ * Агрегати, яких немає готовим mart'ом.
+ *
+ * `mart_version_adoption` має грануляцію місяць × ОС × ВЕРСІЯ. Сумувати
+ * `active_users` по версіях НЕ МОЖНА: хто за місяць користувався двома
+ * версіями, порахується двічі (перевірено: iOS 6 080 замість 5 153, +18%).
+ * Тому розподіл по ОС рахуємо окремим distinct-запитом.
+ *
+ * ⚠️ Це тимчасово тут. Правильне місце — окремий mart у dbt_product; тоді й
+ * дашборд, і будь-який інший споживач отримають однакову цифру.
+ */
+const QUERIES = {
+  agg_os_monthly: `
+    select
+      format_date('%Y-%m', event_month)   as report_month_key,
+      last_os_type                        as os_type,
+      count(distinct user_phone_sk)       as users
+    from \`${PROJECT}.${DATASET}.fct_user_monthly\`
+    where last_os_type is not null
+    group by 1, 2
+    order by 1, 2
+  `,
+};
+
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
 
 /**
@@ -75,6 +99,20 @@ async function main() {
 
     meta.tables[table] = { rows: clean.length };
     console.log(`  ${table.padEnd(34)} ${String(clean.length).padStart(6)} рядків`);
+  }
+
+  for (const [name, sql] of Object.entries(QUERIES)) {
+    const [rows] = await bq.query({ query: sql, location: "EU" });
+    const clean = rows.map((row) =>
+      Object.fromEntries(Object.entries(row).map(([k, v]) => [k, normalize(v)]))
+    );
+    await writeFile(
+      join(OUT_DIR, `${name}.json`),
+      JSON.stringify(clean, null, 0) + "\n",
+      "utf8"
+    );
+    meta.tables[name] = { rows: clean.length };
+    console.log(`  ${name.padEnd(34)} ${String(clean.length).padStart(6)} рядків`);
   }
 
   await writeFile(

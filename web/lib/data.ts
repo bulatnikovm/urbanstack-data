@@ -7,6 +7,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { resolveRange, type Range } from "./period";
+
 const DATA_DIR = join(process.cwd(), "data");
 
 function load<T>(name: string): T[] {
@@ -62,8 +64,14 @@ export type ActivationMonthly = {
 export type TimeToValue = {
   report_month_key: string;
   n_users_with_value_action: number;
-  median_hours_to_value: number;
-  p90_hours_to_value: number;
+  within_1h: number;
+  within_1d: number;
+  within_7d: number;
+  within_30d: number;
+  rate_1h: number;
+  rate_1d: number;
+  rate_7d: number;
+  rate_30d: number;
 };
 
 export type EngagementMonthly = {
@@ -159,31 +167,21 @@ export const getModuleRetention = () =>
 
 // ── Поточний місяць неповний ────────────────────────────────────────────
 
-/**
- * Місяць, у якому ми зараз, ще не закінчився — у ньому 5 днів даних проти 31.
- * Якщо цього не врахувати, дашборд покаже «−65% відвідувачів» і це буде
- * найгірший можливий тип помилки: правдоподібна, помітна й неправдива.
- *
- * Тому скрізь, де рахується «поточний стан» і дельта, беремо ОСТАННІЙ
- * ЗАВЕРШЕНИЙ місяць, а незавершений показуємо окремо й підписаним.
- */
+/** Ключ поточного (можливо, ще незавершеного) місяця — "2026-08". */
 export function currentMonthKey(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-export function splitComplete<T extends { report_month_key: string }>(
-  rows: T[]
-): { complete: T[]; partial: T[] } {
-  const cur = currentMonthKey();
-  return {
-    complete: rows.filter((r) => r.report_month_key < cur),
-    partial: rows.filter((r) => r.report_month_key >= cur),
-  };
-}
 
 /**
- * Спільний період для всіх сторінок: останній ПОВНИЙ місяць, попередній
- * (для дельт), незавершений (для банера) і нижня межа вікна.
+ * Спільний період для всіх сторінок.
+ *
+ * `cur` — ОСТАННІЙ НАЯВНИЙ місяць, включно з поточним незавершеним.
+ * Рішення Микити (2026-08-05): бачити стан «як зараз» важливіше за
+ * коректність порівняння. Наслідок, який треба тримати в голові: 5 серпня
+ * усі помісячні лічильники будуть у ~6 разів менші за липневі, і дельти
+ * покажуть падіння, якого насправді немає. Тому `isPartial` є — щоб
+ * позначити такий місяць прямо в шапці, а не мовчки.
  *
  * `minKey` не косметика: у mart_activation_monthly є когорти "2010-01" і
  * "2022-06" (по 1 користувачу — зіпсований created_at у джерелі). Без
@@ -191,27 +189,68 @@ export function splitComplete<T extends { report_month_key: string }>(
  * правого краю. Беремо початок бази користувачів як спільне вікно, щоб
  * періоди на різних сторінках можна було порівнювати між собою.
  */
-export function getPeriod() {
-  const base = getUserBaseTotals();
-  const { complete, partial } = splitComplete(base);
-  const cur = complete.at(-1)!;
-  const prev = complete.at(-2)!;
-  const minKey = base[0].report_month_key;
+export function getPeriod(
+  params?: Record<string, string | string[] | undefined>
+) {
+  const all = getUserBaseTotals();
+  const bounds = {
+    min: all[0].report_month_key,
+    max: all.at(-1)!.report_month_key,
+  };
+  // Резолв усередині, а не в кожній сторінці: межі відомі тільки тут, і
+  // дублювати «спочатку bounds, потім resolveRange» у пʼятьох файлах — це
+  // пʼять місць, де вони можуть розʼїхатись.
+  const r: Range = params
+    ? resolveRange(params, bounds)
+    : { from: bounds.min, to: bounds.max };
+
+  const base = all.filter(
+    (x) => x.report_month_key >= r.from && x.report_month_key <= r.to
+  );
+
+  // `cur` — останній місяць ДІАПАЗОНУ. `prev` шукаємо в повному наборі, а не
+  // в діапазоні: якщо обрано один місяць, порівнювати все одно треба з
+  // попереднім, і він не має зникати лише тому, що не потрапив у вікно.
+  const cur = base.at(-1) ?? all.at(-1)!;
+  const curIdx = all.findIndex((x) => x.report_month_key === cur.report_month_key);
+  const prev = all[Math.max(0, curIdx - 1)];
+  const minKey = r.from;
 
   return {
     base,
+    bounds,
+    range: r,
     cur,
     prev,
     curKey: cur.report_month_key,
     prevKey: prev.report_month_key,
-    partialKey: partial.at(-1)?.report_month_key,
+    /** Поточний місяць ще триває — цифри неповні */
+    isPartial: cur.report_month_key === currentMonthKey(),
+    /** Скільки днів місяця вже минуло (для підпису «5 з 31») */
+    daysElapsed: new Date().getDate(),
+    daysInMonth: new Date(
+      new Date().getFullYear(),
+      new Date().getMonth() + 1,
+      0
+    ).getDate(),
     minKey,
+    /** Обрізає будь-який часовий ряд до обраного діапазону */
     inWindow: <T extends { report_month_key: string }>(rows: T[]) =>
-      rows.filter((r) => r.report_month_key >= minKey),
+      rows.filter(
+        (x) => x.report_month_key >= r.from && x.report_month_key <= r.to
+      ),
     at: <T extends { report_month_key: string }>(rows: T[], k: string) =>
-      rows.find((r) => r.report_month_key === k),
+      rows.find((x) => x.report_month_key === k),
   };
 }
+
+export type OsMonthly = {
+  report_month_key: string;
+  os_type: string;
+  users: number;
+};
+
+export const getOsMonthly = () => load<OsMonthly>("agg_os_monthly");
 
 export const getVersionAdoption = () =>
   load<VersionAdoption>("mart_version_adoption");

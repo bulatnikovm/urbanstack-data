@@ -6,7 +6,6 @@ import {
   Kpi,
   PageBody,
   Panel,
-  PartialMonthNote,
   Section,
 } from "@/components/dashboard";
 import { TrendLines } from "@/components/trend-charts";
@@ -22,8 +21,9 @@ import {
 
 const STAR_TOTAL = "0. Всього активних";
 
-export default function StarPage() {
-  const { curKey, prevKey, partialKey, inWindow, at } = getPeriod();
+export default async function StarPage({ searchParams }: PageProps<"/star">) {
+  const sp = await searchParams;
+  const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at } = getPeriod(sp);
 
   const star = getStar();
   const total = star.filter((r) => r.star_category === STAR_TOTAL);
@@ -40,11 +40,12 @@ export default function StarPage() {
         title="STAR"
         subtitle="North Star Metric — частка бази, що виконує цільову дію"
         monthKey={curKey}
+        partial={isPartial ? { daysElapsed, daysInMonth } : undefined}
+        range={range}
+        bounds={bounds}
       />
 
       <PageBody>
-        {partialKey && <PartialMonthNote monthLabel={monthLabel(partialKey)} />}
-
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Kpi
             label="STAR від підтверджених"

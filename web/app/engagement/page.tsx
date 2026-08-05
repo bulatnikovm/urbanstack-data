@@ -13,11 +13,11 @@ import {
   Kpi,
   PageBody,
   Panel,
-  PartialMonthNote,
   Section,
 } from "@/components/dashboard";
 import { TrendLines } from "@/components/trend-charts";
 import { RankedBars } from "@/components/ranked-bars";
+import { BklitDonut } from "@/components/bklit-donut";
 import {
   Table,
   TableBody,
@@ -27,8 +27,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default function EngagementPage() {
-  const { curKey, prevKey, partialKey, inWindow, at } = getPeriod();
+export default async function EngagementPage({ searchParams }: PageProps<"/engagement">) {
+  const sp = await searchParams;
+  const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at } = getPeriod(sp);
 
   const eng = getEngagement();
   const engCur = at(eng, curKey)!;
@@ -42,8 +43,22 @@ export default function EngagementPage() {
     .slice()
     .sort((a, b) => b.true_module_drop_off_rate - a.true_module_drop_off_rate);
 
-  // Сегмент × статус версії — скільки активних сидить на застарілому додатку
+  // Снепшот сегментів × версія × ОС. Крос-таблиця 5×2×2 не читалась —
+  // розкладено на дві незалежні агрегації, кожна відповідає на своє питання.
   const segments = getUserSegments();
+
+  const bySegment = new Map<string, number>();
+  for (const r of segments) {
+    bySegment.set(
+      r.activity_segment,
+      (bySegment.get(r.activity_segment) ?? 0) + r.users_count
+    );
+  }
+  const segmentRows = [...bySegment.entries()]
+    .map(([label, value]) => ({ label: stripOrder(label), value, order: label }))
+    .sort((a, b) => a.order.localeCompare(b.order));
+  const segmentTotal = [...bySegment.values()].reduce((a, b) => a + b, 0);
+
   const byVersion = new Map<string, number>();
   for (const r of segments) {
     byVersion.set(
@@ -51,7 +66,13 @@ export default function EngagementPage() {
       (byVersion.get(r.version_status) ?? 0) + r.users_count
     );
   }
+  const versionRows = [...byVersion.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
   const versionTotal = [...byVersion.values()].reduce((a, b) => a + b, 0);
+  const activeShare = segmentTotal
+    ? (bySegment.get("1. Активні (< 1 міс)") ?? 0) / segmentTotal
+    : 0;
 
   return (
     <>
@@ -59,11 +80,12 @@ export default function EngagementPage() {
         title="Залученість"
         subtitle="Чим саме користуються і де відвалюються"
         monthKey={curKey}
+        partial={isPartial ? { daysElapsed, daysInMonth } : undefined}
+        range={range}
+        bounds={bounds}
       />
 
       <PageBody>
-        {partialKey && <PartialMonthNote monthLabel={monthLabel(partialKey)} />}
-
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Kpi
             label="Середній денний актив"
@@ -113,21 +135,22 @@ export default function EngagementPage() {
           title="Цільові сценарії"
           lead={
             <>
-              Голосування побачили <Hl>{n(engCur.voting_saw_users)}</Hl>{" "}
-              користувачів, проголосували{" "}
-              <Hl>{n(engCur.voting_voted_users)}</Hl> —{" "}
+              Екран голосування відкрили{" "}
+              <Hl>{n(engCur.voting_saw_users)}</Hl> користувачів, до самого
+              голосу дійшли <Hl>{n(engCur.voting_voted_users)}</Hl> —{" "}
               <Hl>{pct(engCur.voting_conversion_rate)}</Hl> конверсії (
               {pp(engCur.voting_conversion_rate - engPrev.voting_conversion_rate)}{" "}
-              за місяць). Заявку через додаток створили{" "}
-              <Hl>{n(engCur.app_requests_created_users)}</Hl> користувачів, з них{" "}
-              <Hl>{n(engCur.app_paid_requests_created_users)}</Hl> — платну.
+              за місяць). Кнопку «Створити заявку» натиснули{" "}
+              <Hl>{n(engCur.app_requests_created_users)}</Hl> користувачів, з
+              них <Hl>{n(engCur.app_paid_requests_created_users)}</Hl> — по
+              платній послузі.
             </>
           }
         >
           <div className="grid gap-3 lg:grid-cols-2">
             <Panel
-              title="Голосування: побачили → проголосували"
-              note="Скільки користувачів побачили голосування і скільки дійшли до голосу."
+              title="Голосування: відкрили → проголосували"
+              note="«Відкрили» — зайшли на екран голосування (не «побачили десь у стрічці»). Конверсія — частка тих, хто дійшов до самого натискання «Проголосувати»."
             >
               <TrendLines
                 data={inWindow(eng).map((r) => ({
@@ -136,15 +159,15 @@ export default function EngagementPage() {
                   voted: r.voting_voted_users,
                 }))}
                 series={[
-                  { key: "saw", label: "Побачили", slot: 1 },
+                  { key: "saw", label: "Відкрили", slot: 1 },
                   { key: "voted", label: "Проголосували", slot: 2 },
                 ]}
               />
             </Panel>
 
             <Panel
-              title="Заявки, створені в додатку"
-              note="Це намір у застосунку (Amplitude), а не рядок у CRM — операційна метрика заявок рахується інакше і буде більшою."
+              title="Натиснули «Створити заявку»"
+              note="⚠️ Це натискання кнопки в застосунку (Amplitude), а не підтверджено створена заявка і не рядок у CRM. Операційна метрика заявок (усі канали) рахується окремо й буде більшою."
             >
               <TrendLines
                 data={inWindow(eng).map((r) => ({
@@ -153,8 +176,8 @@ export default function EngagementPage() {
                   paid: r.app_paid_requests_created_users,
                 }))}
                 series={[
-                  { key: "requests", label: "Створили заявку", slot: 1 },
-                  { key: "paid", label: "Створили платну", slot: 2 },
+                  { key: "requests", label: "Безкоштовна", slot: 1 },
+                  { key: "paid", label: "Платна послуга", slot: 2 },
                 ]}
               />
             </Panel>
@@ -262,50 +285,33 @@ export default function EngagementPage() {
                 <Hl>
                   {pct((byVersion.get("Актуальна версія") ?? 0) / versionTotal)}
                 </Hl>{" "}
-                користувачів. Решта сидить на застарілій збірці, і на них не
-                діють останні зміни в продукті.
+                користувачів; решта сидить на застарілій збірці, і на них не
+                діють останні зміни в продукті.{" "}
+                <Hl>{pct(activeShare)}</Hl> підтверджених — активні (заходили
+                за останній місяць). Знімок на поточний момент, не помісячний.
               </>
             ) : undefined
           }
         >
-          <Panel
-            title="Активність × версія × ОС"
-            note="Зріз на поточний момент, не помісячний."
-          >
-            <div className="max-h-[360px] overflow-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-card">
-                  <TableRow>
-                    <TableHead>Сегмент</TableHead>
-                    <TableHead>Версія</TableHead>
-                    <TableHead>ОС</TableHead>
-                    <TableHead className="text-right">Користувачів</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {segments
-                    .slice()
-                    .sort((a, b) => b.users_count - a.users_count)
-                    .map((s, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">
-                          {s.activity_segment}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {s.version_status}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {s.os_type}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {n(s.users_count)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </div>
-          </Panel>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Panel
+              title="Сегменти за активністю"
+              note="Останній заміряний вхід у застосунок відносно сьогодні."
+            >
+              <RankedBars
+                kind="int"
+                highlightTop={1}
+                data={segmentRows}
+              />
+            </Panel>
+
+            <Panel
+              title="Версія застосунку"
+              note="Актуальна — та сама версія, що й у найпопулярнішого сегмента за останні 7 днів."
+            >
+              <BklitDonut data={versionRows} centerLabel="Користувачів" />
+            </Panel>
+          </div>
         </Section>
       </PageBody>
     </>
