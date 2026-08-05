@@ -145,8 +145,11 @@ export function Freshness({ snapshotAt }: { snapshotAt: string }) {
                 : "var(--status-critical)",
         }}
       />
-      <span className="text-muted-foreground">
-        {snapshotLabel(snapshotAt)}
+      <span
+        className="text-muted-foreground"
+        title="Час зрізу даних за київським часом"
+      >
+        {snapshotLabel(snapshotAt)} за Києвом
       </span>
       {state !== "fresh" && (
         <Badge variant="outline" className="h-5 px-1.5 text-[10px]">

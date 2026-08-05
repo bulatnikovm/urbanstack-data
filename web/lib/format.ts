@@ -65,6 +65,18 @@ export function monthTooltip(key: string): string {
   return `${name[0].toUpperCase()}${name.slice(1)}. ${y}`;
 }
 
+/**
+ * Час зрізу — ЗАВЖДИ за київським часом, явно.
+ *
+ * Без `timeZone` формат бере пояс середовища: локально це Europe/Prague
+ * (16:26), а на Vercel сервер працює в UTC (14:26). Та сама мітка часу
+ * показувала різні години залежно від того, де відрендерилось — і виглядало
+ * це як «на проді дані застаріли на дві години», хоча файл був байт-у-байт
+ * той самий.
+ *
+ * Фіксований пояс, а не пояс глядача: дашборд шеряться, і двоє людей мають
+ * бачити однакове число, а не сперечатися, чий час правильний.
+ */
 export function snapshotLabel(iso: string): string {
   const d = new Date(iso);
   return new Intl.DateTimeFormat("uk-UA", {
@@ -73,6 +85,7 @@ export function snapshotLabel(iso: string): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/Kyiv",
   }).format(d);
 }
 

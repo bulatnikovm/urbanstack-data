@@ -43,6 +43,18 @@ function PieCenter({ label, boxSize }: { label: string; boxSize: number }) {
 }
 
 /**
+ * ⚠️ ОБОВʼЯЗКОВО. `isPieCenter()` у pie-chart.tsx шукає центр за
+ * `displayName` АБО `name` функції. У dev-збірці рятує `name` ("PieCenter"),
+ * але в проді мініфікатор перейменовує функції на однобуквені — `name` стає
+ * чимось на кшталт "t", збіг зникає, і центр МОВЧКИ викидається з рендеру
+ * (не помилка, не попередження — просто порожня дірка в пончику).
+ *
+ * Саме так і сталося на першому деплої. Bklit на власному `PieSlice`
+ * displayName ставить — тут його бракувало.
+ */
+PieCenter.displayName = "PieCenter";
+
+/**
  * Пончик на Bklit UI (`@bklit/pie-chart`) — той анімований компонент, який
  * просив Микита, замінює shadcn `DonutChart` для ОС і версій.
  *
