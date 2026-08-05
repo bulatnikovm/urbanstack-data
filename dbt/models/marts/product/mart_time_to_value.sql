@@ -1,18 +1,19 @@
--- Стр.2 — "Медіанна к-сть годин до цінної дії". Один рядок (снепшот) +
--- розбивка по когортах.
+-- Стр.2 — "Час до цінної дії". Грануляція: report_month (когорта приходу).
 --
--- ⚠️ ВИПРАВЛЕНО БАГ оригіналу. У custom_new_users__d303fc10.sql список подій
--- був записаний так:
---     ... 'paid_service_description_popup_success_view' 'widget_home_scrn__view' 'widget_home_key_btn__click')
--- — три літерали БЕЗ КОМ. BigQuery конкатенує суміжні рядкові літерали
--- (перевірено: SELECT 'a' 'b' 'c' → 'abc'), тож в IN потрапляв один
--- неіснуючий рядок і ці три події мовчки не рахувались. Метрика "41,2 год"
--- була порахована по 3 подіях замість 6.
+-- ⚠️ v2 (2026-08-06, рішення Микити): замінено медіану на РОЗПОДІЛ.
+-- Медіана на цьому розподілі не говорить ні про що — вікно 30 днів дає
+-- медіану ~12 хв (СКД у списку цінних дій, а по нього відчиняють двері одразу
+-- після встановлення), і P90 ~300+ год. Ані "швидко", ані "довго" тут немає
+-- єдиного числа, яке можна прочитати.
 --
--- Тут "цінна дія" = is_value_action із seed'а: усі ТЕРМІНАЛЬНІ УСПІШНІ дії
--- (заявка, оплата успішна, голос, платна послуга, СКД, тимчасовий доступ).
--- Невдала оплата навмисно виключена — це не цінність для юзера.
--- Наслідок: цифра зміниться проти дашборду (СКД частий → медіана впаде).
+-- Замість цього — накопичена частка нових користувачів, що зробили цінну дію
+-- за 1 годину / 1 день / 7 днів / 30 днів від першого входу. Це відповідає
+-- на реальне питання ("як швидко доходять до цінності") і не ламається на
+-- асиметрії розподілу.
+--
+-- Той самий баг оригіналу лишається виправленим (три події без ком у списку
+-- custom_new_users__d303fc10.sql — див. git-історію цього файлу v1).
+-- "Цінна дія" = is_value_action із seed'а (усі ТЕРМІНАЛЬНІ УСПІШНІ дії).
 
 with first_seen as (
 
@@ -51,25 +52,48 @@ timings as (
       -- Те саме вікно, що в оригіналі: цікавить швидка активація, не "колись".
       and timestamp_diff(fv.first_value_at, fs.first_seen_at, day) < 30
 
+),
+
+by_cohort as (
+
+    select
+        cohort_month                                            as report_month,
+        count(*)                                                as n_users_with_value_action,
+        countif(minutes_to_value <= 60)                         as within_1h,
+        countif(minutes_to_value <= 60 * 24)                    as within_1d,
+        countif(minutes_to_value <= 60 * 24 * 7)                as within_7d,
+        countif(minutes_to_value <= 60 * 24 * 30)               as within_30d
+    from timings
+    group by cohort_month
+
 )
 
 select
-    cohort_month                                                    as report_month,
-    format_date('%Y-%m', cohort_month)                              as report_month_key,
-    count(*)                                                        as n_users_with_value_action,
-    approx_quantiles(minutes_to_value, 100)[offset(50)]             as median_minutes_to_value,
-    round(approx_quantiles(minutes_to_value, 100)[offset(50)] / 60.0, 1)  as median_hours_to_value,
-    round(approx_quantiles(minutes_to_value, 100)[offset(90)] / 60.0, 1)  as p90_hours_to_value
-from timings
-group by cohort_month
+    report_month,
+    format_date('%Y-%m', report_month)                          as report_month_key,
+    n_users_with_value_action,
+    within_1h,
+    within_1d,
+    within_7d,
+    within_30d,
+    safe_divide(within_1h,  n_users_with_value_action)          as rate_1h,
+    safe_divide(within_1d,  n_users_with_value_action)          as rate_1d,
+    safe_divide(within_7d,  n_users_with_value_action)          as rate_7d,
+    safe_divide(within_30d, n_users_with_value_action)          as rate_30d
+from by_cohort
 
 union all
 
 select
-    null                                                            as report_month,
-    'ALL'                                                           as report_month_key,
+    null                                                        as report_month,
+    'ALL'                                                       as report_month_key,
     count(*),
-    approx_quantiles(minutes_to_value, 100)[offset(50)],
-    round(approx_quantiles(minutes_to_value, 100)[offset(50)] / 60.0, 1),
-    round(approx_quantiles(minutes_to_value, 100)[offset(90)] / 60.0, 1)
+    countif(minutes_to_value <= 60),
+    countif(minutes_to_value <= 60 * 24),
+    countif(minutes_to_value <= 60 * 24 * 7),
+    countif(minutes_to_value <= 60 * 24 * 30),
+    safe_divide(countif(minutes_to_value <= 60),            count(*)),
+    safe_divide(countif(minutes_to_value <= 60 * 24),       count(*)),
+    safe_divide(countif(minutes_to_value <= 60 * 24 * 7),   count(*)),
+    safe_divide(countif(minutes_to_value <= 60 * 24 * 30),  count(*))
 from timings
