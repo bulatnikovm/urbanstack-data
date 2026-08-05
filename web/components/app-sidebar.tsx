@@ -23,6 +23,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
+type AppSidebarProps = { footer?: React.ReactNode };
+
 /**
  * Сторінки повторюють структуру оригінального Looker-дашборду (5 сторінок),
  * а не зводять усе в одну простиню — кожна сторінка відповідає на одне
@@ -46,7 +48,7 @@ const NAV = [
   },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ footer }: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -100,6 +102,7 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
 
+      {footer}
       <SidebarRail />
     </Sidebar>
   );

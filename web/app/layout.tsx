@@ -2,9 +2,6 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-
 /**
  * Кирилиця обов'язкова — увесь інтерфейс українською. Geist зі скафолду має
  * тільки latin.
@@ -39,12 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="uk"
       className={`${sans.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="min-h-full">
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset className="min-w-0">{children}</SidebarInset>
-        </SidebarProvider>
-      </body>
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }

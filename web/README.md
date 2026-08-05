@@ -54,7 +54,12 @@ npm run refresh        # export + build
 | `components/ranked-bars.tsx` | рейтинги — чистий HTML, серверний компонент |
 | `components/dashboard.tsx` | секції, KPI, панелі, бейдж свіжості |
 | `components/app-sidebar.tsx` | навігація |
-| `components/charts/` | Bklit UI (реєстр `@bklit`), поки не задіяний |
+| `components/charts/` | Bklit UI (реєстр `@bklit`) |
+| `components/bklit-donut.tsx` | пончики на Bklit `PieChart`, з власним `PieCenter` (див. нижче чому) |
+| `auth.ts` / `auth.config.ts` | Auth.js — Google OAuth + allowlist, без бази |
+| `proxy.ts` | захист сторінок — редірект на `/login` до рендеру |
+| `app/(dashboard)/` | усі сторінки дашборду, за `proxy.ts` |
+| `app/login/` | екран входу, поза route group — без сайдбара |
 
 ## Період і фільтр дат
 
@@ -144,9 +149,46 @@ npm run refresh        # export + build
 Заголовок тултипа форматує `monthTooltip()` («Черв. 2026»), а не `monthShort()` —
 останній лишається для підписів осі, де потрібно коротко.
 
+## Авторизація (Auth.js v5, без бази)
+
+Google-логін + allowlist в env-змінних — без Postgres, без власної
+реєстрації/паролів (план, §4). Захист двошаровий:
+
+- `proxy.ts` (Next 16; був `middleware.ts` — конвенцію перейменували)
+  редіректить неавторизованих на `/login` ДО рендеру сторінки;
+- `app/(dashboard)/layout.tsx` — усі сторінки дашборду в route group, окремо
+  від `/login`, щоб неавторизований глядач не бачив сайдбар на екрані входу.
+
+**Роль поки лише `admin`/`viewer`** (`ADMIN_EMAILS` — підмножина
+`ALLOWED_EMAILS`). Гранулярні ролі (product/operations/finance) — Фаза E,
+коли підʼїде другий дашборд.
+
+### Як увімкнути (нічого не працює без цього)
+
+1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) →
+   **APIs & Services → Credentials → Create Credentials → OAuth client ID**,
+   тип **Web application**.
+2. Authorized redirect URIs:
+   - `http://localhost:3000/api/auth/callback/google` (локально)
+   - `https://<домен-на-vercel>/api/auth/callback/google` (прод, додати
+     пізніше, коли буде відомий домен)
+3. Скопіювати `.env.local.example` → `.env.local`, заповнити:
+   - `AUTH_SECRET` — `npx auth secret` або `openssl rand -base64 33`
+   - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — з кроку 1
+   - `ALLOWED_EMAILS`, `ADMIN_EMAILS` — через кому
+4. На Vercel ті самі змінні через **Project Settings → Environment
+   Variables** — `AUTH_SECRET` там окремий, не той, що локально.
+
+Без `.env.local` логін впаде на `Configuration` error — це очікувано, ще не
+підключені креди, а не баг коду. Уся решта (типи, збірка, `proxy.ts`)
+перевірена без живого OAuth-обміну.
+
 ## Що далі
 
-- Bklit UI — потрібне посилання на реєстр, ставиться поверх shadcn
-- Google-логін + allowlist (Auth.js, без бази)
+- Bklit UI на решту графіків (герой-графіки на Аудиторії, STAR) — поки
+  задіяний тільки на пончиках
+- Service account + автооновлення щоночі (2:00 Stitch → BigQuery →
+  6:00 dbt build → export → редеплой) — свідомо відкладено, доки немає
+  service account (план, §9)
 - Деплой на Vercel
 - Секція 5: аномалії та інсайти

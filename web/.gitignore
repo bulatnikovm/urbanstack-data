@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...окрім прикладу — його навпаки МАЄ бути видно в репо, це документація
+# для налаштування auth (README → "Авторизація"), не секрет.
+!.env.local.example
 
 # vercel
 .vercel
