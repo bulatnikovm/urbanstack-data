@@ -1,0 +1,15 @@
+module_code,module_name_ua,module_order,drop_off_window_days
+news,1. Новини (Головна),1,30
+news_read,1. Новини (Читання),2,30
+access,2. СКД (Доступ),3,30
+payments,3. Оплати,4,90
+paid_services,4. Платні послуги,5,90
+requests,5. Безкоштовні заявки,6,90
+voting,6. Голосування,7,180
+profile,7. Профіль та Авторизація,8,30
+notifications,8. Сповіщення,9,30
+widgets,9. Віджети,10,30
+objects,10. Об’єкти,11,90
+temp_access,11. Тимчасові доступи,12,180
+guardian,12. Гардіан,13,90
+technical,—,99,0

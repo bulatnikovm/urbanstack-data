@@ -1,0 +1,32 @@
+version: 2
+
+sources:
+  - name: postgresqldim9000_product
+    description: >
+      Копія Amplitude-подій у тій самій Stitch-sync БД. Окремий source-блок за
+      конвенцією postgresqldim9000_geo/_operational/_surveys — фізично той
+      самий датасет.
+    database: analytics-454817
+    schema: postgresqldim9000
+    tables:
+      - name: EVENTS_407641
+        description: >
+          Сирі події застосунку (Amplitude export). ~13,4 млн рядків / ~6 GB,
+          партиційована по event_time (DAY), кластеризована по event_type —
+          інкрементальні прогони дешеві.
+
+          ⚠️ Колонка `user_id` (власний identity Amplitude) — 100% NULL,
+          identity resolution не налаштований. Єдиний реальний ключ
+          користувача — `user_properties.phone_number` (join до users.phone
+          чистий на 99,98%).
+
+          ⚠️ `amplitude_id` — це УСТАНОВКА додатку, не користувач: 20 064
+          девайси на 13 919 телефонів, 29,6% телефонів мають >1 amplitude_id.
+          У staging перейменовано на `device_id`, щоб ніхто більше не порахував
+          його як юзера.
+
+          ⚠️ У даних є ~30 подій з датами до 2028 р. (кривий годинник клієнта)
+          — staging їх відсікає.
+        columns:
+          - name: uuid
+            description: PK події.
