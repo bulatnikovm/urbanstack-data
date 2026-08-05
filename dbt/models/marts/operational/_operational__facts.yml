@@ -38,4 +38,14 @@ models:
           - unique
 
   - name: fact_user_space
-    description: Grain — user_id × space_id, тільки ROLE_CITIZEN/ROLE_INACTIVATED_CITIZEN.
+    description: >
+      Grain — user_id × space_id, тільки ROLE_CITIZEN/ROLE_INACTIVATED_CITIZEN.
+      Аудиторія приміщень = власники (spaces.owner_id) + співмешканці
+      (space_user). Тонка вибірка над спільним int_user_space_links — окремої
+      логіки прив'язки не містить.
+      ⚠️ Виправлено 2026-08-04: раніше читала лише space_user і не бачила
+      власників (для буд. Змієнка 15/23 давало 76 людей замість 425).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, space_id]

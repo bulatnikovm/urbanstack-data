@@ -20,18 +20,24 @@ models:
         +schema: dbt_operational
       surveys:
         +schema: dbt_operational
+      product:
+        +schema: dbt_product
     intermediate:
       +materialized: view
       operational:
         +schema: dbt_operational
       surveys:
         +schema: dbt_operational
+      product:
+        +schema: dbt_product
     marts:
       +materialized: table
       operational:
         +schema: dbt_operational
       surveys:
         +schema: dbt_operational
+      product:
+        +schema: dbt_product
 
 seeds:
   urbanstack_dbt:
@@ -43,3 +49,7 @@ seeds:
       +schema: dbt_operational
     survey_wave_catalog:
       +schema: dbt_operational
+    product_event_catalog:
+      +schema: dbt_product
+    product_module_catalog:
+      +schema: dbt_product
