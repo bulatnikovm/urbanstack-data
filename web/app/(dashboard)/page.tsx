@@ -18,6 +18,8 @@ import { BklitDonut } from "@/components/bklit-donut";
 import { BklitLine } from "@/components/bklit-line";
 import { BklitBar } from "@/components/bklit-bar";
 import { BklitArea } from "@/components/bklit-area";
+import { ExportXlsx } from "@/components/export-xlsx";
+import { buildSheet } from "@/lib/xlsx";
 import {
   Table,
   TableBody,
@@ -204,6 +206,24 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
             <Panel
               title={`Житлові комплекси — ${monthLabel(curKey)}`}
               note="Відсортовано за розміром бази."
+              action={
+                <ExportXlsx
+                  fileName={`urbanstack-zhk-${curKey}`}
+                  sheetName="ЖК"
+                  sheet={buildSheet(byComplex, [
+                    { header: "ЖК", value: (r) => r.complex_name, width: 28 },
+                    { header: "Потенційні", value: (r) => r.count_potential },
+                    { header: "Підтверджені", value: (r) => r.count_confirmed },
+                    {
+                      header: "% підтверджених",
+                      value: (r) => r.rate_confirmed,
+                      format: "0.0%",
+                    },
+                    { header: "Відвідувачі", value: (r) => r.visitors },
+                    { header: "MAU", value: (r) => r.active_core_mau },
+                  ])}
+                />
+              }
             >
               <div className="max-h-[420px] overflow-auto">
                 <Table>
@@ -248,6 +268,7 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
             <Panel
               title="Операційна система"
               note={`Активні користувачі за ${monthLabel(curKey)}.`}
+              contentClassName="flex-1"
             >
               <BklitDonut data={osRows} centerLabel="Користувачів" />
             </Panel>

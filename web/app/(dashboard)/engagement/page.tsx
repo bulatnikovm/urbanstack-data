@@ -19,6 +19,8 @@ import {
 import { BklitLine } from "@/components/bklit-line";
 import { RankedBars } from "@/components/ranked-bars";
 import { BklitDonut } from "@/components/bklit-donut";
+import { ExportXlsx } from "@/components/export-xlsx";
+import { buildSheet } from "@/lib/xlsx";
 import {
   Table,
   TableBody,
@@ -306,6 +308,38 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
           <Panel
             title="Квитанції за місяцями"
             note="⚠️ transaction_type='utilities', accepted/rejected; незавершені спроби (new) не рахуються."
+            action={
+              <ExportXlsx
+                fileName="urbanstack-kvytantsii"
+                sheetName="Квитанції"
+                sheet={buildSheet(inWindow(receipts).slice().reverse(), [
+                  {
+                    header: "Місяць",
+                    value: (r) => monthLabel(r.report_month_key),
+                    width: 14,
+                  },
+                  {
+                    header: "Сума прийнятих, ₴",
+                    value: (r) => r.receipts_accepted_amount,
+                    format: "#,##0.00",
+                    width: 20,
+                  },
+                  { header: "Успішних", value: (r) => r.receipts_accepted },
+                  { header: "Відхилених", value: (r) => r.receipts_rejected },
+                  {
+                    header: "% відхилених",
+                    value: (r) => r.receipts_rejected_rate,
+                    format: "0.0%",
+                  },
+                  {
+                    header: "Середній чек, ₴",
+                    value: (r) => r.receipts_accepted_avg_amount,
+                    format: "#,##0.00",
+                    width: 18,
+                  },
+                ])}
+              />
+            }
           >
             <div className="max-h-[360px] overflow-auto">
               <Table>
@@ -396,6 +430,45 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
           <Panel
             title="Модулі в деталях"
             note="Час у модулі й скільки днів минає до відвалу."
+            action={
+              <ExportXlsx
+                fileName={`urbanstack-moduli-${curKey}`}
+                sheetName="Модулі"
+                sheet={buildSheet(modules, [
+                  {
+                    header: "Модуль",
+                    value: (m) => stripOrder(m.module_name_ua),
+                    width: 26,
+                  },
+                  { header: "Користувачів", value: (m) => m.module_users },
+                  {
+                    header: "Покриття",
+                    value: (m) => m.penetration_rate,
+                    format: "0.0%",
+                  },
+                  {
+                    header: "Медіанний час, хв",
+                    value: (m) => m.median_time_min,
+                    format: "0.0",
+                    width: 18,
+                  },
+                  {
+                    header: "Відвал",
+                    value: (m) =>
+                      dropOff.find((x) => x.module_name_ua === m.module_name_ua)
+                        ?.true_module_drop_off_rate,
+                    format: "0.0%",
+                  },
+                  {
+                    header: "Днів до відвалу",
+                    value: (m) =>
+                      dropOff.find((x) => x.module_name_ua === m.module_name_ua)
+                        ?.median_days_before_drop,
+                    width: 18,
+                  },
+                ])}
+              />
+            }
           >
             <div className="max-h-[440px] overflow-auto">
               <Table>

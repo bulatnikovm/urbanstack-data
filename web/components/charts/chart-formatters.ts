@@ -3,9 +3,12 @@
 // і заголовок тултипа показували "Jul 27" на україномовному дашборді.
 // ⚠️ `npx shadcn add @bklit/...` перезаписує цей файл без -o — з -o теж, це
 // вже сталося один раз (2026-08-06). Патч треба переносити вручну щоразу.
+// Вісь X. Було `{month, day}` → "1 квіт." — день завжди 1 (усі марти
+// помісячні) і року немає, тому на 32 місяцях вісь читалась як безрік'я з
+// трьома однаковими "квіт". Тепер місяць + рік.
 export const shortDateFmt = new Intl.DateTimeFormat("uk-UA", {
   month: "short",
-  day: "numeric",
+  year: "2-digit",
 });
 
 export const weekdayDateFmt = new Intl.DateTimeFormat("uk-UA", {

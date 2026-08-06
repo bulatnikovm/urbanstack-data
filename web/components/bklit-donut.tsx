@@ -1,5 +1,8 @@
 "use client";
 
+import NumberFlow from "@number-flow/react";
+import { useEffect, useState } from "react";
+
 import { PieChart } from "@/components/charts/pie-chart";
 import { PieSlice } from "@/components/charts/pie-slice";
 import { usePieHover, usePieStable } from "@/components/charts/pie-context";
@@ -26,6 +29,16 @@ function PieCenter({ label, boxSize }: { label: string; boxSize: number }) {
   const { data, totalValue } = usePieStable();
   const { hoveredIndex } = usePieHover();
   const hovered = hoveredIndex === null ? null : data[hoveredIndex];
+  const value = hovered ? hovered.value : totalValue;
+
+  // `mounted` — той самий прийом, що й у ThemeToggle. NumberFlow реєструє
+  // custom element при імпорті модуля, тож на СЕРВЕРІ його немає, а в
+  // браузері під час гідратації вже є — два різні дерева, "Hydration
+  // failed" (саме через це анімацію тут раніше й прибрали). Тепер перший
+  // клієнтський рендер збігається з серверним (обидва — статичний текст),
+  // і лише наступним рендером зʼявляється анімоване число.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   return (
     <div
@@ -33,7 +46,11 @@ function PieCenter({ label, boxSize }: { label: string; boxSize: number }) {
       style={{ width: boxSize, height: boxSize }}
     >
       <span className="text-2xl font-bold tabular-nums text-foreground">
-        {n(hovered ? hovered.value : totalValue)}
+        {mounted ? (
+          <NumberFlow value={value} locales="uk-UA" />
+        ) : (
+          n(value)
+        )}
       </span>
       <span className="mt-0.5 text-xs text-muted-foreground">
         {hovered ? hovered.label : label}
@@ -77,16 +94,18 @@ PieCenter.displayName = "PieCenter";
 export function BklitDonut({
   data,
   centerLabel = "Разом",
-  size = 180,
+  size = 200,
 }: {
   data: Array<{ label: string; value: number }>;
   centerLabel?: string;
   size?: number;
 }) {
   const total = data.reduce((a, d) => a + d.value, 0);
+  // `--chart-N`, не `--series-N`: дашборд монохромний (рішення Микити
+  // 2026-08-06), пончик має бути тієї ж сірої шкали, що й лінії.
   const colored = data.slice(0, 3).map((d, i) => ({
     ...d,
-    color: `var(--series-${i + 1})`,
+    color: `var(--chart-${i + 1})`,
   }));
   const rest = data.slice(3);
   if (rest.length) {
@@ -98,7 +117,10 @@ export function BklitDonut({
   }
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    // `h-full justify-center` — картка стоїть у grid-ряду поруч із високою
+    // таблицею й розтягується під неї; без цього пончик тулився вгору, а
+    // під легендою лишалась порожнеча на пів картки.
+    <div className="flex h-full flex-col items-center justify-center gap-5">
       <PieChart
         data={colored}
         size={size}

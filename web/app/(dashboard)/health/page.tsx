@@ -1,5 +1,5 @@
 import { getAppHealth, getPeriod } from "@/lib/data";
-import { delta, n, pct, pp } from "@/lib/format";
+import { delta, n, pct, pp, weekTooltip } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
 import { HealthFilters } from "@/components/health-filters";
@@ -116,7 +116,7 @@ export default async function HealthPage({
               <Kpi
                 label="Активних за тиждень"
                 value={n(last.wau)}
-                sub={`тиждень з ${last.week}`}
+                sub={weekTooltip(last.week).toLowerCase()}
                 trend={
                   prevWeek
                     ? {
@@ -171,7 +171,7 @@ export default async function HealthPage({
               title="Тижневий актив і логаути"
               lead={
                 <>
-                  Останній тиждень ({last.week}) —{" "}
+                  Останній тиждень ({weekTooltip(last.week).toLowerCase()}) —{" "}
                   <Hl>{n(last.wau)}</Hl> активних, з них{" "}
                   <Hl>{n(last.logout)}</Hl> примусово розлогінені (
                   <Hl>{pct(last.logoutRate)}</Hl>).
@@ -188,6 +188,7 @@ export default async function HealthPage({
                   }
                 >
                   <BklitLine
+                    xUnit="week"
                     data={withRates.map((w) => ({
                       month: w.week,
                       wau: w.wau,
@@ -198,6 +199,7 @@ export default async function HealthPage({
 
                 <Panel title="Частка примусових логаутів">
                   <BklitLine
+                    xUnit="week"
                     data={withRates.map((w) => ({
                       month: w.week,
                       rate: w.logoutRate ?? 0,
@@ -225,6 +227,7 @@ export default async function HealthPage({
                 note="Обидва — частка від «лояльних біометричних» юзерів (бачили поп-ап біометрії за останні 30 днів)."
               >
                 <BklitLine
+                    xUnit="week"
                   data={withRates.map((w) => ({
                     month: w.week,
                     friction: w.frictionRate ?? 0,

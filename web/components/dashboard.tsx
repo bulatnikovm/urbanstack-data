@@ -103,23 +103,35 @@ export function Kpi({
 export function Panel({
   title,
   note,
+  action,
   className,
+  contentClassName,
   children,
 }: {
   title: string;
   note?: string;
+  /** Кнопка праворуч у шапці — напр. `<ExportXlsx …/>`. */
+  action?: React.ReactNode;
   className?: string;
+  /** Напр. `flex-1` — щоб вміст розтягнувся на всю висоту картки в grid-ряду,
+   * де сусід вищий (інакше під пончиком лишається порожнеча). */
+  contentClassName?: string;
   children: React.ReactNode;
 }) {
   return (
     <Card className={cn("gap-0 py-0", className)}>
       <CardHeader className="gap-1 border-b px-4 py-3">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          {action && <div className="shrink-0">{action}</div>}
+        </div>
         {note && (
           <p className="text-xs leading-snug text-muted-foreground">{note}</p>
         )}
       </CardHeader>
-      <CardContent className="px-3 py-3">{children}</CardContent>
+      <CardContent className={cn("px-3 py-3", contentClassName)}>
+        {children}
+      </CardContent>
     </Card>
   );
 }

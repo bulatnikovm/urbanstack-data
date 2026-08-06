@@ -2,15 +2,39 @@
 
 import { Grid } from "@/components/charts/grid";
 import { Line, LineChart } from "@/components/charts/line-chart";
-import { ChartTooltip } from "@/components/charts/tooltip";
+import { ChartTooltip, TooltipContent } from "@/components/charts/tooltip";
 import { XAxis } from "@/components/charts/x-axis";
-import { n, n1, pct, uah } from "@/lib/format";
+import { monthTooltip, n, n1, pct, uah, weekTooltip } from "@/lib/format";
 
 export type Series = { key: string; label: string; slot: 1 | 2 | 3 };
 type Fmt = "int" | "pct" | "num" | "money";
+/** Крок осі X: помісячні марти ("2026-08") чи тижневі ("2026-08-03"). */
+export type XUnit = "month" | "week";
 
 const fmt = (v: number, k: Fmt) =>
   k === "pct" ? pct(v) : k === "num" ? n1(v) : k === "money" ? uah(v) : n(v);
+
+/**
+ * Заголовок тултипа з СИРОГО ключа, а не з `Date`.
+ *
+ * Штатний заголовок bklit — `weekdayDateFmt.format(xAccessor(point))`, тобто
+ * "ср, 1 квіт.": день тижня й число, яких у помісячних даних не існує (усі
+ * ключі — перше число місяця). Тому скрізь передаємо власний `content`.
+ */
+export const tooltipTitle = (raw: string, unit: XUnit) =>
+  unit === "week" ? weekTooltip(raw) : monthTooltip(raw);
+
+/** Спільні рядки тултипа для всіх Bklit-обгорток. */
+export const tooltipRows = (
+  point: Record<string, unknown>,
+  series: Series[],
+  kind: Fmt
+) =>
+  series.map((s) => ({
+    color: `var(--chart-${s.slot})`,
+    label: s.label,
+    value: fmt(Number(point[s.key] ?? 0), kind),
+  }));
 
 /**
  * Лінії на Bklit UI. Заміна `TrendLines` (shadcn/Recharts) — та сама роль
@@ -31,6 +55,7 @@ export function BklitLine({
   series,
   kind = "int",
   xKey = "month",
+  xUnit = "month",
   aspectRatio = "2 / 1",
   className = "w-full",
 }: {
@@ -38,6 +63,7 @@ export function BklitLine({
   series: Series[];
   kind?: Fmt;
   xKey?: string;
+  xUnit?: XUnit;
   /** "ширина / висота", напр. "3 / 1". ⚠️ Не задавай через Tailwind
    * `aspect-[…]` у className — LineChart сам ставить inline
    * `style.aspectRatio`, і inline завжди перебиває клас (перевірено
@@ -64,13 +90,12 @@ export function BklitLine({
           />
         ))}
         <ChartTooltip
-          rows={(point) =>
-            series.map((s) => ({
-              color: `var(--chart-${s.slot})`,
-              label: s.label,
-              value: fmt(Number(point[s.key] ?? 0), kind),
-            }))
-          }
+          content={({ point }) => (
+            <TooltipContent
+              title={tooltipTitle(String(point[xKey] ?? ""), xUnit)}
+              rows={tooltipRows(point, series, kind)}
+            />
+          )}
         />
       </LineChart>
 

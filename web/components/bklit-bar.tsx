@@ -4,14 +4,21 @@ import { Bar } from "@/components/charts/bar";
 import { BarChart } from "@/components/charts/bar-chart";
 import { BarXAxis } from "@/components/charts/bar-x-axis";
 import { Grid } from "@/components/charts/grid";
-import { ChartTooltip } from "@/components/charts/tooltip";
-import { n, n1, pct, uah } from "@/lib/format";
-import type { Series } from "./bklit-line";
+import { ChartTooltip, TooltipContent } from "@/components/charts/tooltip";
+import { monthAxis } from "@/lib/format";
+import type { Series, XUnit } from "./bklit-line";
+import { tooltipRows, tooltipTitle } from "./bklit-line";
 
 type Fmt = "int" | "pct" | "num" | "money";
 
-const fmt = (v: number, k: Fmt) =>
-  k === "pct" ? pct(v) : k === "num" ? n1(v) : k === "money" ? uah(v) : n(v);
+/**
+ * На відміну від Line/Area (шкала часу), стовпчики мають КАТЕГОРІАЛЬНУ вісь:
+ * підпис = сам рядок ключа, тому "2026-08" і малювалось на осі як є.
+ * Тому підписи форматуємо тут, у даних, а сирий ключ лишаємо поруч —
+ * тултип бере його й формує власний заголовок.
+ */
+const X_LABEL = "__xLabel";
+const X_RAW = "__xRaw";
 
 /**
  * Стовпчики на Bklit UI. Заміна `StackedBars`.
@@ -30,6 +37,7 @@ export function BklitBar({
   series,
   kind = "int",
   xKey = "month",
+  xUnit = "month",
   stacked = false,
   aspectRatio = "2 / 1",
   className = "w-full",
@@ -38,17 +46,23 @@ export function BklitBar({
   series: Series[];
   kind?: Fmt;
   xKey?: string;
+  xUnit?: XUnit;
   stacked?: boolean;
   /** "ширина / висота" — задавай тут, не через Tailwind `aspect-[…]` у
    * className (inline style компонента завжди перебиває клас). */
   aspectRatio?: string;
   className?: string;
 }) {
+  const rows = data.map((d) => {
+    const raw = String(d[xKey] ?? "");
+    return { ...d, [X_RAW]: raw, [X_LABEL]: monthAxis(raw) };
+  });
+
   return (
     <div className="flex flex-col gap-2">
       <BarChart
-        data={data}
-        xDataKey={xKey}
+        data={rows}
+        xDataKey={X_LABEL}
         stacked={stacked}
         aspectRatio={aspectRatio}
         className={className}
@@ -61,13 +75,12 @@ export function BklitBar({
           <Bar key={s.key} dataKey={s.key} fill={`var(--chart-${s.slot})`} />
         ))}
         <ChartTooltip
-          rows={(point) =>
-            series.map((s) => ({
-              color: `var(--chart-${s.slot})`,
-              label: s.label,
-              value: fmt(Number(point[s.key] ?? 0), kind),
-            }))
-          }
+          content={({ point }) => (
+            <TooltipContent
+              title={tooltipTitle(String(point[X_RAW] ?? ""), xUnit)}
+              rows={tooltipRows(point, series, kind)}
+            />
+          )}
         />
       </BarChart>
 

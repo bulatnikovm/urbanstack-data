@@ -62,6 +62,28 @@ export function monthShort(key: string): string {
   return idx === 0 ? `${MONTHS[0]} ${y.slice(2)}` : MONTHS[idx];
 }
 
+/**
+ * "2026-07" → "лип 26" — підпис осі X.
+ *
+ * Рік обовʼязково: без нього вісь на 32 місяці читається як безрік'я, і
+ * «квіт» зустрічається тричі поспіль. Дня і дня тижня немає навмисно —
+ * усі марти помісячні, «1 квіт.» обіцяло б точність, якої в даних нема.
+ */
+export function monthAxis(key: string): string {
+  const [y, m] = String(key).split("-");
+  const idx = Number(m) - 1;
+  if (!Number.isInteger(idx) || idx < 0 || idx > 11) return String(key);
+  return `${MONTHS[idx]} ${y.slice(2)}`;
+}
+
+/** "2026-08-03" → "Тиждень з 3 серп. 2026" — тижневі графіки (Стан додатку) */
+export function weekTooltip(iso: string): string {
+  const [y, m, d] = String(iso).split("-");
+  const idx = Number(m) - 1;
+  if (!Number.isInteger(idx) || idx < 0 || idx > 11) return String(iso);
+  return `Тиждень з ${Number(d)} ${MONTHS[idx]}. ${y}`;
+}
+
 /** "2026-06" → "Черв. 2026" — заголовок тултипа: з великої, зі скороченням і роком */
 export function monthTooltip(key: string): string {
   const [y, m] = String(key).split("-");

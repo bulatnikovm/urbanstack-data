@@ -2,15 +2,12 @@
 
 import { Area, AreaChart } from "@/components/charts/area-chart";
 import { Grid } from "@/components/charts/grid";
-import { ChartTooltip } from "@/components/charts/tooltip";
+import { ChartTooltip, TooltipContent } from "@/components/charts/tooltip";
 import { XAxis } from "@/components/charts/x-axis";
-import { n, n1, pct, uah } from "@/lib/format";
-import type { Series } from "./bklit-line";
+import type { Series, XUnit } from "./bklit-line";
+import { tooltipRows, tooltipTitle } from "./bklit-line";
 
 type Fmt = "int" | "pct" | "num" | "money";
-
-const fmt = (v: number, k: Fmt) =>
-  k === "pct" ? pct(v) : k === "num" ? n1(v) : k === "money" ? uah(v) : n(v);
 
 /**
  * Площі з градієнтом на Bklit UI. Заміна `TrendAreas` (герой-графіки) —
@@ -25,6 +22,7 @@ export function BklitArea({
   series,
   kind = "int",
   xKey = "month",
+  xUnit = "month",
   aspectRatio = "3 / 1",
   className = "w-full",
 }: {
@@ -32,6 +30,7 @@ export function BklitArea({
   series: Series[];
   kind?: Fmt;
   xKey?: string;
+  xUnit?: XUnit;
   /** "ширина / висота" — задавай тут, не через Tailwind `aspect-[…]` у
    * className (inline style компонента завжди перебиває клас). */
   aspectRatio?: string;
@@ -57,13 +56,12 @@ export function BklitArea({
           />
         ))}
         <ChartTooltip
-          rows={(point) =>
-            series.map((s) => ({
-              color: `var(--chart-${s.slot})`,
-              label: s.label,
-              value: fmt(Number(point[s.key] ?? 0), kind),
-            }))
-          }
+          content={({ point }) => (
+            <TooltipContent
+              title={tooltipTitle(String(point[xKey] ?? ""), xUnit)}
+              rows={tooltipRows(point, series, kind)}
+            />
+          )}
         />
       </AreaChart>
 

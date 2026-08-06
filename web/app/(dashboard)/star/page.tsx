@@ -10,6 +10,8 @@ import {
 } from "@/components/dashboard";
 import { BklitLine } from "@/components/bklit-line";
 import { RankedBars } from "@/components/ranked-bars";
+import { ExportXlsx } from "@/components/export-xlsx";
+import { buildSheet } from "@/lib/xlsx";
 import {
   Table,
   TableBody,
@@ -145,6 +147,38 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
             <Panel
               title="Категорії в деталях"
               note="Зміна до попереднього місяця розрахована в самій марті."
+              action={
+                <ExportXlsx
+                  fileName={`urbanstack-star-${curKey}`}
+                  sheetName="STAR"
+                  sheet={buildSheet(cats, [
+                    {
+                      header: "Категорія",
+                      value: (c) => stripOrder(c.star_category),
+                      width: 24,
+                    },
+                    { header: "Користувачів", value: (c) => c.unique_users },
+                    {
+                      header: "% потенційної бази",
+                      value: (c) => c.star_rate,
+                      format: "0.0%",
+                      width: 20,
+                    },
+                    {
+                      header: "% підтвердженої бази",
+                      value: (c) => c.star_rate_of_confirmed,
+                      format: "0.0%",
+                      width: 22,
+                    },
+                    {
+                      header: "Зміна за місяць",
+                      value: (c) => c.mom_change_pct,
+                      format: "0.0%",
+                      width: 18,
+                    },
+                  ])}
+                />
+              }
             >
               <Table>
                 <TableHeader>
