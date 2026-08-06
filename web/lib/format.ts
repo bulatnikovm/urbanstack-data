@@ -27,6 +27,12 @@ export const pp = (v: number) =>
     ? "без змін"
     : `${v >= 0 ? "+" : "−"}${nf1.format(Math.abs(v) * 100)} п.п.`;
 
+const nfMoney = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 0 });
+
+/** Сума в гривнях — "3 644 233 ₴" */
+export const uah = (v: number | null | undefined) =>
+  v === null || v === undefined ? "—" : `${nfMoney.format(Math.round(v))} ₴`;
+
 /** Відносна зміна — "+12,3%" */
 export const delta = (v: number) =>
   Math.abs(v) * 100 < 0.05

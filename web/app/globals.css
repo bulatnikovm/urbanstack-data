@@ -69,54 +69,82 @@
   --color-chart-background: var(----chart-background);
 }
 
+/* ── Брендові кольори ────────────────────────────────────────────────────
+   Точні значення з брендбуку UrbanStack (2026), розділ «Колір». Єдине
+   місце, де вони записані — усе решта посилається на ці змінні.
+   Нейтралі світлої теми — розбіли Cool Gray Blue, а не сірий: інакше
+   холодний брендовий синій сусідить із нейтральним сірим і читається як
+   брудний. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --brand-charcoal: #232323;
+  --brand-black: #0c0c0c;
+  --brand-mint: #cdf2c7;
+  --brand-slate: #a1b3c7; /* Cool Gray Blue */
+  --brand-sky: #b3dffc; /* Pale Sky Blue  */
+  --brand-red: #dd0e0d; /* Vivid Red, доп. палітра */
+
+  --brand-tint-50: #f9fafc;
+  --brand-tint-100: #f2f4f7;
+  --brand-tint-200: #e5eaf0;
+  --brand-ink-muted: #5c646d; /* 6.0:1 на білому — AA для дрібного тексту */
+
+  --brand-surface-1: #303030; /* темна тема: підкладка над Charcoal */
+  --brand-surface-2: #393939;
+}
+
+/* ⚠️ `npx shadcn add @bklit/bar-chart @bklit/area-chart` (2026-08-06)
+   дублював сюди повний набір `--chart-*` зі скафолдними значеннями —
+   видалено, бо нижче вже є ті самі ключі з брендовими значеннями (другий
+   :root), і другий у порядку джерела все одно переміг би. Якщо ставитимеш
+   ще один bklit-компонент, перевір діфф — може повторитись. */
+:root {
+  --background: #ffffff;
+  --foreground: var(--brand-charcoal);
+  --card: #ffffff;
+  --card-foreground: var(--brand-charcoal);
+  --popover: #ffffff;
+  --popover-foreground: var(--brand-charcoal);
+  --primary: var(--brand-charcoal);
+  --primary-foreground: #ffffff;
+  --secondary: var(--brand-tint-100);
+  --secondary-foreground: var(--brand-charcoal);
+  --muted: var(--brand-tint-100);
+  --muted-foreground: var(--brand-ink-muted);
+  --accent: var(--brand-tint-100);
+  --accent-foreground: var(--brand-charcoal);
+  --destructive: var(--brand-red);
+  --border: var(--brand-tint-200);
+  --input: var(--brand-tint-200);
+  --ring: var(--brand-slate);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: var(--brand-tint-50);
+  --sidebar-foreground: var(--brand-charcoal);
+  --sidebar-primary: var(--brand-charcoal);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--brand-tint-200);
+  --sidebar-accent-foreground: var(--brand-charcoal);
+  --sidebar-border: var(--brand-tint-200);
+  --sidebar-ring: var(--brand-slate);
   --chart-background: oklch(1 0 0);
-  --chart-foreground: oklch(0.145 0.004 285);
-  --chart-foreground-muted: oklch(0.55 0.014 260);
+  --chart-foreground: var(--brand-charcoal);
+  --chart-foreground-muted: var(--brand-ink-muted);
   --chart-line-primary: var(--chart-1);
   --chart-line-secondary: var(--chart-2);
   --chart-crosshair: oklch(0.4 0.1828 274.34);
-  --chart-grid: oklch(0.9 0 0);
+  --chart-grid: var(--brand-tint-200);
   --chart-brush-border: var(--chart-grid);
-  --chart-tooltip-background: oklch(0.21 0.006 285 / 0.8);
-  --chart-tooltip-foreground: oklch(0.985 0 0);
-  --chart-tooltip-muted: oklch(0.65 0.01 260);
-  --chart-marker-background: oklch(0.97 0.005 260);
-  --chart-marker-border: oklch(0.85 0.01 260);
-  --chart-marker-foreground: oklch(0.3 0.01 260);
-  --chart-label: oklch(0.45 0.01 260);
+  --chart-tooltip-background: var(--popover);
+  --chart-tooltip-foreground: var(--popover-foreground);
+  --chart-tooltip-muted: var(--brand-ink-muted);
+  --chart-marker-background: var(--brand-tint-100);
+  --chart-marker-border: var(--brand-tint-200);
+  --chart-marker-foreground: var(--brand-charcoal);
+  --chart-label: var(--brand-ink-muted);
   --chart-scale-01: oklch(0.98 0.003 106);
   --chart-scale-02: oklch(0.92 0.008 106);
   --chart-scale-03: oklch(0.82 0.015 106);
@@ -125,48 +153,52 @@
   --chart-scale-pattern-color: oklch(0.96 0.005 106);
 }
 
+/* Темна тема будується з двох брендових чорних, а не з одного: фон —
+   «Стандартний чорний» #0C0C0C, підняті поверхні (картки, сайдбар) —
+   Charcoal #232323. Ієрархія глибини береться з брендбуку, а не
+   вигадується освітленням одного кольору. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: var(--brand-black);
+  --foreground: #ffffff;
+  --card: var(--brand-charcoal);
+  --card-foreground: #ffffff;
+  --popover: var(--brand-charcoal);
+  --popover-foreground: #ffffff;
+  --primary: var(--chart-1);
+  --primary-foreground: var(--brand-charcoal);
+  --secondary: var(--brand-surface-1);
+  --secondary-foreground: #ffffff;
+  --muted: var(--brand-surface-1);
+  --muted-foreground: var(--brand-slate);
+  --accent: var(--brand-surface-2);
+  --accent-foreground: #ffffff;
+  --destructive: #e75656; /* Vivid Red висвітлений — на чорному 5.5:1 */
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: var(--brand-slate);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar: var(--brand-charcoal);
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: var(--chart-1);
+  --sidebar-primary-foreground: var(--brand-charcoal);
+  --sidebar-accent: var(--brand-surface-2);
+  --sidebar-accent-foreground: #ffffff;
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-  --chart-background: oklch(0.145 0 0);
-  --chart-foreground: oklch(0.45 0 0);
-  --chart-foreground-muted: oklch(0.65 0.01 260);
+  --sidebar-ring: var(--brand-slate);
+  --chart-background: var(--brand-black);
+  --chart-foreground: var(--brand-slate);
+  --chart-foreground-muted: var(--brand-slate);
   --chart-crosshair: oklch(0.45 0 0);
-  --chart-grid: oklch(0.25 0 0);
+  --chart-grid: var(--brand-surface-1);
   --chart-brush-border: var(--chart-grid);
-  --chart-marker-background: oklch(0.25 0.01 260);
-  --chart-marker-border: oklch(0.4 0.01 260);
-  --chart-marker-foreground: oklch(0.9 0 0);
-  --chart-label: oklch(0.75 0.01 260);
+  --chart-marker-background: var(--brand-surface-1);
+  --chart-marker-border: var(--brand-surface-2);
+  --chart-marker-foreground: #ffffff;
+  --chart-label: var(--brand-slate);
   --chart-scale-01: oklch(0.28 0.03 270);
   --chart-scale-02: oklch(0.38 0.04 270);
   --chart-scale-03: oklch(0.48 0.05 270);
@@ -186,6 +218,19 @@
     @apply font-sans;
   }
 }
+
+/* Активний пункт навігації. Було залито Mint Green — Микита попросив
+   прибрати (2026-08-06): дашборд монохромний, як лінії графіків, без
+   кольорових плям у хромі. `--chart-1` — та сама сіра, що й лінії.
+   Правилом, а не класом: shadcn вішає на активний пункт ТОЙ САМИЙ
+   `--sidebar-accent`, що й на ховер, тож через токен розвести їх
+   неможливо. Напівпрозорий color-mix, а не суцільна заливка — колір без
+   насиченості (chroma=0), тому не примусово темний текст, як було для
+   м'яти: `--sidebar-foreground` й так контрастний в обох темах. */
+[data-slot="sidebar-menu-button"][data-active],
+[data-slot="sidebar-menu-button"][data-active]:hover {
+  background-color: color-mix(in oklab, var(--chart-1) 28%, transparent);
+}
 /* ── Палітра графіків ────────────────────────────────────────────────────
    Валідовані слоти з dataviz-довідника (перші 3 категоріальні слоти —
    проходять CVD-гейти в обох темах: worst ΔE 9.2 light / 9.4 dark).
@@ -200,7 +245,7 @@
   --status-good: #0ca30c;
   --status-warning: #fab219;
   --status-critical: #d03b3b;
-  --grid-line: #e8e8e4;
+  --grid-line: var(--brand-tint-200);
 }
 
 .dark {
@@ -209,5 +254,5 @@
   --series-3: #199e70;
   --seq-400: #2a78d6;
   --seq-250: #184f95;
-  --grid-line: #2c2c2a;
+  --grid-line: var(--brand-surface-1);
 }

@@ -8,7 +8,7 @@ import {
   Panel,
   Section,
 } from "@/components/dashboard";
-import { TrendLines } from "@/components/trend-charts";
+import { BklitLine } from "@/components/bklit-line";
 import { RankedBars } from "@/components/ranked-bars";
 import {
   Table,
@@ -104,8 +104,8 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
             title="STAR — частка бази з цільовою дією"
             note="Дві бази порівняння: від усіх потенційних і від підтверджених користувачів."
           >
-            <TrendLines
-              className="aspect-[3/1] w-full"
+            <BklitLine
+              aspectRatio="3 / 1"
               kind="pct"
               data={inWindow(total).map((r) => ({
                 month: r.report_month_key,

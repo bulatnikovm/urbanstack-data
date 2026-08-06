@@ -4,9 +4,10 @@ import {
   getModuleUsage,
   getPeriod,
   getUserSegments,
+  getUtilityReceipts,
   stripOrder,
 } from "@/lib/data";
-import { delta, monthLabel, n, n1, pct, pp } from "@/lib/format";
+import { delta, monthLabel, n, n1, pct, pp, uah } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import {
   Hl,
@@ -15,7 +16,7 @@ import {
   Panel,
   Section,
 } from "@/components/dashboard";
-import { TrendLines } from "@/components/trend-charts";
+import { BklitLine } from "@/components/bklit-line";
 import { RankedBars } from "@/components/ranked-bars";
 import { BklitDonut } from "@/components/bklit-donut";
 import {
@@ -34,6 +35,15 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
   const eng = getEngagement();
   const engCur = at(eng, curKey)!;
   const engPrev = at(eng, prevKey)!;
+
+  // ⚠️ Не Amplitude — банківські транзакції (dbt_finance.stg_finance__transactions,
+  // крос-доменний ref). Оплата йде через сторонній платіжний шлюз, застосунок
+  // цього не бачить. Формула звірена з дашбордом (Микита, 2026-08-06):
+  // transaction_type='utilities', accepted/rejected (new — незавершені спроби).
+  const receipts = getUtilityReceipts();
+  const recCur = at(receipts, curKey)!;
+  const recPrev = at(receipts, prevKey)!;
+  const recCurTotal = recCur.receipts_accepted + recCur.receipts_rejected;
 
   const modules = getModuleUsage()
     .filter((r) => r.report_month_key === curKey)
@@ -152,7 +162,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
               title="Голосування: відкрили → проголосували"
               note="«Відкрили» — зайшли на екран голосування (не «побачили десь у стрічці»). Конверсія — частка тих, хто дійшов до самого натискання «Проголосувати»."
             >
-              <TrendLines
+              <BklitLine
                 data={inWindow(eng).map((r) => ({
                   month: r.report_month_key,
                   saw: r.voting_saw_users,
@@ -169,7 +179,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
               title="Натиснули «Створити заявку»"
               note="⚠️ Це натискання кнопки в застосунку (Amplitude), а не підтверджено створена заявка і не рядок у CRM. Операційна метрика заявок (усі канали) рахується окремо й буде більшою."
             >
-              <TrendLines
+              <BklitLine
                 data={inWindow(eng).map((r) => ({
                   month: r.report_month_key,
                   requests: r.app_requests_created_users,
@@ -182,6 +192,163 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
               />
             </Panel>
           </div>
+        </Section>
+
+        <Section
+          title="Квитанції за комунальні послуги"
+          lead={
+            <>
+              Оплачено <Hl>{n(recCur.receipts_accepted)}</Hl> квитанцій на{" "}
+              <Hl>{uah(recCur.receipts_accepted_amount)}</Hl>,{" "}
+              <Hl>{n(recCur.receipts_rejected)}</Hl> відхилено банком —{" "}
+              <Hl>{pct(recCur.receipts_rejected_rate)}</Hl> від усіх спроб (
+              {pp(recCur.receipts_rejected_rate - recPrev.receipts_rejected_rate)}{" "}
+              за місяць).
+            </>
+          }
+        >
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Kpi
+              label="Сума прийнятих"
+              value={uah(recCur.receipts_accepted_amount)}
+              sub={`середній чек ${uah(recCur.receipts_accepted_avg_amount)}`}
+              trend={{
+                text: delta(
+                  recCur.receipts_accepted_amount /
+                    recPrev.receipts_accepted_amount -
+                    1
+                ),
+                good:
+                  recCur.receipts_accepted_amount >=
+                  recPrev.receipts_accepted_amount,
+              }}
+            />
+            <Kpi
+              label="Прийнято квитанцій"
+              value={n(recCur.receipts_accepted)}
+              sub={`з ${n(recCurTotal)} спроб`}
+              trend={{
+                text: delta(
+                  recCur.receipts_accepted / recPrev.receipts_accepted - 1
+                ),
+                good: recCur.receipts_accepted >= recPrev.receipts_accepted,
+              }}
+            />
+            <Kpi
+              label="Відхилено банком"
+              value={n(recCur.receipts_rejected)}
+              sub={pct(recCur.receipts_rejected_rate) + " від спроб"}
+              trend={{
+                text: pp(
+                  recCur.receipts_rejected_rate -
+                    recPrev.receipts_rejected_rate
+                ),
+                good:
+                  recCur.receipts_rejected_rate <=
+                  recPrev.receipts_rejected_rate,
+              }}
+            />
+            <Kpi
+              label="Середній чек"
+              value={uah(recCur.receipts_accepted_avg_amount)}
+              sub={`було ${uah(recPrev.receipts_accepted_avg_amount)}`}
+              trend={{
+                text: delta(
+                  recCur.receipts_accepted_avg_amount /
+                    recPrev.receipts_accepted_avg_amount -
+                    1
+                ),
+                good:
+                  recCur.receipts_accepted_avg_amount >=
+                  recPrev.receipts_accepted_avg_amount,
+              }}
+            />
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-3">
+            <Panel title="Прийнято vs відхилено" note="Банківські транзакції, не подія застосунку.">
+              <BklitLine
+                data={inWindow(receipts).map((r) => ({
+                  month: r.report_month_key,
+                  accepted: r.receipts_accepted,
+                  rejected: r.receipts_rejected,
+                }))}
+                series={[
+                  { key: "accepted", label: "Прийнято", slot: 1 },
+                  { key: "rejected", label: "Відхилено", slot: 2 },
+                ]}
+              />
+            </Panel>
+
+            <Panel title="Сума оплачених квитанцій">
+              <BklitLine
+                kind="money"
+                data={inWindow(receipts).map((r) => ({
+                  month: r.report_month_key,
+                  amount: r.receipts_accepted_amount,
+                }))}
+                series={[{ key: "amount", label: "Сума", slot: 1 }]}
+              />
+            </Panel>
+
+            <Panel title="Частка відхилених">
+              <BklitLine
+                kind="pct"
+                data={inWindow(receipts).map((r) => ({
+                  month: r.report_month_key,
+                  rate: r.receipts_rejected_rate,
+                }))}
+                series={[{ key: "rate", label: "Відхилено", slot: 2 }]}
+              />
+            </Panel>
+          </div>
+
+          <Panel
+            title="Квитанції за місяцями"
+            note="⚠️ transaction_type='utilities', accepted/rejected; незавершені спроби (new) не рахуються."
+          >
+            <div className="max-h-[360px] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-card">
+                  <TableRow>
+                    <TableHead>Місяць</TableHead>
+                    <TableHead className="text-right">Сума прийнятих</TableHead>
+                    <TableHead className="text-right">Успішних</TableHead>
+                    <TableHead className="text-right">Відхилених</TableHead>
+                    <TableHead className="text-right">% відхилених</TableHead>
+                    <TableHead className="text-right">Середній чек</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inWindow(receipts)
+                    .slice()
+                    .reverse()
+                    .map((r) => (
+                      <TableRow key={r.report_month_key}>
+                        <TableCell className="font-medium">
+                          {monthLabel(r.report_month_key)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {uah(r.receipts_accepted_amount)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {n(r.receipts_accepted)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {n(r.receipts_rejected)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {pct(r.receipts_rejected_rate)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {uah(r.receipts_accepted_avg_amount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Panel>
         </Section>
 
         <Section

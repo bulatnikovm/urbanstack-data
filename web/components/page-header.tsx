@@ -2,6 +2,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Freshness } from "@/components/dashboard";
 import { DateRangePicker } from "@/components/date-range-picker";
+import { ThemeToggle } from "@/components/theme";
 import { getMeta } from "@/lib/data";
 import { monthLabel } from "@/lib/format";
 import type { Range } from "@/lib/period";
@@ -43,6 +44,7 @@ export function PageHeader({
           </h1>
         </div>
         <DateRangePicker range={range} bounds={bounds} />
+        <ThemeToggle />
         <div className="hidden lg:block">
           <Freshness snapshotAt={meta.snapshot_at} />
         </div>

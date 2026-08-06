@@ -13,13 +13,11 @@ import {
   Panel,
   Section,
 } from "@/components/dashboard";
-import {
-  StackedBars,
-  TrendAreas,
-  TrendLines,
-  type Series,
-} from "@/components/trend-charts";
+import type { Series } from "@/components/trend-charts";
 import { BklitDonut } from "@/components/bklit-donut";
+import { BklitLine } from "@/components/bklit-line";
+import { BklitBar } from "@/components/bklit-bar";
+import { BklitArea } from "@/components/bklit-area";
 import {
   Table,
   TableBody,
@@ -147,8 +145,7 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
             title="Потенційні, підтверджені та відвідувачі"
             note="Потенційні — усі, хто хоч раз прив'язувався до приміщення. Підтверджені — верифіковані й не деактивовані. Відвідувачі — будь-яка подія в додатку за місяць."
           >
-            <TrendAreas
-              className="aspect-[3/1] w-full"
+            <BklitArea
               data={base.map((r) => ({
                 month: r.report_month_key,
                 potential: r.count_potential,
@@ -168,7 +165,7 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
               title="Якість бази у відсотках"
               note="Частка підтверджених від потенційних і частка активних від підтверджених."
             >
-              <TrendLines
+              <BklitLine
                 kind="pct"
                 data={base.map((r) => ({
                   month: r.report_month_key,
@@ -186,7 +183,7 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
               title="Живі / Сонні / Неактивні"
               note="Сегмент за активністю на ковзному вікні 2 місяці, по всій компанії."
             >
-              <StackedBars data={segRows} series={SEGMENT_SERIES} />
+              <BklitBar data={segRows} series={SEGMENT_SERIES} />
             </Panel>
           </div>
         </Section>

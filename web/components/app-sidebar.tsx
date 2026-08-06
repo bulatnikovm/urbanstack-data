@@ -2,15 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Activity,
-  Building2,
-  Gauge,
-  Rocket,
-  Star,
-  Wrench,
-} from "lucide-react";
+import { Activity, Building2, Rocket, Star, Wrench } from "lucide-react";
 
+import { UrbanStackMark } from "@/components/brand";
 import {
   Sidebar,
   SidebarContent,
@@ -58,9 +52,7 @@ export function AppSidebar({ footer }: AppSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/" />}>
               <>
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Gauge className="size-4" />
-                </div>
+                <UrbanStackMark className="size-8 shrink-0 text-foreground [--brand-mark-fg:var(--sidebar)]" />
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold">
                     UrbanStack

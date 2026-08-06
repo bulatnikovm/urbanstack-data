@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-08-05T14:26:46.054Z",
+  "snapshot_at": "2026-08-06T09:08:16.638Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
@@ -23,6 +23,9 @@
     },
     "mart_engagement_monthly": {
       "rows": 42
+    },
+    "mart_utility_receipts_monthly": {
+      "rows": 13
     },
     "mart_star_monthly": {
       "rows": 130

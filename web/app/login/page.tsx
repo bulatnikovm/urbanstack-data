@@ -1,5 +1,6 @@
-import { Gauge, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import { signIn } from "@/auth";
+import { UrbanStackLogo } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -17,13 +18,13 @@ export default async function LoginPage({
 
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-8 px-4">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Gauge className="size-6" />
-        </div>
+      <div className="flex flex-col items-center gap-6 text-center">
+        {/* Єдине місце в застосунку, де є простір показати повний логотип
+            з дотриманням охоронного поля — тому тут лого, а не іконка. */}
+        <UrbanStackLogo className="h-14 w-auto text-foreground" />
         <div>
           <h1 className="text-lg font-semibold tracking-tight">
-            Продуктовий дашборд UrbanStack
+            Продуктовий дашборд
           </h1>
           <p className="text-sm text-muted-foreground">
             Доступ лише для команди

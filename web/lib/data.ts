@@ -90,6 +90,15 @@ export type EngagementMonthly = {
   app_paid_requests_created_users: number;
 };
 
+export type UtilityReceiptsMonthly = {
+  report_month_key: string;
+  receipts_accepted: number;
+  receipts_rejected: number;
+  receipts_rejected_rate: number;
+  receipts_accepted_amount: number;
+  receipts_accepted_avg_amount: number;
+};
+
 export type StarMonthly = {
   report_month_key: string;
   star_category: string;
@@ -130,6 +139,20 @@ export type VersionAdoption = {
   active_devices: number;
 };
 
+export type AppHealthWeekly = {
+  event_week: string;
+  os_type: string;
+  app_version: string;
+  weekly_active_users: number;
+  forced_logout_users: number;
+  forced_logout_rate: number | null;
+  total_bio_users: number;
+  technical_friction_users: number;
+  biometric_fallback_users: number;
+  technical_friction_rate: number | null;
+  biometric_fallback_rate: number | null;
+};
+
 export type UserSegments = {
   activity_segment: string;
   version_status: string;
@@ -159,11 +182,15 @@ export const getActivation = () =>
 export const getTimeToValue = () => load<TimeToValue>("mart_time_to_value");
 export const getEngagement = () =>
   load<EngagementMonthly>("mart_engagement_monthly");
+export const getUtilityReceipts = () =>
+  load<UtilityReceiptsMonthly>("mart_utility_receipts_monthly");
 export const getStar = () => load<StarMonthly>("mart_star_monthly");
 export const getModuleUsage = () =>
   load<ModuleUsageMonthly>("mart_module_usage_monthly");
 export const getModuleRetention = () =>
   load<ModuleRetention>("mart_module_retention");
+export const getAppHealth = () =>
+  load<AppHealthWeekly>("mart_app_health_weekly");
 
 // ── Поточний місяць неповний ────────────────────────────────────────────
 

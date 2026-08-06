@@ -8,7 +8,9 @@ import {
   Panel,
   Section,
 } from "@/components/dashboard";
-import { StackedBars, TrendLines, type Series } from "@/components/trend-charts";
+import type { Series } from "@/components/trend-charts";
+import { BklitLine } from "@/components/bklit-line";
+import { BklitBar } from "@/components/bklit-bar";
 
 // Дві категорії, не три. У марті count_activated + count_passively_activated
 // == count_new_users ТОТОЖНО (перевірено: залишок = 0 у кожному місяці), тож
@@ -107,8 +109,9 @@ export default async function ActivationPage({ searchParams }: PageProps<"/activ
             title="Нові користувачі за станом активації"
             note="Висота стовпчика — усі нові користувачі місяця. Активований — зробив цільову дію (оплата, заявка, голосування, платна послуга) у місяць першого входу."
           >
-            <StackedBars
-              className="aspect-[3/1] w-full"
+            <BklitBar
+              stacked
+              aspectRatio="3 / 1"
               data={inWindow(act).map((r) => ({
                 month: r.report_month_key,
                 activated: r.count_activated,
@@ -123,7 +126,7 @@ export default async function ActivationPage({ searchParams }: PageProps<"/activ
               title="Нові користувачі за місяць"
               note="Скільки людей уперше зайшли в додаток. Абсолютне число під конверсією — щоб зростання відсотка на падаючому притоці не читалось як успіх."
             >
-              <TrendLines
+              <BklitLine
                 data={inWindow(act).map((r) => ({
                   month: r.report_month_key,
                   new_users: r.count_new_users,
@@ -136,7 +139,7 @@ export default async function ActivationPage({ searchParams }: PageProps<"/activ
               title="Конверсія в активацію"
               note="Активовані / усі нові користувачі місяця."
             >
-              <TrendLines
+              <BklitLine
                 kind="pct"
                 data={inWindow(act).map((r) => ({
                   month: r.report_month_key,
@@ -152,7 +155,7 @@ export default async function ActivationPage({ searchParams }: PageProps<"/activ
               title="Швидкість до цінної дії"
               note="Частка нових користувачів, що зробили цінну дію за 1 годину / добу / тиждень від першого входу. Вище — краще."
             >
-              <TrendLines
+              <BklitLine
                 kind="pct"
                 data={inWindow(ttv).map((r) => ({
                   month: r.report_month_key,

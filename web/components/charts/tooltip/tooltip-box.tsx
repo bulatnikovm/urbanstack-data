@@ -176,7 +176,13 @@ function TooltipBoxInner({
   const transformOrigin = isFlipped ? "right top" : "left top";
 
   const panelClassName = cn(
-    "min-w-[140px] overflow-hidden rounded-lg text-chart-tooltip-foreground shadow-lg",
+    // `ring-1 ring-foreground/10` додано локально (vendored bklit) — тултип
+    // тепер theme-aware (світлий у світлій темі, темний у темній, див.
+    // globals.css), і на світлому тлі саме shadow-lg без обводки губився,
+    // майже не читався. Те саме правило, що вже на Popover/DropdownMenu.
+    // ⚠️ `npx shadcn add @bklit/...` перезаписує цей файл — патч переносити
+    // вручну щоразу (уже сталося один раз, 2026-08-06).
+    "min-w-[140px] overflow-hidden rounded-lg text-chart-tooltip-foreground shadow-lg ring-1 ring-foreground/10",
     panelStyle?.backgroundColor === undefined &&
       backgroundColor === chartCssVars.tooltipBackground &&
       "bg-chart-tooltip-background",

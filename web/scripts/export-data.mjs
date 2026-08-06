@@ -28,6 +28,7 @@ const MANIFEST = {
   mart_activation_monthly: "report_month",
   mart_time_to_value: "report_month",
   mart_engagement_monthly: "report_month",
+  mart_utility_receipts_monthly: "report_month",
   mart_star_monthly: "report_month, star_category",
   mart_module_usage_monthly: "report_month, module_order",
   mart_module_retention: "module_order",

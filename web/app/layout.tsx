@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { ThemeProvider } from "@/components/theme";
 import "./globals.css";
 
 /**
@@ -28,6 +29,9 @@ export const metadata: Metadata = {
   title: "Продуктовий дашборд UrbanStack",
   description:
     "Продуктові метрики UrbanStack — аудиторія, активація, залученість, STAR",
+  // Іконка вкладки — `app/icon.svg`, Next підхоплює її за конвенцією.
+  // Кольори там зафіксовані (чорна плашка, білі літери): favicon малюється
+  // поза сторінкою, `currentColor` там нема від чого успадковувати.
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -35,8 +39,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="uk"
       className={`${sans.variable} ${mono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }
