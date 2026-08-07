@@ -186,11 +186,7 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
               title="Живі / Сонні / Неактивні"
               note="Сегмент за активністю на ковзному вікні 2 місяці, по всій компанії."
             >
-              {/* Стек, не групування: три сегменти — це ЧАСТИНИ однієї
-                  бази, і висота стовпчика має читатись як її розмір.
-                  Групою на 32 місяцях це 96 тонких стовпчиків — гребінець,
-                  у якому нічого не видно. */}
-              <BklitBar stacked data={segRows} series={SEGMENT_SERIES} />
+              <BklitBar data={segRows} series={SEGMENT_SERIES} />
             </Panel>
           </div>
         </Section>

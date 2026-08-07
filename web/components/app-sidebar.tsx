@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Building2, Rocket, Star, Wrench } from "lucide-react";
+import { Activity, Building2, Rocket, Star, Users, Wrench } from "lucide-react";
 
 import { UrbanStackMark } from "@/components/brand";
 import {
@@ -17,7 +17,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-type AppSidebarProps = { footer?: React.ReactNode };
+type AppSidebarProps = { footer?: React.ReactNode; isAdmin?: boolean };
 
 /**
  * Сторінки повторюють структуру оригінального Looker-дашборду (5 сторінок),
@@ -42,8 +42,22 @@ const NAV = [
   },
 ];
 
-export function AppSidebar({ footer }: AppSidebarProps) {
+const ADMIN_ITEM = {
+  href: "/admin",
+  label: "Доступи",
+  icon: Users,
+  page: "",
+};
+
+export function AppSidebar({ footer, isAdmin }: AppSidebarProps) {
   const pathname = usePathname();
+
+  // Пункт «Доступи» бачить лише адмін. Це виключно UI: сама сторінка
+  // віддає 404 не-адміну, а Server Actions перевіряють роль окремо —
+  // сховане меню нікого не захищає.
+  const nav = isAdmin
+    ? [...NAV, { group: "Адміністрування", items: [ADMIN_ITEM] }]
+    : NAV;
 
   return (
     <Sidebar collapsible="icon">
@@ -68,7 +82,7 @@ export function AppSidebar({ footer }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
-        {NAV.map((group) => (
+        {nav.map((group) => (
           <SidebarGroup key={group.group}>
             <SidebarGroupLabel>{group.group}</SidebarGroupLabel>
             <SidebarMenu>

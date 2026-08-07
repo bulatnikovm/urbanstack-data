@@ -1,38 +1,17 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 
+import { accessFor } from "@/lib/access";
+
 /**
- * Allowlist, БЕЗ бази. Микита, Артем, Максим — 5–15 людей на цьому етапі,
- * заводити для цього Postgres-таблицю користувачів немає сенсу (план,
- * §4: "не робимо власну реєстрацію, паролі, інвайти").
+ * Хто має доступ — тепер у Supabase (`dashboard_users`), а не в env.
+ * Раніше список жив у `ALLOWED_EMAILS`, і додати колегу означало полізти
+ * в налаштування Vercel; тепер це робиться зі сторінки `/admin`.
  *
- * `ALLOWED_EMAILS` — comma-separated env var, редагується на Vercel без
- * редеплою коду. Порожній список = усі відхиляються (fail closed, не
- * fail open) — заводити явно, а не мовчки пускати всіх, поки хтось не
- * забув налаштувати змінну.
+ * `ADMIN_EMAILS` / `ALLOWED_EMAILS` більше не читаються. Роль приходить з
+ * того ж рядка таблиці, що й сам дозвіл — двох джерел правди немає.
  */
-function allowedEmails(): Set<string> {
-  return new Set(
-    (process.env.ALLOWED_EMAILS ?? "")
-      .split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
-
-/** `role` поки має лише два значення — гранулярні ролі (product/operations/
- *  finance) додаються у Фазі E, коли підʼїде другий дашборд (план, §10). */
-export type Role = "admin" | "viewer";
-
-function roleFor(email: string): Role {
-  const admins = new Set(
-    (process.env.ADMIN_EMAILS ?? "")
-      .split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean)
-  );
-  return admins.has(email.toLowerCase()) ? "admin" : "viewer";
-}
+export type { Role } from "@/lib/access";
 
 export const authConfig = {
   providers: [Google],
@@ -41,19 +20,31 @@ export const authConfig = {
     error: "/login",
   },
   callbacks: {
-    signIn({ user }) {
+    async signIn({ user }) {
       if (!user.email) return false;
-      return allowedEmails().has(user.email.toLowerCase());
+      // fail closed: `accessFor` повертає null і коли пошти немає в
+      // списку, і коли база недоступна — обидва випадки означають «не
+      // пускаємо». Див. коментар у lib/access.ts.
+      return (await accessFor(user.email)) !== null;
     },
-    jwt({ token, user }) {
-      if (user?.email) {
-        token.role = roleFor(user.email);
+
+    /**
+     * Роль кладемо в токен при вході і оновлюємо при кожному оновленні
+     * сесії (`trigger === "update"`). Інакше зміна ролі в адмінці не
+     * дійшла б до людини, поки та не перелогінилась.
+     */
+    async jwt({ token, user, trigger }) {
+      const email = user?.email ?? token.email;
+      if (email && (user || trigger === "update")) {
+        token.role = (await accessFor(email)) ?? "viewer";
       }
       return token;
     },
+
     session({ session, token }) {
       if (session.user) {
-        session.user.role = (token.role as Role) ?? "viewer";
+        session.user.role =
+          (token.role as "admin" | "viewer" | undefined) ?? "viewer";
       }
       return session;
     },

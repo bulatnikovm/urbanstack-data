@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserMenu } from "@/components/user-menu";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -12,14 +13,17 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
  * Ця обгортка — друга: якщо middleware колись пропустить щось (напр. race
  * після виходу), `UserMenu` тут все одно читає сесію на сервері.
  */
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await auth();
+
   return (
     <SidebarProvider>
       <AppSidebar
+        isAdmin={session?.user?.role === "admin"}
         footer={
           <Suspense fallback={null}>
             <UserMenu />
