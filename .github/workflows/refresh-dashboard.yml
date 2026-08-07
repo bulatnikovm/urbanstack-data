@@ -1,0 +1,106 @@
+name: Оновити продуктовий дашборд
+
+# Раз на добу, після нічного Stitch-синку (~02:00 UTC — CLAUDE.md §2.4).
+# workflow_dispatch — щоб можна було запустити руками з вкладки Actions,
+# не чекаючи розкладу, коли треба перевірити свіжі дані одразу.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+# Пише коміти в цей репозиторій — потрібен явний запис, бо
+# GITHUB_TOKEN за замовчуванням лише читає.
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    # Крок деплою пушить в ІНШИЙ приватний репозиторій (urbanstack-dashboard,
+    # до нього й підключено Vercel) — GITHUB_TOKEN туди не дотягнеться,
+    # потрібен окремий PAT. Без секрету крок деплою просто не виконається,
+    # а не впаде мовчки: перевіряємо явно нижче.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Автентифікація в GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Встановити dbt
+        run: pip install "dbt-core==1.12.0" dbt-bigquery
+
+      - name: Профіль dbt
+        # Той самий підхід, що й у README для локального запуску, тільки
+        # method: oauth тут читає ADC, який щойно виставив auth-крок вище
+        # (без нього був би `gcloud auth application-default login`, якого
+        # в CI немає й не буде — сервіс-акаунт саме для цього).
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<'EOF'
+          urbanstack:
+            target: prod
+            outputs:
+              prod:
+                type: bigquery
+                method: oauth
+                project: analytics-454817
+                dataset: dbt_finance
+                location: EU
+                threads: 4
+          EOF
+
+      - name: dbt build
+        working-directory: dbt
+        run: |
+          dbt deps
+          dbt build
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Вивантажити марти й реєстр метрик
+        working-directory: web
+        run: |
+          npm ci
+          npm run export-data
+          npm run build-metrics
+
+      - name: Закомітити свіжі дані
+        id: commit
+        run: |
+          git config user.name "urbanstack-bot"
+          git config user.email "analytics@dim9000.com"
+          git add web/data/
+          if git diff --cached --quiet; then
+            echo "Дані не змінились — коміт не потрібен"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "chore(data): автооновлення $(date -u +'%Y-%m-%d %H:%M') UTC"
+            git push origin HEAD:main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Деплой — виніс web/ у репозиторій дашборду
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          if [ -z "${{ secrets.DASHBOARD_REPO_TOKEN }}" ]; then
+            echo "::error::Немає секрету DASHBOARD_REPO_TOKEN — дані закомічені сюди, але на Vercel не поїхали. Додай секрет (Settings → Secrets → Actions) — fine-grained PAT з Contents: Read and write лише на bulatnikovm/urbanstack-dashboard."
+            exit 1
+          fi
+          git subtree split --prefix=web -b web-deploy-tmp
+          git push "https://x-access-token:${{ secrets.DASHBOARD_REPO_TOKEN }}@github.com/bulatnikovm/urbanstack-dashboard.git" web-deploy-tmp:main
+          # Vercel сам підхоплює пуш і редеплоїть — тут більше нічого не
+          # робимо (див. web/README.md: "git push → Vercel передеплоює").
