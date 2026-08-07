@@ -268,7 +268,11 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
           </div>
 
           <div className="grid gap-3 lg:grid-cols-3">
-            <Panel title="Прийнято vs відхилено" note="Банківські транзакції, не подія застосунку.">
+            <Panel
+              title="Прийнято vs відхилено"
+              note="Банківські транзакції, не подія застосунку."
+              metric="Квитанції за комунальні послуги"
+            >
               <BklitLine
                 data={inWindow(receipts).map((r) => ({
                   month: r.report_month_key,
@@ -404,6 +408,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
           <div className="grid gap-3 lg:grid-cols-2">
             <Panel
               title={`Покриття модулів — ${monthLabel(curKey)}`}
+              metric="Покриття модулів"
               note="Частка користувачів, які торкнулись модуля за місяць."
             >
               <RankedBars

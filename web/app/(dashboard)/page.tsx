@@ -165,6 +165,7 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
           <div className="grid gap-3 lg:grid-cols-2">
             <Panel
               title="Якість бази у відсотках"
+              metric="% підтверджених"
               note="Частка підтверджених від потенційних і частка активних від підтверджених."
             >
               <BklitLine

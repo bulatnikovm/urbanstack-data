@@ -283,5 +283,39 @@ export const getVersionAdoption = () =>
   load<VersionAdoption>("mart_version_adoption");
 export const getUserSegments = () => load<UserSegments>("mart_user_segments");
 
+// ── Реєстр метрик ───────────────────────────────────────────────────────
+
+export type MetricStatus = "active" | "known_issue" | "needs_decision";
+
+export type Metric = {
+  id: string;
+  label: string;
+  definition: string;
+  formula?: string;
+  grain?: string;
+  source?: string;
+  owner?: string;
+  status?: MetricStatus;
+  note?: string;
+};
+
+/**
+ * Довідка по метриці за її ПІДПИСОМ на дашборді (не за PROD-ID): так
+ * компонент картки не мусить знати кодів, а розсинхрон ловиться очима —
+ * якщо підпис змінили, а в реєстрі ні, довідка просто не з'явиться.
+ * Дублікати підписів відсіює build-metrics.mjs на збірці.
+ */
+let metricsByLabel: Map<string, Metric> | null = null;
+
+export function getMetric(label: string): Metric | undefined {
+  if (!metricsByLabel) {
+    const doc = JSON.parse(
+      readFileSync(join(DATA_DIR, "metrics.json"), "utf8")
+    ) as { metrics: Metric[] };
+    metricsByLabel = new Map(doc.metrics.map((m) => [m.label, m]));
+  }
+  return metricsByLabel.get(label);
+}
+
 /** Прибирає порядковий префікс "3. " з назв категорій/модулів */
 export const stripOrder = (s: string) => s.replace(/^\d+\.\s*/, "");

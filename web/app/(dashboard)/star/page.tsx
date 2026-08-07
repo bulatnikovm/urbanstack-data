@@ -104,6 +104,7 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
         >
           <Panel
             title="STAR — частка бази з цільовою дією"
+            metric="STAR"
             note="Дві бази порівняння: від усіх потенційних і від підтверджених користувачів."
           >
             <BklitLine
