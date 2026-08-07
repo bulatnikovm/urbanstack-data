@@ -74,6 +74,18 @@ models:
       - name: report_month
         tests: [not_null, unique]
 
+  - name: mart_utility_receipts_monthly
+    description: >
+      Стр.3 — квитанції за комунальні послуги, оплачені через застосунок.
+      ⚠️ Джерело — `stg_finance__transactions` (домен finance, крос-доменний
+      ref), не Amplitude: оплата йде через сторонній платіжний шлюз.
+      Формула (transaction_type='utilities', accepted/rejected, new —
+      незавершені спроби) звірена з дашбордом: лип.2026 3213/250, сума
+      прийнятих 3 644 232,57 — точний збіг.
+    columns:
+      - name: report_month
+        tests: [not_null, unique]
+
   - name: mart_module_usage_monthly
     description: >
       Стр.3 — використання модулів. Покриття 100% подій (було 76%): додались
