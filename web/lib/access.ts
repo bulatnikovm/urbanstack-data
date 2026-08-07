@@ -64,17 +64,41 @@ async function query<T>(path: string, init?: RequestInit): Promise<T | null> {
 }
 
 /**
- * Чи пускаємо цю пошту. Повертає роль або `null`.
+ * Результат перевірки доступу.
  *
- * ⚠️ Fail CLOSED: якщо Supabase недоступний або змінні не налаштовані —
- * повертаємо `null`, тобто не пускаємо нікого. Протилежний вибір (пускати,
- * коли база мовчить) перетворив би збій бази на відкриті двері.
+ * Станів ТРИ, а не два, і це принципово. «Немає в списку» і «база не
+ * відповіла» вимагають різної поведінки: перше має викинути людину
+ * (доступ відкликали — токен більше не дійсний), друге не має, інакше
+ * хвилинна недоступність Supabase розлогінить одразу всіх.
  */
-export async function accessFor(email: string): Promise<Role | null> {
-  const rows = await query<Array<{ role: Role }>>(
-    `?select=role&email=eq.${encodeURIComponent(norm(email))}`
-  );
-  return rows?.[0]?.role ?? null;
+export type AccessResult =
+  | { status: "ok"; role: Role }
+  | { status: "denied" }
+  | { status: "error" };
+
+export async function accessFor(email: string): Promise<AccessResult> {
+  const rest = REST();
+  if (!rest) return { status: "error" };
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `${rest.endpoint}?select=role&email=eq.${encodeURIComponent(norm(email))}`,
+      { headers: rest.headers, cache: "no-store" }
+    );
+  } catch (e) {
+    console.error("[access] accessFor — мережа:", e);
+    return { status: "error" };
+  }
+
+  if (!res.ok) {
+    console.error("[access] accessFor:", res.status, await res.text());
+    return { status: "error" };
+  }
+
+  const rows = (await res.json()) as Array<{ role: Role }>;
+  const role = rows[0]?.role;
+  return role ? { status: "ok", role } : { status: "denied" };
 }
 
 export async function listUsers(): Promise<DashboardUser[]> {

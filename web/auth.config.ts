@@ -22,22 +22,39 @@ export const authConfig = {
   callbacks: {
     async signIn({ user }) {
       if (!user.email) return false;
-      // fail closed: `accessFor` повертає null і коли пошти немає в
-      // списку, і коли база недоступна — обидва випадки означають «не
-      // пускаємо». Див. коментар у lib/access.ts.
-      return (await accessFor(user.email)) !== null;
+      // fail closed: пускаємо ЛИШЕ на явне "ok". Недоступна база — теж
+      // відмова: краще не пустити свого, ніж пустити чужого.
+      return (await accessFor(user.email)).status === "ok";
     },
 
     /**
-     * Роль кладемо в токен при вході і оновлюємо при кожному оновленні
-     * сесії (`trigger === "update"`). Інакше зміна ролі в адмінці не
-     * дійшла б до людини, поки та не перелогінилась.
+     * Роль перечитується з бази НА КОЖНОМУ запиті, а не лише при вході.
+     *
+     * Спершу тут було "оновлювати при вході або на `trigger === 'update'`"
+     * — і це виявилось хибним двічі. По-перше, роль у вже виданому токені
+     * застигала назавжди: Микита мав admin у базі, а в сесії лишався
+     * viewer з часів, коли роль бралась з ADMIN_EMAILS, і пункт «Доступи»
+     * не з'являвся. По-друге, і це гірше: відкликаєш доступ в адмінці — а
+     * старий токен спокійно працює до закінчення терміну.
+     *
+     * Ціна — один запит до Supabase на запит сторінки. На команді з 5-15
+     * людей це ніщо, а відкликання доступу починає діяти негайно.
      */
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       const email = user?.email ?? token.email;
-      if (email && (user || trigger === "update")) {
-        token.role = (await accessFor(email)) ?? "viewer";
+      if (!email) return token;
+
+      const access = await accessFor(email);
+      if (access.status === "denied") {
+        // Доступ прибрали — анулюємо сесію, а не лишаємо з роллю viewer.
+        return null;
       }
+      if (access.status === "ok") {
+        token.role = access.role;
+      }
+      // status === "error" — база не відповіла: лишаємо токен як є.
+      // Розлогінювати всіх через хвилинний збій Supabase було б гірше за
+      // те, що людина ще трохи походить зі старою роллю.
       return token;
     },
 
