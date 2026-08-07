@@ -28,6 +28,12 @@ const X_RAW = "__xRaw";
  * (напр. «активовані + не активувались = усі нові користувачі», де важлива
  * саме висота стовпчика як тотал).
  *
+ * ⚠️ `stackGap={2}` при стеку — не косметика. У bar.tsx скруглення
+ * застосовується за правилом `!stacked || stackGap > 0 || isLastSeries`:
+ * при нульовому зазорі закруглюється ЛИШЕ верхній сегмент, а нижній
+ * лишається з гострими кутами — і це читається як баг рендеру. Ненульовий
+ * зазор вмикає скруглення для всіх сегментів, і стовпчик виглядає цілісно.
+ *
  * Кольори, вісь, легенда, локаль тултипа — той самий підхід, що й у
  * `BklitLine` (див. коментар там). НЕ чіпати кольори без нового рішення
  * Микити — монохром навмисний.
@@ -64,6 +70,7 @@ export function BklitBar({
         data={rows}
         xDataKey={X_LABEL}
         stacked={stacked}
+        stackGap={stacked ? 2 : 0}
         aspectRatio={aspectRatio}
         className={className}
         margin={{ top: 24, right: 12, bottom: 28, left: 12 }}
@@ -72,7 +79,12 @@ export function BklitBar({
         <Grid horizontal fadeHorizontal={false} />
         <BarXAxis />
         {series.map((s) => (
-          <Bar key={s.key} dataKey={s.key} fill={`var(--chart-${s.slot})`} />
+          <Bar
+            key={s.key}
+            dataKey={s.key}
+            fill={`var(--chart-${s.slot})`}
+            lineCap={3}
+          />
         ))}
         <ChartTooltip
           content={({ point }) => (

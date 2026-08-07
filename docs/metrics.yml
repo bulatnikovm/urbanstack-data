@@ -298,3 +298,149 @@ metrics:
     source: dbt_product.mart_app_health_weekly
     owner: Артем
     status: active
+
+  # ── Додано 2026-08-07: метрики, яким бракувало довідки ───────────────
+  - id: PROD-023
+    label: Час у додатку за місяць
+    definition: >
+      Скільки часу типовий користувач провів у застосунку за весь місяць
+      (сума його сесій, медіана по людях).
+    formula: медіана від SUM(тривалість сесій) на користувача за місяць
+    grain: report_month
+    source: dbt_product.mart_engagement_monthly
+    owner: Артем
+    status: active
+    note: >
+      Рахується по тому ж канону сесії, що й «Медіанна сесія»: сесія — це
+      більше однієї події тривалістю до 4 годин. Поточний місяць завжди
+      нижчий за попередні, бо він ще не закінчився.
+
+  - id: PROD-024
+    label: Сесій за місяць
+    definition: Скільки всього сесій відкрили користувачі за місяць.
+    formula: COUNT(*) по сесіях місяця
+    grain: report_month
+    source: dbt_product.mart_engagement_monthly
+    owner: Артем
+    status: active
+    note: >
+      Без фільтра сесій було б на 69% більше (1,31 млн проти 778 тис.) —
+      туди потрапляли одноподієві «застосунок прокинувся, показав PIN».
+
+  - id: PROD-025
+    label: Нові користувачі
+    definition: Скільки людей уперше зайшли в застосунок за місяць.
+    formula: COUNT(DISTINCT user_phone_sk) з першим входом у цьому місяці
+    grain: report_month (когорта)
+    source: dbt_product.mart_activation_monthly
+    owner: Артем
+    status: active
+    note: >
+      Абсолютне число поруч із конверсією не випадково: конверсія може
+      зростати просто тому, що новачків стало менше.
+
+  - id: PROD-026
+    label: Активовані
+    definition: >
+      Новачки, які зробили цільову дію вже в місяць першого входу.
+    formula: COUNT(DISTINCT user) з core-подією в місяць першого входу
+    grain: report_month (когорта)
+    source: dbt_product.mart_activation_monthly
+    owner: Артем
+    status: active
+
+  - id: PROD-027
+    label: Дійшли до цінності за добу
+    definition: >
+      Частка новачків, які зробили цільову дію протягом доби від першого
+      входу.
+    formula: користувачі з цільовою дією за 24 год / усі новачки когорти
+    grain: report_month (когорта)
+    source: dbt_product.mart_time_to_value
+    owner: Артем
+    status: active
+
+  - id: PROD-028
+    label: STAR від підтверджених
+    definition: >
+      Частка ПІДТВЕРДЖЕНОЇ бази, яка виконала цільову дію за місяць.
+    formula: унікальні користувачі з core-подією / count_confirmed
+    grain: report_month
+    source: dbt_product.mart_star_monthly
+    owner: Артем
+    status: needs_decision
+    note: >
+      Це база, на яку ділило поле всередині оригінального STAR-запиту
+      (лип.2026 давало ≈21%). На старому дашборді показувалась інша цифра —
+      див. «STAR від потенційних». Яка канонічна — вирішує Артем.
+
+  - id: PROD-029
+    label: STAR від потенційних
+    definition: >
+      Частка ВСІЄЇ бази (включно з непідтвердженими), яка виконала цільову
+      дію за місяць.
+    formula: унікальні користувачі з core-подією / count_potential
+    grain: report_month
+    source: dbt_product.mart_star_monthly
+    owner: Артем
+    status: needs_decision
+    note: >
+      Саме так рахувалась цифра «STAR 10,03%» на старому дашборді — Looker
+      ділив на рядок «Потенційних». Знаменник більший, тому відсоток
+      завжди нижчий за «STAR від підтверджених».
+
+  - id: PROD-030
+    label: Користувачів із цільовою дією
+    definition: >
+      Скільки живих людей за місяць довели до кінця хоч одну цільову дію.
+    formula: COUNT(DISTINCT user_phone_sk) WHERE is_core_event
+    grain: report_month
+    source: dbt_product.mart_star_monthly
+    owner: Артем
+    status: active
+    note: >
+      Це чисельник обох варіантів STAR — сама по собі цифра від вибору
+      бази порівняння не залежить.
+
+  - id: PROD-031
+    label: Активних за тиждень
+    definition: Скільки людей заходили в застосунок протягом тижня.
+    formula: COUNT(DISTINCT user_phone_sk) з подією news_scrn__view за тиждень
+    grain: event_week × os_type × app_version
+    source: dbt_product.mart_app_health_weekly
+    owner: Артем
+    status: known_issue
+    note: >
+      ⚠️ Коли обрано «Усі версії», числа СУМУЮТЬСЯ по версіях — людина, що
+      оновилась усередині тижня, порахується двічі. Для точного числа
+      обери конкретну версію. Окремого distinct-агрегату поки немає.
+
+  - id: PROD-032
+    label: Операційна система
+    definition: Розподіл активних користувачів місяця між iOS і Android.
+    formula: COUNT(DISTINCT user_phone_sk) по last_os_type
+    grain: report_month × os_type
+    source: dbt_product.fct_user_monthly (агрегат agg_os_monthly)
+    owner: Артем
+    status: active
+    note: >
+      Рахується окремим distinct-запитом, а НЕ сумою по версіях: у розрізі
+      місяць × ОС × версія той, хто за місяць був на двох версіях,
+      рахувався двічі (iOS показувало 6 080 замість 5 153, +18%).
+      Стара цифра в Looker (Android 1 630 / iOS 3 362) рахувалась лише по
+      одній події — news_scrn__view.
+
+  - id: PROD-033
+    label: Версія застосунку
+    definition: >
+      Скільки користувачів сидить на актуальній збірці, а скільки на
+      застарілій.
+    formula: розподіл користувачів за version_status
+    grain: знімок на поточний момент
+    source: dbt_product.mart_user_segments
+    owner: Артем
+    status: active
+    note: >
+      Актуальна — та сама версія, що й у найпопулярнішого сегмента за
+      останні 7 днів. На застарілих збірках не діють останні зміни в
+      продукті — це важливо при читанні будь-якої іншої метрики.

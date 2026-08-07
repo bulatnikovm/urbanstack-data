@@ -109,7 +109,9 @@ export function MetricInfo({ metric }: { metric: Metric }) {
               </span>
             </Row>
           )}
-          {metric.owner && <Row term="Методологія">{metric.owner}</Row>}
+          {/* `owner` свідомо НЕ показуємо: скрізь «Артем», рядок нічого не
+              додає й лише шумить. У реєстрі поле лишається — воно потрібне,
+              щоб знати, до кого йти зі спірним визначенням. */}
         </dl>
 
         {metric.note && (
