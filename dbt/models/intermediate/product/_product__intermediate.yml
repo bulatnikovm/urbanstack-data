@@ -1,0 +1,68 @@
+version: 2
+
+models:
+  - name: int_user_identity
+    description: >
+      Продуктова обгортка над спільним int_user_space_links (виключає тестові
+      ЖК). Грануляція: user_id × house_id.
+      Звірено: без point-in-time фільтра, сумою по ЖК, дає 32 587 потенційних
+      на серп.2026 проти 32 583 у продакшн-view — розбіжність 4 юзери.
+    columns:
+      - name: user_id
+        tests: [not_null]
+      - name: house_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_house')
+                field: house_id
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, house_id]
+
+  - name: int_user_base_monthly
+    description: >
+      Канонічна база користувачів по місяцях. Тонка обгортка над спільним
+      int_user_exclusions. Грануляція user_id × report_month — один рядок на
+      людину («два особові рахунки = один користувач»). Єдине джерело
+      "потенційних"/"підтверджених" і для Стр.1, і для знаменника STAR (Стр.4).
+    columns:
+      - name: report_month
+        tests: [not_null]
+      - name: user_id
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_month, user_id]
+
+  - name: int_events_enriched
+    description: >
+      Події + каталог подій (seed) + користувач CRM. Грануляція: подія.
+      Класифікація береться виключно з seed'а, не з CASE.
+    columns:
+      - name: event_uuid
+        tests: [not_null, unique]
+      - name: module_code
+        description: NULL лише для подій, яких немає в seed'і (має бути 0 — див. guard-тест).
+
+  - name: int_user_sessions
+    description: >
+      Сесії застосунку. Уніфікує ТРИ розбіжні визначення сесії з Looker.
+      Канонічне: session_id не -1, >1 події, 0 < тривалість < 4 год.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_id, user_phone_sk]
+
+  - name: int_user_monthly_activity
+    description: Активність користувача за місяць. Бекбон для fct_user_monthly.
+    columns:
+      - name: user_phone_sk
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_phone_sk, event_month]

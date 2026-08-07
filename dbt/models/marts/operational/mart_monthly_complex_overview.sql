@@ -85,6 +85,14 @@ billing_accounts as (
     group by ah.complex_id, ah.report_month
 ),
 
+-- Порахований з нуля підрахунок мешканців (канонічний з 2026-08-04).
+users_computed as (
+    select * from {{ ref('fct_users_monthly') }} where not is_test_complex
+),
+
+-- Снапшот джерела — лишається поруч для звірки, колонки з суфіксом `_src`.
+-- Не використовувати як основні: не виключає деактивовані будинки
+-- (ЖК "Севен" пішов вер-жовт 2025, а снапшот показував 2 911 юзерів у квіт.2026).
 citizens as (
     select * from {{ ref('fact_citizen_snapshot') }} where not is_test_complex
 ),
@@ -103,11 +111,24 @@ select
     coalesce(sc.n_commercial, 0)     as n_commercial,
     coalesce(sc.n_storeroom, 0)      as n_storeroom,
     coalesce(ba.n_billing_accounts, 0) as n_billing_accounts,
-    cs.total                         as n_users_total,
-    cs.confirmed_user                as n_users_confirmed,
-    cs.unconfirmed_user              as n_users_unconfirmed,
-    cs.active_user                   as n_users_active,
-    cs.owner                         as n_owners,
+    -- Канонічні (пораховані з users через int_user_exclusions).
+    coalesce(uc.n_users_total, 0)      as n_users_total,
+    coalesce(uc.n_users_confirmed, 0)  as n_users_confirmed,
+    coalesce(uc.n_users_unconfirmed, 0) as n_users_unconfirmed,
+    coalesce(uc.n_owners, 0)           as n_owners,
+    coalesce(uc.n_tenants, 0)          as n_tenants,
+
+    -- Діагностика чистки бази.
+    coalesce(uc.n_with_space_any_status, 0)      as n_users_with_space_any_status,
+    coalesce(uc.n_excluded_house_deactivated, 0) as n_users_excluded_house_deactivated,
+    coalesce(uc.n_excluded_role_deactivated, 0)  as n_users_excluded_role_deactivated,
+
+    -- Снапшот джерела (statistic_citizen) — тільки для звірки.
+    cs.total                         as n_users_total_src,
+    cs.confirmed_user                as n_users_confirmed_src,
+    cs.unconfirmed_user              as n_users_unconfirmed_src,
+    cs.active_user                   as n_users_active_src,
+    cs.owner                         as n_owners_src,
     sla.created_count,
     sla.completed_count,
     sla.canceled_count
@@ -116,5 +137,6 @@ left join complexes c on c.complex_id = cm.complex_id
 left join house_months_agg hm on hm.complex_id = cm.complex_id and hm.report_month = cm.report_month
 left join space_counts sc on sc.complex_id = cm.complex_id and sc.report_month = cm.report_month
 left join billing_accounts ba on ba.complex_id = cm.complex_id and ba.report_month = cm.report_month
+left join users_computed uc on uc.complex_id = cm.complex_id and uc.report_month = cm.report_month
 left join citizens cs on cs.complex_id = cm.complex_id and cs.report_month = cm.report_month
 left join sla on sla.complex_id = cm.complex_id and sla.report_month = cm.report_month

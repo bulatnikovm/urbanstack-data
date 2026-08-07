@@ -1,0 +1,132 @@
+version: 2
+
+models:
+  - name: dim_app_module
+    description: Модулі застосунку (seed + агрегат по каталогу подій).
+    columns:
+      - name: module_code
+        tests: [not_null, unique]
+
+  - name: fct_user_monthly
+    description: >
+      Бекбон домену. Грануляція: user_phone_sk × event_month. Живить Стр.1
+      (сегменти), Стр.2 (активація), Стр.3 (актив/версії), Стр.5.
+    columns:
+      - name: user_phone_sk
+        tests: [not_null]
+      - name: event_month
+        tests: [not_null]
+      - name: lifecycle_segment_current
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - '1. Активні (< 1 міс)'
+                  - '2. Сплячі (1-3 міс)'
+                  - '3. Ризик відтоку (3-6 міс)'
+                  - '4. Загублені (6-12 міс)'
+                  - '5. Мертві душі (> 1 року)'
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_phone_sk, event_month]
+
+  - name: mart_user_base_monthly
+    description: >
+      Стр.1 у розрізі ЖК. Грануляція: report_month × complex_id.
+      ⚠️ Сумувати по ЖК для тоталу НЕ можна (юзер може мати приміщення в
+      кількох ЖК — 1 660 таких) — для тоталів є mart_user_base_totals_monthly.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_month, complex_id]
+
+  - name: mart_user_base_totals_monthly
+    description: >
+      Стр.1 по всій компанії, DISTINCT-користувачі. Скоркарти й часові ряди.
+      Поле visitors_devices — стара метрика по установках, лишена для
+      порівняння; devices_inflation_rate показує масштаб завищення.
+    columns:
+      - name: report_month
+        tests: [not_null, unique]
+
+  - name: mart_activation_monthly
+    description: >
+      Стр.2 — воронка активації по когортах. Звірено з PDF: конверсія
+      черв.2026 26,9%, трав. 18,5%, лип. 23,9% — збіг з дашбордом.
+    columns:
+      - name: report_month
+        tests: [not_null, unique]
+
+  - name: mart_time_to_value
+    description: >
+      Стр.2 — медіанний час до цінної дії. ⚠️ Виправлено баг оригіналу
+      (суміжні рядкові літерали без ком → BigQuery конкатенував їх в один
+      неіснуючий event_type). Цінна дія = усі термінальні успішні дії.
+      Рядок report_month_key='ALL' — тотал по всіх когортах.
+
+  - name: mart_engagement_monthly
+    description: >
+      Стр.3 — актив/сесії/воронки. Поля app_requests_* рахуються з ПОДІЙ
+      застосунку, а не з таблиці orders — це інша метрика, ніж operational
+      fact_orders (звідси префікс app_).
+    columns:
+      - name: report_month
+        tests: [not_null, unique]
+
+  - name: mart_utility_receipts_monthly
+    description: >
+      Стр.3 — квитанції за комунальні послуги, оплачені через застосунок.
+      ⚠️ Джерело — `stg_finance__transactions` (домен finance, крос-доменний
+      ref), не Amplitude: оплата йде через сторонній платіжний шлюз.
+      Формула (transaction_type='utilities', accepted/rejected, new —
+      незавершені спроби) звірена з дашбордом: лип.2026 3213/250, сума
+      прийнятих 3 644 232,57 — точний збіг.
+    columns:
+      - name: report_month
+        tests: [not_null, unique]
+
+  - name: mart_module_usage_monthly
+    description: >
+      Стр.3 — використання модулів. Покриття 100% подій (було 76%): додались
+      модулі Сповіщення, Віджети, Об'єкти, Тимчасові доступи, Гардіан.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_month, module_code]
+
+  - name: mart_module_retention
+    description: Стр.3 (низ) — відвал по модулях, снепшот на current_date().
+    columns:
+      - name: module_code
+        tests: [not_null, unique]
+
+  - name: mart_user_segments
+    description: Стр.3 (донат) — сегменти × версія застосунку, снепшот.
+
+  - name: mart_user_segments_monthly
+    description: Стр.1 — Живі/Сонні/Мертві по місяцях і ЖК.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_month, complex_id]
+
+  - name: mart_app_health_weekly
+    description: >
+      Стр.5 — логаути + біометрія (канонічна методика з 3 метриками, включно
+      з Fallback to PIN). Грануляція: тиждень × ОС × версія.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [event_week, os_type, app_version]
+
+  - name: mart_star_monthly
+    description: >
+      Стр.4 — North Star Metric. ⚠️ Категорія "3. Голосування" рахується по
+      vote_details_active_btn_vote_tap (термінальна дія), а не по
+      vote_details_active_form__tap. Через це Стр.3 і Стр.4 тепер узгоджені —
+      раніше показували 946 і 688 за той самий місяць.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_month, star_category]

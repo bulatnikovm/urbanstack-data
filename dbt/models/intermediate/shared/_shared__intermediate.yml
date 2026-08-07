@@ -10,3 +10,48 @@ models:
         tests:
           - not_null
           - unique
+
+  - name: int_user_space_links
+    description: >
+      Спільний зв'язок користувач ↔ приміщення (власники ∪ співмешканці).
+      Грануляція: user_id × space_id — атомарний рівень, будинок/ЖК
+      агрегуються з нього. Єдине джерело прив'язки для обох доменів.
+      Не фільтрує деактивованих — це робить int_user_exclusions.
+    columns:
+      - name: user_id
+        tests: [not_null]
+      - name: space_id
+        tests: [not_null]
+      - name: house_id
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, space_id]
+
+  - name: int_user_exclusions
+    description: >
+      ЄДИНИЙ механізм виключення користувачів для всіх доменів. Грануляція:
+      user_id × report_month. Чотири причини: employee / test_complex /
+      role_deactivated / house_deactivated. Виключення похідне від
+      houses.deactivated_at, тому оборотне автоматично — УК свідомо НЕ
+      відв'язує жителів деактивованих будинків від квартир (щоб мати змогу
+      їх повернути), тож іншого прапорця в даних немає.
+      Будинок, деактивований 1-го числа місяця, у цьому місяці вже не рахується.
+    columns:
+      - name: user_id
+        tests: [not_null]
+      - name: report_month
+        tests: [not_null]
+      - name: exclusion_reason
+        description: NULL = користувач у чистій базі.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['employee', 'test_complex', 'role_deactivated', 'house_deactivated']
+      - name: is_active_resident
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_month, user_id]

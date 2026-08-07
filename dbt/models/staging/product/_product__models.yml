@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: stg_amplitude__events
+    description: >
+      Сирі Amplitude-події, очищені й перейменовані. Єдина модель домену, що
+      читає EVENTS_407641. Інкрементальна (insert_overwrite, партиція по
+      event_date, вікно перезапису 3 дні).
+    columns:
+      - name: event_uuid
+        description: PK події.
+        tests: [not_null, unique]
+      - name: event_date
+        tests: [not_null]
+      - name: event_type
+        tests: [not_null]
+      - name: device_id
+        description: >
+          amplitude_id. УСТАНОВКА додатку, не користувач — 20 064 девайси на
+          13 919 телефонів. Використовувати лише для метрик версій/девайсів.
+      - name: user_phone_sk
+        description: >
+          sha256(trim(phone)) з user_properties. Канонічний ключ користувача
+          (рішення 2026-08-04). NULL для гостей/до-авторизаційного трафіку
+          (~5,6% подій) і для псевдо-значення 'unknown phone_number'.
+      - name: os_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['iOS', 'Android', 'Other']
+
+seeds:
+  - name: product_event_catalog
+    description: >
+      Каталог усіх 135 event_type застосунку — єдине джерело правди для
+      класифікації подій. Замінює 4 розбіжні списки core-подій і 2 розбіжні
+      CASE по модулях, що жили в Looker custom SQL.
+    columns:
+      - name: event_type
+        tests: [not_null, unique]
+      - name: module_code
+        description: Модуль застосунку. Покриття 100% подій (було 76%).
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('product_module_catalog')
+                field: module_code
+      - name: is_core_event
+        description: >
+          ТЕРМІНАЛЬНА цільова дія (останній івент ланцюжка) — рішення Микити
+          2026-08-04. 8 подій. Раніше було 10, з них 2
+          (widget_control_center_key_btn__click, widget_lock_key_btn__click)
+          не існують — 0 записів за всю історію.
+      - name: star_category
+        description: Категорія Стр.4. NULL для не-core подій.
+
+  - name: product_module_catalog
+    description: >
+      Модулі застосунку: українська назва, порядок, вікно відвалу.
+      drop_off_window_days раніше був захардкоджений CASE у custom_retention_4.
+    columns:
+      - name: module_code
+        tests: [not_null, unique]
+      - name: drop_off_window_days
+        tests: [not_null]

@@ -21,6 +21,12 @@ models:
       Grain — complex_id × report_month. n_houses_active = 110 на квіт.2026,
       ТОЧНИЙ збіг з xlsx (аудит-знахідка #1 закрита — паркінгові будівлі без
       квартир виключені через dim_house.is_residential).
+
+      ⚠️ 2026-08-04: кількість мешканців (n_users_*/n_owners/n_tenants) тепер
+      рахується З НУЛЯ через fct_users_monthly, а не береться з
+      statistic_citizen. Снапшот джерела лишився поруч з суфіксом `_src` для
+      звірки — НЕ використовувати як основний. Різниця на лип.2026:
+      26 895 проти 32 396.
     columns:
       - name: complex_id
         tests:
@@ -28,6 +34,29 @@ models:
               arguments:
                 to: ref('dim_complex')
                 field: complex_id
+
+  - name: fct_users_monthly
+    description: >
+      Grain — complex_id × report_month. Мешканці, пораховані з `users` +
+      прив'язок до приміщень через спільний int_user_exclusions, замість
+      непрозорого агрегату statistic_citizen. Користувач рахується один раз,
+      тому суму по ЖК можна брати як тотал.
+    columns:
+      - name: complex_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_complex')
+                field: complex_id
+      - name: report_month
+        tests: [not_null]
+      - name: n_users_total
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_month, complex_id]
 
   - name: mart_monthly_categories
     description: Grain — complex_id × report_month × category_ua × type_ua × is_valid.
