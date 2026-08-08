@@ -69,7 +69,11 @@ jobs:
       - name: Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          # Та сама версія, що локально (npm ci впав з "Missing from lock
+          # file" на 22-й — package-lock.json генерувався npm 11, який
+          # іде в парі з Node 24, і структура лока трохи різна між
+          # мажорними версіями npm).
+          node-version: "24"
 
       - name: Вивантажити марти й реєстр метрик
         working-directory: web
