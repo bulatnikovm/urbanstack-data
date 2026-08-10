@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-08-09T07:00:22.719Z",
+  "snapshot_at": "2026-08-10T07:46:13.409Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
@@ -40,7 +40,7 @@
       "rows": 816
     },
     "mart_app_health_weekly": {
-      "rows": 2421
+      "rows": 2428
     },
     "agg_os_monthly": {
       "rows": 71
