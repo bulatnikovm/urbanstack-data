@@ -11,12 +11,3 @@ seeds:
           - not_null
           - unique
 
-  - name: survey_wave_catalog
-    description: >
-      Allowlist реальних хвиль CSAT-опитувань (охорона/прибудинкова/будинкова) —
-      відсікає тестові/дев-опитування, які живуть в тому ж id-просторі surveys.
-    columns:
-      - name: wave_description
-        tests:
-          - not_null
-          - unique

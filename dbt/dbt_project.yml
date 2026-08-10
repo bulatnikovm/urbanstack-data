@@ -47,8 +47,6 @@ seeds:
       +schema: dbt_operational
     dim_order_type:
       +schema: dbt_operational
-    survey_wave_catalog:
-      +schema: dbt_operational
     product_event_catalog:
       +schema: dbt_product
     product_module_catalog:

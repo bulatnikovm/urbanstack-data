@@ -1,6 +1,7 @@
 -- Grain: одна відповідь (answer_id). INNER JOIN до int_survey_waves —
--- тестові/некласифіковані опитування (survey_id, якого немає в
--- survey_wave_catalog) автоматично випадають.
+-- тестові/некласифіковані опитування (wave_description без розпізнаваного
+-- ключового слова категорії — див. коментар в int_survey_waves.sql)
+-- автоматично випадають.
 --
 -- ⚠️ areas дедуплікується до 1 рядка на survey_id (QUALIFY нижче) — сирі дані
 -- НЕ гарантують 1:1 (див. _surveys__models.yml, id 431 — 10 area на 1 survey).
