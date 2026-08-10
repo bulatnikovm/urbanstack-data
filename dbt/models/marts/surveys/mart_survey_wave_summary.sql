@@ -26,6 +26,7 @@ select
     complex_name,
     house_id,
     coalesce(house_number, 'ЖК загалом') as house_number,
+    coalesce(house_address, 'ЖК загалом') as house_address,
     min(survey_id) as wave_sort_id,
     count(*) as votes,
     countif(has_comment) as comments,
@@ -36,4 +37,4 @@ select
     countif(grade = 2) as grade_2,
     countif(grade = 1) as grade_1
 from {{ ref('fact_survey_answers') }}
-group by wave_label, survey_category_ua, wave_month, complex_id, complex_name, house_id, house_number
+group by wave_label, survey_category_ua, wave_month, complex_id, complex_name, house_id, house_number, house_address

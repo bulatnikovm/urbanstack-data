@@ -33,6 +33,14 @@ models:
           - not_null
           - unique
 
+  - name: stg_shared__locations
+    description: Адреси (street/city). number з джерела навмисно НЕ переносимо — див. _shared__sources.yml.
+    columns:
+      - name: location_id
+        tests:
+          - not_null
+          - unique
+
   - name: stg_shared__space_apartments
     description: Деталізація приміщень типу "квартира"
     columns:

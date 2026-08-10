@@ -27,6 +27,13 @@ sources:
           продуктового/операційного доменів, не фінансового.
       - name: complexes
         description: ЖК (житлові комплекси)
+      - name: locations
+        description: >
+          Поштова адреса (street + number + city). houses.location_id → сюди.
+          ⚠️ locations.number — НЕ адреса конкретного будинку, а спільний
+          кластер/під'їзд на кілька будинків (низька кардинальність — напр.
+          "1" для 6+ будинків просп. Європейського Союзу відразу). Реальний
+          номер будинку в адресі — це houses.number, не locations.number.
       - name: space_apartments
         description: Деталізація приміщень типу "квартира" (особовий рахунок)
       - name: space_commercials

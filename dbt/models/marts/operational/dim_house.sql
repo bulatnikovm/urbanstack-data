@@ -24,6 +24,10 @@ complexes as (
     select * from {{ ref('dim_complex') }}
 ),
 
+locations as (
+    select * from {{ ref('stg_shared__locations') }}
+),
+
 apartment_counts as (
     select
         house_id,
@@ -44,8 +48,15 @@ select
     coalesce(ac.n_apartments, 0) as n_apartments,
     coalesce(ac.n_apartments, 0) > 0 as is_residential,
     h.location_id,
+    l.street,
+    -- ⚠️ Реальна адреса будинку = street + houses.number, НЕ locations.number
+    -- (те низькокардинальне поле — спільний кластер на кілька будинків,
+    -- див. _shared__sources.yml). Формула звірена з ручним xlsx-звітом
+    -- Микити ("вул. Всеволода Змієнка, 21" тощо) 2026-08-11.
+    case when l.street is not null then concat(l.street, ', ', h.house_number) end as house_address,
     h.created_at,
     h.updated_at
 from houses h
 left join complexes c on c.complex_id = h.complex_id
 left join apartment_counts ac on ac.house_id = h.house_id
+left join locations l on l.location_id = h.location_id
