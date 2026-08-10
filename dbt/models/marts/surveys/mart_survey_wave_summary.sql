@@ -11,6 +11,12 @@
 -- це коректно переагрегується на будь-якому рівні групування.
 -- house_number: NULL замінено на явний лейбл — інакше Looker показує
 -- буквальний текст "null" в таблиці, що виглядає як помилка, а не дизайн.
+--
+-- wave_sort_id: min(survey_id) хвилі — хронологічний ключ сортування колонок
+-- у зведеній таблиці Looker. wave_label текстово НЕ сортується хронологічно
+-- впереміш між категоріями (напр. "Прибудинкова" і "Охорона" перемежовуються
+-- за алфавітом/групуванням, а не за часом) — сортування по wave_sort_id
+-- (зростання) дає справжню хронологію незалежно від категорії.
 
 select
     wave_label,
@@ -20,6 +26,7 @@ select
     complex_name,
     house_id,
     coalesce(house_number, 'ЖК загалом') as house_number,
+    min(survey_id) as wave_sort_id,
     count(*) as votes,
     countif(has_comment) as comments,
     sum(grade) as grade_sum,
