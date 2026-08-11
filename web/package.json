@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "export-data": "node scripts/export-data.mjs",
-    "build-metrics": "node scripts/build-metrics.mjs",
-    "refresh": "node scripts/export-data.mjs && node scripts/build-metrics.mjs && next build"
+    "build-metrics": "node scripts/build-metrics.mjs && node scripts/check-metric-coverage.mjs",
+    "check-metrics": "node scripts/check-metric-coverage.mjs",
+    "refresh": "node scripts/export-data.mjs && npm run build-metrics && next build"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

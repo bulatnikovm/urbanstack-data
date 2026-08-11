@@ -135,6 +135,7 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
           <div className="grid gap-3 lg:grid-cols-2">
             <Panel
               title={`Рейтинг категорій — ${monthLabel(curKey)}`}
+              metric="Категорії цільових дій"
               note="Частка від потенційної бази."
             >
               <RankedBars
@@ -147,6 +148,7 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
 
             <Panel
               title="Категорії в деталях"
+              metric="Категорії цільових дій"
               note="Зміна до попереднього місяця розрахована в самій марті."
               action={
                 <ExportXlsx

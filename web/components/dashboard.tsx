@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MetricInfo } from "@/components/metric-info";
 import { cn } from "@/lib/utils";
-import { getMetric } from "@/lib/data";
+import { getMetrics } from "@/lib/data";
 import { hoursSince, snapshotLabel } from "@/lib/format";
 
 // ── Обгортка контенту сторінки ──────────────────────────────────────────
@@ -63,17 +63,17 @@ export function Kpi({
   sub?: string;
   trend?: { text: string; good: boolean | null };
   /** Ключ у реєстрі, якщо підпис на картці не збігається з ним дослівно. */
-  metric?: string;
+  metric?: string | string[];
 }) {
   const Icon =
     trend?.good === null ? Minus : trend?.good ? ArrowUpRight : ArrowDownRight;
-  const doc = getMetric(metric ?? label);
+  const docs = getMetrics(metric ?? label);
   return (
     <Card className="gap-0 py-0">
       <CardHeader className="px-4 pt-4 pb-0">
         <CardTitle className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           {label}
-          {doc && <MetricInfo metric={doc} />}
+          <MetricInfo metrics={docs} />
         </CardTitle>
       </CardHeader>
       <CardContent className="px-4 pt-1 pb-4">
@@ -120,22 +120,26 @@ export function Panel({
   note?: string;
   /** Кнопка праворуч у шапці — напр. `<ExportXlsx …/>`. */
   action?: React.ReactNode;
-  /** Ключ у реєстрі, якщо заголовок динамічний (напр. з назвою місяця). */
-  metric?: string;
+  /**
+   * Ключ у реєстрі, якщо заголовок динамічний (напр. з назвою місяця).
+   * Масив — коли на панелі кілька метрик (три ряди на одному графіку);
+   * тоді довідка показує всі поспіль.
+   */
+  metric?: string | string[];
   className?: string;
   /** Напр. `flex-1` — щоб вміст розтягнувся на всю висоту картки в grid-ряду,
    * де сусід вищий (інакше під пончиком лишається порожнеча). */
   contentClassName?: string;
   children: React.ReactNode;
 }) {
-  const doc = getMetric(metric ?? title);
+  const docs = getMetrics(metric ?? title);
   return (
     <Card className={cn("gap-0 py-0", className)}>
       <CardHeader className="gap-1 border-b px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="flex items-center gap-1.5 text-sm font-medium">
             {title}
-            {doc && <MetricInfo metric={doc} />}
+            <MetricInfo metrics={docs} />
           </CardTitle>
           {action && <div className="shrink-0">{action}</div>}
         </div>

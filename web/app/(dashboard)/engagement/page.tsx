@@ -5,6 +5,7 @@ import {
   getPeriod,
   getUserSegments,
   getUtilityReceipts,
+  getVersionAdoption,
   stripOrder,
 } from "@/lib/data";
 import { delta, monthLabel, n, n1, pct, pp, uah } from "@/lib/format";
@@ -71,17 +72,33 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
     .sort((a, b) => a.order.localeCompare(b.order));
   const segmentTotal = [...bySegment.values()].reduce((a, b) => a + b, 0);
 
+  // Версії застосунку — ТОП-5 конкретних збірок за поточний місяць.
+  //
+  // Було: поділ «Актуальна / Стара версія» з mart_user_segments. Він не
+  // відповідав на питання, яке реально ставлять («на чому люди сидять?»):
+  // не видно ЯКА збірка застаріла, а зі зміною актуальної версії вся
+  // історія переписувалась заднім числом.
+  //
+  // ⚠️ Сумуємо по ОС у межах версії — це коректно (людина за місяць на двох
+  // ОС не буває). А от між ВЕРСІЯМИ той, хто оновився всередині місяця,
+  // рахується двічі, тому сума більша за реальну кількість активних людей.
+  // Те саме обмеження, що й у mart_version_adoption загалом; зафіксовано в
+  // реєстрі (PROD-033, known_issue).
   const byVersion = new Map<string, number>();
-  for (const r of segments) {
+  for (const r of getVersionAdoption()) {
+    if (r.report_month_key !== curKey) continue;
     byVersion.set(
-      r.version_status,
-      (byVersion.get(r.version_status) ?? 0) + r.users_count
+      r.app_version,
+      (byVersion.get(r.app_version) ?? 0) + r.active_users
     );
   }
   const versionRows = [...byVersion.entries()]
-    .map(([label, value]) => ({ label, value }))
+    .map(([label, value]) => ({ label: `v${label}`, value }))
     .sort((a, b) => b.value - a.value);
   const versionTotal = [...byVersion.values()].reduce((a, b) => a + b, 0);
+  const TOP_VERSIONS = 5;
+  const topVersion = versionRows[0];
+  const tailVersions = Math.max(0, versionRows.length - TOP_VERSIONS);
   const activeShare = segmentTotal
     ? (bySegment.get("1. Активні (< 1 міс)") ?? 0) / segmentTotal
     : 0;
@@ -286,7 +303,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
               />
             </Panel>
 
-            <Panel title="Сума оплачених квитанцій">
+            <Panel title="Сума оплачених квитанцій" metric="Сума прийнятих">
               <BklitLine
                 kind="money"
                 data={inWindow(receipts).map((r) => ({
@@ -297,7 +314,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
               />
             </Panel>
 
-            <Panel title="Частка відхилених">
+            <Panel title="Частка відхилених" metric="Відхилено банком">
               <BklitLine
                 kind="pct"
                 data={inWindow(receipts).map((r) => ({
@@ -311,6 +328,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
 
           <Panel
             title="Квитанції за місяцями"
+            metric="Квитанції за комунальні послуги"
             note="⚠️ transaction_type='utilities', accepted/rejected; незавершені спроби (new) не рахуються."
             action={
               <ExportXlsx
@@ -434,6 +452,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
 
           <Panel
             title="Модулі в деталях"
+            metric={["Покриття модулів", "Відвал за модулями"]}
             note="Час у модулі й скільки днів минає до відвалу."
             action={
               <ExportXlsx
@@ -524,16 +543,18 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
         <Section
           title="Сегменти й версія додатку"
           lead={
-            versionTotal > 0 ? (
+            versionTotal > 0 && topVersion ? (
               <>
-                На актуальній версії додатку —{" "}
-                <Hl>
-                  {pct((byVersion.get("Актуальна версія") ?? 0) / versionTotal)}
-                </Hl>{" "}
-                користувачів; решта сидить на застарілій збірці, і на них не
-                діють останні зміни в продукті.{" "}
+                Найпоширеніша збірка {monthLabel(curKey)} —{" "}
+                <Hl>{topVersion.label}</Hl>, на ній{" "}
+                <Hl>{pct(topVersion.value / versionTotal)}</Hl> активних
+                користувачів
+                {tailVersions > 0 ? `; ще ${tailVersions} версій за межами топ-5.` : "."}{" "}
+                На старих збірках не діють останні зміни в продукті — це
+                варто тримати в голові, читаючи будь-яку іншу метрику.{" "}
                 <Hl>{pct(activeShare)}</Hl> підтверджених — активні (заходили
-                за останній місяць). Знімок на поточний момент, не помісячний.
+                за останній місяць); цей зріз — на поточний момент, не
+                помісячний.
               </>
             ) : undefined
           }
@@ -552,9 +573,14 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
 
             <Panel
               title="Версія застосунку"
-              note="Актуальна — та сама версія, що й у найпопулярнішого сегмента за останні 7 днів."
+              note={`Топ-5 збірок серед активних користувачів за ${monthLabel(curKey)}. Хто оновився всередині місяця, потрапляє у дві версії — сума більша за кількість людей.`}
             >
-              <BklitDonut data={versionRows} centerLabel="Користувачів" />
+              <BklitDonut
+                data={versionRows}
+                centerLabel="Користувачів"
+                maxSlices={5}
+                restLabel="Інші версії"
+              />
             </Panel>
           </div>
         </Section>

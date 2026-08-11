@@ -301,9 +301,15 @@ export type Metric = {
 
 /**
  * Довідка по метриці за її ПІДПИСОМ на дашборді (не за PROD-ID): так
- * компонент картки не мусить знати кодів, а розсинхрон ловиться очима —
- * якщо підпис змінили, а в реєстрі ні, довідка просто не з'явиться.
- * Дублікати підписів відсіює build-metrics.mjs на збірці.
+ * компонент картки не мусить знати кодів. Дублікати підписів відсіює
+ * build-metrics.mjs на збірці.
+ *
+ * ⚠️ Розсинхрон «підпис змінили, а в реєстрі ні» НЕ ловиться очима — довідка
+ * просто тихо зникає, і помітити це можна лише випадково (так і сталося:
+ * 21 картка з 52 була без довідки). Тому є `scripts/check-metric-coverage.mjs`
+ * — він падає на збірці, якщо на дашборді зʼявилась картка без запису в
+ * реєстрі. Це та сама логіка, що й seeds замість хардкод-списків: розходження
+ * має бути неможливим структурно, а не «помітним».
  */
 let metricsByLabel: Map<string, Metric> | null = null;
 
@@ -315,6 +321,13 @@ export function getMetric(label: string): Metric | undefined {
     metricsByLabel = new Map(doc.metrics.map((m) => [m.label, m]));
   }
   return metricsByLabel.get(label);
+}
+
+/** Кілька метрик однієї картки; невідомі ключі відкидаються. */
+export function getMetrics(labels: string | string[]): Metric[] {
+  return (Array.isArray(labels) ? labels : [labels])
+    .map(getMetric)
+    .filter((m): m is Metric => Boolean(m));
 }
 
 /** Прибирає порядковий префікс "3. " з назв категорій/модулів */

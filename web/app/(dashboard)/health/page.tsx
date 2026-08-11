@@ -28,6 +28,32 @@ type WeekAgg = {
   fallback: number;
 };
 
+/**
+ * Мінімальний знаменник, щоб рахувати частку.
+ *
+ * Без цього графік біометрії був порожнім, і виглядало це як зламаний
+ * компонент. Насправді ламали дані: у 2024 застосунком користувались
+ * одиниці, і тиждень, де біометрію бачила ОДНА людина, а поп-ап не
+ * показався, давав чесні 100%. Дві такі точки задирали вісь до 100%, а
+ * реальний сигнал (4-5%) лягав у нуль і ставав невидимим.
+ *
+ * 100 — не магія: на меншій базі довірчий інтервал частки ширший за сам
+ * сигнал (±10 п.п. проти 4-5%), тобто точка не несе інформації. Тижні з
+ * малою базою лишаються на графіку активних (там знаменника немає), але
+ * частку по них не малюємо.
+ */
+const MIN_RATE_BASE = 100;
+
+/**
+ * Понеділок поточного тижня — ключ `event_week` у марті (тижні там
+ * починаються з понеділка, перевірено на даних).
+ */
+function currentWeekKey(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
 export default async function HealthPage({
   searchParams,
 }: PageProps<"/health">) {
@@ -78,15 +104,29 @@ export default async function HealthPage({
     a.week.localeCompare(b.week)
   );
 
+  // Частку рахуємо тільки там, де знаменник достатній — див. MIN_RATE_BASE.
   const withRates = weekly.map((w) => ({
     ...w,
-    logoutRate: w.wau ? w.logout / w.wau : null,
-    frictionRate: w.bioTotal ? w.friction / w.bioTotal : null,
-    fallbackRate: w.bioTotal ? w.fallback / w.bioTotal : null,
+    logoutRate: w.wau >= MIN_RATE_BASE ? w.logout / w.wau : null,
+    frictionRate: w.bioTotal >= MIN_RATE_BASE ? w.friction / w.bioTotal : null,
+    fallbackRate: w.bioTotal >= MIN_RATE_BASE ? w.fallback / w.bioTotal : null,
   }));
 
-  const last = withRates.at(-1);
-  const prevWeek = withRates.at(-2);
+  /**
+   * Картки показують ОСТАННІЙ ПОВНИЙ тиждень, а не поточний.
+   *
+   * Тижневу метрику незавершеного тижня немає з чим порівнювати: у вівторок
+   * там один день даних, і дельта до повного тижня показала б −97% — падіння,
+   * якого немає. У помісячних сторінках ми свідомо показуємо незавершений
+   * місяць із позначкою «місяць триває», але там перекіс у рази, а тут — на
+   * порядок. Поточний тиждень лишається на ГРАФІКАХ (останню точку видно), у
+   * картках же підпис прямо називає тиждень, який рахували.
+   */
+  const currentWeek = currentWeekKey();
+  const complete = withRates.filter((w) => w.week < currentWeek);
+  const last = complete.at(-1) ?? withRates.at(-1);
+  const prevWeek = complete.at(-2);
+  const hasRunningWeek = withRates.at(-1)?.week === currentWeek;
 
   const isMixedVersions = version === "all" && versions.length > 1;
 
@@ -103,6 +143,14 @@ export default async function HealthPage({
 
       <PageBody>
         <HealthFilters os={os} version={version} versions={versions} />
+
+        {hasRunningWeek && last && (
+          <p className="-mt-1 text-xs text-muted-foreground">
+            Поточний тиждень ще триває — картки рахують останній повний
+            ({weekTooltip(last?.week ?? "").toLowerCase()}). На графіках
+            остання точка неповна.
+          </p>
+        )}
 
         {!last ? (
           <Panel title="Немає даних за обраний фільтр">
@@ -181,6 +229,7 @@ export default async function HealthPage({
               <div className="grid gap-3 lg:grid-cols-2">
                 <Panel
                   title="Активних юзерів за тиждень"
+                  metric="Активних за тиждень"
                   note={
                     isMixedVersions
                       ? "⚠️ Сума по версіях: юзер, що оновився впродовж тижня, порахується двічі. Для точного числа обери конкретну версію."
@@ -197,13 +246,18 @@ export default async function HealthPage({
                   />
                 </Panel>
 
-                <Panel title="Частка примусових логаутів">
+                <Panel title="Частка примусових логаутів" metric="Примусові логаути">
+                  {/* Тижні з малою базою ВИКИДАЄМО, а не малюємо нулем:
+                      `?? 0` опускав лінію в підлогу там, де частки просто
+                      немає, і це читалось як «логаутів не було». */}
                   <BklitLine
                     xUnit="week"
-                    data={withRates.map((w) => ({
-                      month: w.week,
-                      rate: w.logoutRate ?? 0,
-                    }))}
+                    data={withRates
+                      .filter((w) => w.logoutRate != null)
+                      .map((w) => ({
+                        month: w.week,
+                        rate: w.logoutRate as number,
+                      }))}
                     series={[{ key: "rate", label: "Логаути", slot: 2 }]}
                     kind="pct"
                   />
@@ -224,15 +278,18 @@ export default async function HealthPage({
             >
               <Panel
                 title="Технічний збій vs fallback на PIN"
+                metric={["Технічний збій біометрії", "Fallback на PIN"]}
                 note="Обидва — частка від «лояльних біометричних» юзерів (бачили поп-ап біометрії за останні 30 днів)."
               >
                 <BklitLine
-                    xUnit="week"
-                  data={withRates.map((w) => ({
-                    month: w.week,
-                    friction: w.frictionRate ?? 0,
-                    fallback: w.fallbackRate ?? 0,
-                  }))}
+                  xUnit="week"
+                  data={withRates
+                    .filter((w) => w.frictionRate != null)
+                    .map((w) => ({
+                      month: w.week,
+                      friction: w.frictionRate as number,
+                      fallback: w.fallbackRate ?? 0,
+                    }))}
                   series={[
                     { key: "friction", label: "Технічний збій", slot: 1 },
                     { key: "fallback", label: "Fallback на PIN", slot: 2 },

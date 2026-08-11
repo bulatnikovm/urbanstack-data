@@ -107,6 +107,7 @@ export default async function ActivationPage({ searchParams }: PageProps<"/activ
         >
           <Panel
             title="Нові користувачі за станом активації"
+            metric={["Нові користувачі", "Активовані"]}
             note="Дві категорії разом дають усіх новачків місяця. Активований — зробив цільову дію (оплата, заявка, голосування, платна послуга) у місяць першого входу."
           >
             <BklitBar
@@ -123,6 +124,7 @@ export default async function ActivationPage({ searchParams }: PageProps<"/activ
           <div className="grid gap-3 lg:grid-cols-3">
             <Panel
               title="Нові користувачі за місяць"
+              metric="Нові користувачі"
               note="Скільки людей уперше зайшли в додаток. Абсолютне число під конверсією — щоб зростання відсотка на падаючому притоці не читалось як успіх."
             >
               <BklitLine

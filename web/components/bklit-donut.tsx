@@ -95,22 +95,29 @@ export function BklitDonut({
   data,
   centerLabel = "Разом",
   size = 200,
+  maxSlices = 3,
+  restLabel = "Інше",
 }: {
   data: Array<{ label: string; value: number }>;
   centerLabel?: string;
   size?: number;
+  /** Скільки категорій показати окремо; решта злипається в один сегмент.
+   * Стеля — 5: більше градацій сірого (`--chart-1..5`) у нас немає. */
+  maxSlices?: number;
+  restLabel?: string;
 }) {
   const total = data.reduce((a, d) => a + d.value, 0);
   // `--chart-N`, не `--series-N`: дашборд монохромний (рішення Микити
   // 2026-08-06), пончик має бути тієї ж сірої шкали, що й лінії.
-  const colored = data.slice(0, 3).map((d, i) => ({
+  const shown = Math.min(maxSlices, 5);
+  const colored = data.slice(0, shown).map((d, i) => ({
     ...d,
     color: `var(--chart-${i + 1})`,
   }));
-  const rest = data.slice(3);
+  const rest = data.slice(shown);
   if (rest.length) {
     colored.push({
-      label: "Інше",
+      label: restLabel,
       value: rest.reduce((a, d) => a + d.value, 0),
       color: "var(--muted-foreground)",
     });

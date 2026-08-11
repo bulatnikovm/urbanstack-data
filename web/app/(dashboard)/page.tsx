@@ -16,7 +16,6 @@ import {
 import type { Series } from "@/components/trend-charts";
 import { BklitDonut } from "@/components/bklit-donut";
 import { BklitLine } from "@/components/bklit-line";
-import { BklitBar } from "@/components/bklit-bar";
 import { BklitArea } from "@/components/bklit-area";
 import { ExportXlsx } from "@/components/export-xlsx";
 import { buildSheet } from "@/lib/xlsx";
@@ -145,6 +144,11 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
         >
           <Panel
             title="Потенційні, підтверджені та відвідувачі"
+            metric={[
+              "Потенційні користувачі",
+              "Підтверджені",
+              "Відвідувачі додатку",
+            ]}
             note="Потенційні — усі, хто хоч раз прив'язувався до приміщення. Підтверджені — верифіковані й не деактивовані. Відвідувачі — будь-яка подія в додатку за місяць."
           >
             <BklitArea
@@ -186,7 +190,10 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
               title="Живі / Сонні / Неактивні"
               note="Сегмент за активністю на ковзному вікні 2 місяці, по всій компанії."
             >
-              <BklitBar data={segRows} series={SEGMENT_SERIES} />
+              {/* Лінії, не стовпчики. 32 місяці × 3 серії — це 96 стовпчиків
+                  на пів-екрана, кожен по 2 пікселі: побачити тренд у такому
+                  гребінці неможливо, а саме тренд тут і є змістом. */}
+              <BklitLine data={segRows} series={SEGMENT_SERIES} />
             </Panel>
           </div>
         </Section>
@@ -206,6 +213,7 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
           <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
             <Panel
               title={`Житлові комплекси — ${monthLabel(curKey)}`}
+              metric="Житлові комплекси"
               note="Відсортовано за розміром бази."
               action={
                 <ExportXlsx
