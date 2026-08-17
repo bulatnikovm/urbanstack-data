@@ -4,6 +4,9 @@ select
     id                  as order_id,
     space_id,
     citizen_id,
+    created_by_id,
+    citizen_id is not null
+        and created_by_id = citizen_id  as is_self_authored,
     category,
     type,
     status,

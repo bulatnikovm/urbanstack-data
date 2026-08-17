@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: int_order_text_flags
+    description: >
+      Лексичний розбір тексту кожної заявки за словником negativity_lexicon.
+      Grain: order_id. matched_patterns лишено навмисно — потрібно вміти
+      пояснити, чому будинок підсвітився.
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+      - name: is_escalation
+        description: >
+          legal OR outrage OR collective OR osbb_intent. Пост-фактум ОСББ
+          сюди НЕ входить — це наслідок, а не сигнал.
+        tests:
+          - not_null
+
+  - name: int_order_campaigns
+    description: >
+      Заявки, що входять у скоординовану кампанію (>=3 різних мешканці
+      І >=3 різних автори записи, однаковий префікс тексту, розрив <=14 днів).
+      Grain: order_id (тільки заявки-учасниці).
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+      - name: campaign_id
+        tests:
+          - not_null

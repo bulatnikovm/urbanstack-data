@@ -1,6 +1,26 @@
 version: 2
 
 seeds:
+  - name: negativity_lexicon
+    description: >
+      Словник лексичних маркерів для розбору тексту заявок (int_order_text_flags).
+      Групи: legal (юридично-ескалаційний регістр), outrage, collective,
+      osbb_intent (намір вийти), osbb_postfact (дім уже вийшов — детекція факту),
+      repeat (фрустрація від невирішеного), profanity.
+      Правити можна без коду — це і є сенс сіда.
+      ⚠️ v1, зібраний по ~50 прочитаних заявках, precision/recall не заміряні.
+    columns:
+      - name: pattern
+        description: RE2-регулярка, застосовується до lower(normalize(description)).
+        tests:
+          - not_null
+          - unique
+      - name: flag_group
+        tests:
+          - not_null
+          - accepted_values:
+              values: [legal, outrage, collective, osbb_intent, osbb_postfact, repeat, profanity]
+
   - name: test_complexes
     description: >
       Хардкод-список QA/тестових ЖК, які треба виключати з operational-метрик.

@@ -10,6 +10,52 @@ models:
   - name: mart_status_donut
     description: Grain — complex_id × report_month × status.
 
+  - name: mart_campaigns
+    description: >
+      Grain — campaign_id. Реєстр скоординованих звернень мешканців
+      (детектор — int_order_campaigns). Робочий артефакт: керівник ЖК
+      отримує дату, тему, будинки, кількість учасників і зразок тексту.
+      Історично кампанії передували виходу будинків (Севен бер.2024 —
+      22 людини, обидва будинки пішли; Варш. Плюс лист.2024 — 13 людей,
+      обидва пішли).
+    columns:
+      - name: campaign_id
+        tests:
+          - not_null
+          - unique
+      - name: n_people
+        description: Різних мешканців у кампанії. За побудовою >= 3.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 3
+              inclusive: true
+
+  - name: mart_house_churn_risk_monthly
+    description: >
+      Grain — house_id × report_month. Сходинки ризику 0-5 замість єдиного
+      скора: подій виходу лише 13 за три роки, тому це пріоритизатор черги
+      роботи, а НЕ оцінка ймовірності. Пороги підібрані на історії й не
+      відкаліброані статистично — міняти їх тут нормально.
+
+      ⚠️ CSAT-опитування не входять: 3 750 із 3 794 відповідей без house_id
+      (голосування створюється одне на весь ЖК). Джерело оцінок — order_reviews.
+    columns:
+      - name: house_id
+        tests:
+          - not_null
+      - name: risk_stage
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1, 2, 3, 4, 5]
+              quote: false
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - house_id
+            - report_month
+
   - name: mart_yearly_totals
     description: >
       Grain — report_year (компанія загалом). 2023-2025 збігаються з xlsx

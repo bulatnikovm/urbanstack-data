@@ -25,6 +25,17 @@ sources:
           співробітника без заявки (order_id IS NULL). category — той самий
           enum, що і orders.category. status — ІНШИЙ enum (closed/canceled/
           in_progress/assigned/done), не плутати з orders.status.
+      - name: order_reviews
+        description: >
+          Оцінка мешканцем ЗАКРИТТЯ заявки (rating 1-5 + comment). Єдине
+          джерело оцінок задоволеності з прив'язкою до будинку: CSAT-опитування
+          дають house_id лише в 44 із 3 794 відповідей (голосування створюється
+          одне на весь ЖК). ~16 тис. рядків з 2022-05.
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
       - name: history_order_updates
         description: >
           Event log змін заявки, before/after RECORD зі вкладеним status.
