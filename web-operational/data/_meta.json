@@ -1,0 +1,19 @@
+{
+  "snapshot_at": "2026-08-14T08:32:06.517Z",
+  "project": "analytics-454817",
+  "dataset": "dbt_operational",
+  "tables": {
+    "mart_campaigns": {
+      "rows": 121
+    },
+    "agg_complex_overview_monthly": {
+      "rows": 816
+    },
+    "agg_churn_stage_monthly": {
+      "rows": 43
+    },
+    "agg_churn_houses": {
+      "rows": 791
+    }
+  }
+}

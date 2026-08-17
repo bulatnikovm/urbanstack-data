@@ -1,0 +1,258 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-chart-scale-pattern-color: var(----chart-scale-pattern-color);
+  --color-chart-scale-05: var(----chart-scale-05);
+  --color-chart-scale-04: var(----chart-scale-04);
+  --color-chart-scale-03: var(----chart-scale-03);
+  --color-chart-scale-02: var(----chart-scale-02);
+  --color-chart-scale-01: var(----chart-scale-01);
+  --color-chart-label: var(----chart-label);
+  --color-chart-marker-foreground: var(----chart-marker-foreground);
+  --color-chart-marker-border: var(----chart-marker-border);
+  --color-chart-marker-background: var(----chart-marker-background);
+  --color-chart-tooltip-muted: var(----chart-tooltip-muted);
+  --color-chart-tooltip-foreground: var(----chart-tooltip-foreground);
+  --color-chart-tooltip-background: var(----chart-tooltip-background);
+  --chart-brush-border: var(----chart-brush-border);
+  --color-chart-grid: var(----chart-grid);
+  --color-chart-crosshair: var(----chart-crosshair);
+  --chart-line-secondary: var(----chart-line-secondary);
+  --chart-line-primary: var(----chart-line-primary);
+  --color-chart-foreground-muted: var(----chart-foreground-muted);
+  --color-chart-foreground: var(----chart-foreground);
+  --color-chart-background: var(----chart-background);
+}
+
+/* ── Брендові кольори ────────────────────────────────────────────────────
+   Точні значення з брендбуку UrbanStack (2026), розділ «Колір». Єдине
+   місце, де вони записані — усе решта посилається на ці змінні.
+   Нейтралі світлої теми — розбіли Cool Gray Blue, а не сірий: інакше
+   холодний брендовий синій сусідить із нейтральним сірим і читається як
+   брудний. */
+:root {
+  --brand-charcoal: #232323;
+  --brand-black: #0c0c0c;
+  --brand-mint: #cdf2c7;
+  --brand-slate: #a1b3c7; /* Cool Gray Blue */
+  --brand-sky: #b3dffc; /* Pale Sky Blue  */
+  --brand-red: #dd0e0d; /* Vivid Red, доп. палітра */
+
+  --brand-tint-50: #f9fafc;
+  --brand-tint-100: #f2f4f7;
+  --brand-tint-200: #e5eaf0;
+  --brand-ink-muted: #5c646d; /* 6.0:1 на білому — AA для дрібного тексту */
+
+  --brand-surface-1: #303030; /* темна тема: підкладка над Charcoal */
+  --brand-surface-2: #393939;
+}
+
+/* ⚠️ `npx shadcn add @bklit/bar-chart @bklit/area-chart` (2026-08-06)
+   дублював сюди повний набір `--chart-*` зі скафолдними значеннями —
+   видалено, бо нижче вже є ті самі ключі з брендовими значеннями (другий
+   :root), і другий у порядку джерела все одно переміг би. Якщо ставитимеш
+   ще один bklit-компонент, перевір діфф — може повторитись. */
+:root {
+  --background: #ffffff;
+  --foreground: var(--brand-charcoal);
+  --card: #ffffff;
+  --card-foreground: var(--brand-charcoal);
+  --popover: #ffffff;
+  --popover-foreground: var(--brand-charcoal);
+  --primary: var(--brand-charcoal);
+  --primary-foreground: #ffffff;
+  --secondary: var(--brand-tint-100);
+  --secondary-foreground: var(--brand-charcoal);
+  --muted: var(--brand-tint-100);
+  --muted-foreground: var(--brand-ink-muted);
+  --accent: var(--brand-tint-100);
+  --accent-foreground: var(--brand-charcoal);
+  --destructive: var(--brand-red);
+  --border: var(--brand-tint-200);
+  --input: var(--brand-tint-200);
+  --ring: var(--brand-slate);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: var(--brand-tint-50);
+  --sidebar-foreground: var(--brand-charcoal);
+  --sidebar-primary: var(--brand-charcoal);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--brand-tint-200);
+  --sidebar-accent-foreground: var(--brand-charcoal);
+  --sidebar-border: var(--brand-tint-200);
+  --sidebar-ring: var(--brand-slate);
+  --chart-background: oklch(1 0 0);
+  --chart-foreground: var(--brand-charcoal);
+  --chart-foreground-muted: var(--brand-ink-muted);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-2);
+  --chart-crosshair: oklch(0.4 0.1828 274.34);
+  --chart-grid: var(--brand-tint-200);
+  --chart-brush-border: var(--chart-grid);
+  --chart-tooltip-background: var(--popover);
+  --chart-tooltip-foreground: var(--popover-foreground);
+  --chart-tooltip-muted: var(--brand-ink-muted);
+  --chart-marker-background: var(--brand-tint-100);
+  --chart-marker-border: var(--brand-tint-200);
+  --chart-marker-foreground: var(--brand-charcoal);
+  --chart-label: var(--brand-ink-muted);
+  --chart-scale-01: oklch(0.98 0.003 106);
+  --chart-scale-02: oklch(0.92 0.008 106);
+  --chart-scale-03: oklch(0.82 0.015 106);
+  --chart-scale-04: oklch(0.68 0.02 106);
+  --chart-scale-05: oklch(0.55 0.025 106);
+  --chart-scale-pattern-color: oklch(0.96 0.005 106);
+}
+
+/* Темна тема будується з двох брендових чорних, а не з одного: фон —
+   «Стандартний чорний» #0C0C0C, підняті поверхні (картки, сайдбар) —
+   Charcoal #232323. Ієрархія глибини береться з брендбуку, а не
+   вигадується освітленням одного кольору. */
+.dark {
+  --background: var(--brand-black);
+  --foreground: #ffffff;
+  --card: var(--brand-charcoal);
+  --card-foreground: #ffffff;
+  --popover: var(--brand-charcoal);
+  --popover-foreground: #ffffff;
+  --primary: var(--chart-1);
+  --primary-foreground: var(--brand-charcoal);
+  --secondary: var(--brand-surface-1);
+  --secondary-foreground: #ffffff;
+  --muted: var(--brand-surface-1);
+  --muted-foreground: var(--brand-slate);
+  --accent: var(--brand-surface-2);
+  --accent-foreground: #ffffff;
+  --destructive: #e75656; /* Vivid Red висвітлений — на чорному 5.5:1 */
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--brand-slate);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: var(--brand-charcoal);
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: var(--chart-1);
+  --sidebar-primary-foreground: var(--brand-charcoal);
+  --sidebar-accent: var(--brand-surface-2);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: var(--brand-slate);
+  --chart-background: var(--brand-black);
+  --chart-foreground: var(--brand-slate);
+  --chart-foreground-muted: var(--brand-slate);
+  --chart-crosshair: oklch(0.45 0 0);
+  --chart-grid: var(--brand-surface-1);
+  --chart-brush-border: var(--chart-grid);
+  --chart-marker-background: var(--brand-surface-1);
+  --chart-marker-border: var(--brand-surface-2);
+  --chart-marker-foreground: #ffffff;
+  --chart-label: var(--brand-slate);
+  --chart-scale-01: oklch(0.28 0.03 270);
+  --chart-scale-02: oklch(0.38 0.04 270);
+  --chart-scale-03: oklch(0.48 0.05 270);
+  --chart-scale-04: oklch(0.58 0.06 270);
+  --chart-scale-05: oklch(0.68 0.07 270);
+  --chart-scale-pattern-color: oklch(0.145 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Активний пункт навігації. Було залито Mint Green — Микита попросив
+   прибрати (2026-08-06): дашборд монохромний, як лінії графіків, без
+   кольорових плям у хромі. `--chart-1` — та сама сіра, що й лінії.
+   Правилом, а не класом: shadcn вішає на активний пункт ТОЙ САМИЙ
+   `--sidebar-accent`, що й на ховер, тож через токен розвести їх
+   неможливо. Напівпрозорий color-mix, а не суцільна заливка — колір без
+   насиченості (chroma=0), тому не примусово темний текст, як було для
+   м'яти: `--sidebar-foreground` й так контрастний в обох темах. */
+[data-slot="sidebar-menu-button"][data-active],
+[data-slot="sidebar-menu-button"][data-active]:hover {
+  background-color: color-mix(in oklab, var(--chart-1) 28%, transparent);
+}
+/* ── Палітра графіків ────────────────────────────────────────────────────
+   Валідовані слоти з dataviz-довідника (перші 3 категоріальні слоти —
+   проходять CVD-гейти в обох темах: worst ΔE 9.2 light / 9.4 dark).
+   Порядок слотів фіксований і НЕ циклиться: 4-та серія — це привід
+   згорнути в "Інше" або зробити small multiples, а не взяти новий колір. */
+:root {
+  --series-1: #2a78d6; /* синій   */
+  --series-2: #eb6834; /* оранж   */
+  --series-3: #1baf7a; /* аква    */
+  --seq-400: #3987e5;
+  --seq-250: #86b6ef;
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+  --grid-line: var(--brand-tint-200);
+}
+
+.dark {
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --seq-400: #2a78d6;
+  --seq-250: #184f95;
+  --grid-line: var(--brand-surface-1);
+}
