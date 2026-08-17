@@ -51,6 +51,11 @@ seeds:
       +schema: dbt_operational
       +column_types:
         weight: int64
+    negativity_rules:
+      +schema: dbt_operational
+      +column_types:
+        priority: int64
+        points: int64
     product_event_catalog:
       +schema: dbt_product
     product_module_catalog:

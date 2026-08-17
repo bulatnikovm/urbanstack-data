@@ -116,3 +116,65 @@ models:
         tests:
           - not_null
           - unique
+
+  - name: fct_resident_friction_monthly
+    description: >
+      Рівень ЛЮДИНИ в моделі раннього попередження відтоку. Grain:
+      citizen_id × report_month, вікно 3 місяці. Шкала Макса (0-100) +
+      floor-правила для рідкісних вирішальних сигналів + історія замість
+      «вічного тега» + behaviour_segment (що робити).
+      ⚠️ Персональний рівень — для контуру C, не для загального дашборду.
+    columns:
+      - name: citizen_id
+        tests:
+          - not_null
+      - name: report_month
+        tests:
+          - not_null
+      - name: tension_score
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+      - name: segment_no
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4]
+              quote: false
+      - name: behaviour_segment
+        tests:
+          - not_null
+          - accepted_values:
+              values: [Організатор, Хронічний, Розчарований, Мовчун, Звичайний]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [citizen_id, report_month]
+
+  - name: mart_house_segment_mix_monthly
+    description: >
+      Друга вісь ризику будинку — склад населення (сегменти мешканців),
+      поруч зі сходинкою конфлікту і прапорцем згасання. Grain: house_id ×
+      report_month з 2024-01. Знаменник — активні мешканці, пороги —
+      перцентилі всередині портфеля (з квартирами та абсолютними відсотками
+      пороги Макса недосяжні: максимум по портфелю 4,8%).
+    columns:
+      - name: house_id
+        tests:
+          - not_null
+      - name: report_month
+        tests:
+          - not_null
+      - name: house_mood
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Спокійний', 'Шумний', 'Напружений', 'Ризиковий', 'мало даних']
+      - name: needs_attention
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [house_id, report_month]

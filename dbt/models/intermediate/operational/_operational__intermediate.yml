@@ -31,3 +31,33 @@ models:
       - name: campaign_id
         tests:
           - not_null
+
+  - name: int_negativity_signals
+    description: >
+      Спільна стрічка сигналів: пріоритет × градація × бали. Матриця Макса,
+      покладена в дані. Grain: один сигнал (заявка або оцінка). Додати канал
+      = дописати union, а не правити скор у трьох місцях.
+      ⚠️ Пріоритет 3 (дії з платежами) поки не підключено — потрібен
+      стейджинг paid_orders і desired_amount.
+    columns:
+      - name: signal_id
+        tests:
+          - not_null
+          - unique
+      - name: priority
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3]
+              quote: false
+      - name: severity
+        tests:
+          - not_null
+          - accepted_values:
+              values: [safe, attention, trigger]
+      - name: points
+        tests:
+          - not_null
+      - name: citizen_id
+        tests:
+          - not_null

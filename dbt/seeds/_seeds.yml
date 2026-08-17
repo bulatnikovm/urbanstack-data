@@ -20,6 +20,40 @@ seeds:
           - not_null
           - accepted_values:
               values: [legal, outrage, collective, osbb_intent, osbb_postfact, repeat, profanity]
+      - name: severity
+        description: >
+          Градація Макса на рівні ОКРЕМОГО патерна: trigger (погроза судом,
+          прокуратурою, колективною скаргою, зборами; намір ОСББ), attention
+          (скарга на якість, невдоволення термінами, роздратування), none
+          (пост-фактум ОСББ — фіксація факту, у скор не входить).
+          Задано патерном, а не групою, навмисно: у групі legal «прокуратура»
+          і «згідно договору» — різні речі.
+        tests:
+          - not_null
+          - accepted_values:
+              values: [trigger, attention, none]
+
+  - name: negativity_rules
+    description: >
+      Матриця балів Макса як дані: пріоритет (1 текст / 2 оцінка / 3 дії)
+      × градація (safe / attention / trigger) → бали. Змінити вагу = змінити
+      рядок у CSV, без правок SQL. Пріоритет 3 поки не має джерела сигналів
+      (потрібен стейджинг paid_orders + desired_amount) — рядки лежать наперед.
+    columns:
+      - name: priority
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3]
+              quote: false
+      - name: severity
+        tests:
+          - not_null
+          - accepted_values:
+              values: [none, safe, attention, trigger]
+      - name: points
+        tests:
+          - not_null
 
   - name: test_complexes
     description: >

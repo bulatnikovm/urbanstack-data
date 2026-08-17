@@ -44,7 +44,7 @@ normalized as (
 ),
 
 lexicon as (
-    select pattern, flag_group, weight
+    select pattern, flag_group, severity, weight
     from {{ ref('negativity_lexicon') }}
 ),
 
@@ -52,6 +52,7 @@ matches as (
     select
         n.order_id,
         l.flag_group,
+        l.severity,
         l.pattern,
         l.weight
     from normalized n
@@ -69,6 +70,9 @@ per_order as (
         countif(flag_group = 'osbb_postfact')  as n_osbb_postfact_hits,
         countif(flag_group = 'repeat')         as n_repeat_hits,
         countif(flag_group = 'profanity')      as n_profanity_hits,
+        -- градація Макса, задана в сіді по кожному патерну окремо
+        countif(severity = 'trigger')          as n_trigger_hits,
+        countif(severity = 'attention')        as n_attention_hits,
         sum(weight)                            as lexicon_weight,
         string_agg(distinct flag_group, ', ' order by flag_group) as matched_groups,
         string_agg(pattern, ' | ')                                as matched_patterns
@@ -103,6 +107,15 @@ select
       + coalesce(p.n_outrage_hits, 0)
       + coalesce(p.n_collective_hits, 0)
       + coalesce(p.n_osbb_intent_hits, 0) > 0  as is_escalation,
+
+    -- ⚠️ safe тут означає «жодного ескалаційного маркера», а не «людина
+    -- задоволена». Пост-фактум ОСББ має severity=none у сіді, тому теж
+    -- потрапляє в safe: це фіксація факту виходу, а не тиск.
+    case
+        when coalesce(p.n_trigger_hits, 0)   > 0 then 'trigger'
+        when coalesce(p.n_attention_hits, 0) > 0 then 'attention'
+        else 'safe'
+    end                                        as text_severity,
 
     coalesce(p.lexicon_weight, 0)              as lexicon_weight,
     p.matched_groups,
