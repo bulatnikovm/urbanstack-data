@@ -48,19 +48,49 @@ export type ChurnStageMonthly = {
   houses_irritated: number;
   houses_fading: number;
   houses_fading_only: number;
+  houses_risky: number;
+  houses_tense: number;
+  houses_noisy: number;
+  houses_thin: number;
+  residents_active: number;
+  residents_restless_plus: number;
+  residents_revolutionary: number;
   campaigns_esc_3m: number;
   low_rating_share: number | null;
 };
 
-export type ChurnHouse = {
+/**
+ * Будинок × місяць — усі ТРИ осі ризику в одному рядку.
+ *
+ * Осі не складаються в одне число і це не спрощення, яке колись приберуть:
+ * сходинка каже «що відбувається», настрій — «хто живе», згасання — «чи з
+ * нами ще розмовляють». Будинок буває тихим і вже втраченим (Севен) або
+ * гучним і стабільним («Грейт»).
+ */
+export type HouseMonthly = {
   report_month_key: string;
   complex_name: string;
   house_number: string;
   n_apartments: number;
+
   risk_stage: number;
   risk_stage_ua: string;
+  /** Гістерезис: максимум сходинки за півроку — див. коментар у dbt-моделі. */
+  risk_stage_max_6m: number;
   is_fading: boolean;
   needs_attention: boolean;
+  house_mood: string;
+
+  n_active_residents: number;
+  n_restless_plus: number;
+  n_overthinker_plus: number;
+  n_revolutionary: number;
+  n_ever_revolutionary: number;
+  n_campaign_members: number;
+  share_restless_plus: number | null;
+  share_pctile: number | null;
+  contagion_3m: number | null;
+
   campaigns_esc_3m: number;
   campaign_people_esc_3m: number;
   legal_3m: number;
@@ -71,6 +101,37 @@ export type ChurnHouse = {
   engagement_drop: number | null;
   orders_recent_per_month: number | null;
   orders_base_per_month: number | null;
+};
+
+/** Популяція мешканців по сегментах напруги. Тільки лічильники — персональні
+ * рядки на спільний дашборд не їдуть (профілювання за перс. даними). */
+export type SegmentMonthly = {
+  report_month_key: string;
+  residents_active: number;
+  calm: number;
+  restless: number;
+  overthinkers: number;
+  revolutionaries: number;
+  tense_total: number;
+  organizers: number;
+  chronic: number;
+  disappointed: number;
+  silent: number;
+  ever_revolutionary: number;
+  ever_osbb: number;
+  campaign_members: number;
+};
+
+export type SegmentComplexMonthly = {
+  report_month_key: string;
+  complex_id: string;
+  complex_name: string;
+  residents_active: number;
+  tense_total: number;
+  overthinkers: number;
+  revolutionaries: number;
+  organizers: number;
+  silent: number;
 };
 
 export type Campaign = {
@@ -222,7 +283,10 @@ export function getOverviewPeriod(
 
 export const getChurnStages = () =>
   load<ChurnStageMonthly>("agg_churn_stage_monthly");
-export const getChurnHouses = () => load<ChurnHouse>("agg_churn_houses");
+export const getHouses = () => load<HouseMonthly>("agg_houses_monthly");
+export const getSegments = () => load<SegmentMonthly>("agg_segment_monthly");
+export const getSegmentsByComplex = () =>
+  load<SegmentComplexMonthly>("agg_segment_complex_monthly");
 export const getCampaigns = () => load<Campaign>("mart_campaigns");
 
 /**
@@ -260,6 +324,54 @@ export function getChurnPeriod(
   const prev = all[Math.max(0, curIdx - 1)];
 
   return {
+    base,
+    bounds,
+    range: r,
+    cur,
+    prev,
+    curKey: cur.report_month_key,
+    prevKey: prev.report_month_key,
+    inWindow: <T extends { report_month_key: string }>(rows: T[]) =>
+      rows.filter(
+        (x) => x.report_month_key >= r.from && x.report_month_key <= r.to
+      ),
+  };
+}
+
+/**
+ * Період сторінки «Напруга і сегменти».
+ *
+ * Окремо від `getChurnPeriod`, хоча межі однакові: там ряд по БУДИНКАХ, тут
+ * по ЛЮДЯХ, і `cur`/`prev` мають бути з відповідного ряду. Спокуса передати
+ * один період на обидві сторінки закінчилась би тим, що дельта «+3» на
+ * сторінці людей показувала б різницю в будинках.
+ *
+ * Поточного місяця тут теж немає: `fct_resident_friction_monthly` рахує
+ * тримісячне вікно, на неповному місяці воно просідає штучно.
+ */
+export function getSegmentPeriod(
+  params?: Record<string, string | string[] | undefined>
+) {
+  const all = getSegments();
+  const bounds = {
+    min: all[0].report_month_key,
+    max: all.at(-1)!.report_month_key,
+  };
+  const r: Range = params
+    ? resolveRange(params, bounds)
+    : { from: bounds.min, to: bounds.max };
+
+  const base = all.filter(
+    (x) => x.report_month_key >= r.from && x.report_month_key <= r.to
+  );
+  const cur = base.at(-1) ?? all.at(-1)!;
+  const curIdx = all.findIndex(
+    (x) => x.report_month_key === cur.report_month_key
+  );
+  const prev = all[Math.max(0, curIdx - 1)];
+
+  return {
+    all,
     base,
     bounds,
     range: r,

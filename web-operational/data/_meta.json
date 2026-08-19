@@ -1,19 +1,25 @@
 {
-  "snapshot_at": "2026-08-14T08:32:06.517Z",
+  "snapshot_at": "2026-08-19T07:22:26.997Z",
   "project": "analytics-454817",
   "dataset": "dbt_operational",
   "tables": {
     "mart_campaigns": {
-      "rows": 121
+      "rows": 122
     },
     "agg_complex_overview_monthly": {
       "rows": 816
     },
     "agg_churn_stage_monthly": {
-      "rows": 43
+      "rows": 31
     },
-    "agg_churn_houses": {
-      "rows": 791
+    "agg_houses_monthly": {
+      "rows": 1344
+    },
+    "agg_segment_monthly": {
+      "rows": 31
+    },
+    "agg_segment_complex_monthly": {
+      "rows": 306
     }
   }
 }

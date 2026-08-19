@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, ShieldAlert, Users } from "lucide-react";
+import { Building2, Gauge, ShieldAlert, Users } from "lucide-react";
 
 import { UrbanStackMark } from "@/components/brand";
 import {
@@ -39,6 +39,7 @@ const NAV = [
     items: [
       { href: "/", label: "Огляд ЖК", icon: Building2, page: "" },
       { href: "/churn", label: "Ризик відтоку", icon: ShieldAlert, page: "" },
+      { href: "/segments", label: "Напруга і сегменти", icon: Gauge, page: "" },
     ],
   },
 ];

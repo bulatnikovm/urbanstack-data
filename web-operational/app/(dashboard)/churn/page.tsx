@@ -1,11 +1,11 @@
 import {
   getCampaigns,
-  getChurnHouses,
   getChurnPeriod,
+  getHouses,
   type Campaign,
-  type ChurnHouse,
+  type HouseMonthly,
 } from "@/lib/data";
-import { monthLabel, n, n1, pct } from "@/lib/format";
+import { monthLabel, n, pct, pp } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
 import { BklitLine } from "@/components/bklit-line";
@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-/** Ключ будинку: house_id у вивантаження не їде (36 символів × 791 рядок). */
+/** Ключ будинку: house_id у вивантаження не їде (36 символів × 1 344 рядки). */
 const houseKey = (h: { complex_name: string; house_number: string }) =>
   `${h.complex_name} ${h.house_number}`;
 
@@ -35,15 +35,29 @@ function stageTone(stage: number): string | undefined {
   return undefined;
 }
 
+function moodTone(mood: string): string | undefined {
+  if (mood === "Ризиковий") return "var(--status-critical)";
+  if (mood === "Напружений") return "var(--status-warning)";
+  return undefined;
+}
+
 /** Через що будинок потрапив у чергу — людською мовою, а не набором колонок. */
-function drivers(h: ChurnHouse): string[] {
+function drivers(h: HouseMonthly): string[] {
   const out: string[] = [];
   if (h.osbb_intent_12m > 0) out.push(`ОСББ у тексті (${h.osbb_intent_12m})`);
   if (h.campaigns_esc_3m > 0)
     out.push(
       `кампанії: ${h.campaigns_esc_3m}, учасників ${h.campaign_people_esc_3m}`
     );
+  // Гістерезис: кампанія могла вийти за тримісячне вікно, але група нікуди
+  // не поділась. Без цього рядка будинок 10 «Варшавський Плюс» за місяць до
+  // виходу виглядав у таблиці як звичайне роздратування.
+  if (h.campaigns_esc_3m === 0 && h.risk_stage_max_6m >= 3 && h.risk_stage < 3)
+    out.push(`була організація за півроку (стадія ${h.risk_stage_max_6m})`);
   if (h.legal_3m > 0) out.push(`юридичних заявок: ${h.legal_3m}`);
+  if (h.n_revolutionary > 0) out.push(`революціонерів: ${h.n_revolutionary}`);
+  else if (h.n_restless_plus >= 3)
+    out.push(`напружених мешканців: ${h.n_restless_plus}`);
   if (h.reviews_3m >= 5 && (h.low_rating_share_3m ?? 0) > 0.6)
     out.push(`оцінок 1–2: ${pct(h.low_rating_share_3m)}`);
   // Падіння показуємо не лише при `is_fading`: на стадію 5 будинок потрапляє
@@ -62,13 +76,14 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
   const { curKey, prevKey, bounds, range, cur, prev, base, inWindow } =
     getChurnPeriod(sp);
 
-  const houses = getChurnHouses();
+  const houses = getHouses();
   const queue = houses
     .filter((h) => h.report_month_key === curKey && h.needs_attention)
     .sort(
       (a, b) =>
-        b.risk_stage - a.risk_stage ||
-        (b.escalation_p100_3m ?? 0) - (a.escalation_p100_3m ?? 0)
+        Math.max(b.risk_stage, b.risk_stage_max_6m) -
+          Math.max(a.risk_stage, a.risk_stage_max_6m) ||
+        (b.share_pctile ?? 0) - (a.share_pctile ?? 0)
     );
 
   // Скільки місяців будинок протримався в зоні уваги — у межах вивантаженого
@@ -93,6 +108,13 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
   const apartments = queue.reduce((s, h) => s + h.n_apartments, 0);
   const stage4plus = queue.filter((h) => h.risk_stage >= 4);
   const fadingOnly = queue.filter((h) => h.is_fading && h.risk_stage < 2);
+  // Будинки, які тримає в черзі ЛИШЕ склад населення: сходинка спокійна,
+  // згасання немає, але напружених мешканців більше, ніж деінде.
+  const moodOnly = queue.filter(
+    (h) => h.risk_stage < 2 && !h.is_fading && h.risk_stage_max_6m < 3
+  );
+  const d = (a: number, b: number) =>
+    `${a - b >= 0 ? "+" : "−"}${Math.abs(a - b)}`;
 
   return (
     <>
@@ -105,13 +127,13 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
       />
 
       <PageBody>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <Kpi
             label="Будинків у зоні уваги"
             value={n(cur.houses_attention)}
             sub={`з ${n(cur.houses_total)} · квартир: ${n(apartments)}`}
             trend={{
-              text: `${cur.houses_attention - prev.houses_attention >= 0 ? "+" : "−"}${Math.abs(cur.houses_attention - prev.houses_attention)} до ${monthLabel(prevKey)}`,
+              text: `${d(cur.houses_attention, prev.houses_attention)} до ${monthLabel(prevKey)}`,
               good: cur.houses_attention <= prev.houses_attention,
             }}
           />
@@ -120,8 +142,17 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
             value={n(cur.houses_stage3plus)}
             sub="стадії 3–5: є група або заявлений намір"
             trend={{
-              text: `${cur.houses_stage3plus - prev.houses_stage3plus >= 0 ? "+" : "−"}${Math.abs(cur.houses_stage3plus - prev.houses_stage3plus)}`,
+              text: d(cur.houses_stage3plus, prev.houses_stage3plus),
               good: cur.houses_stage3plus <= prev.houses_stage3plus,
+            }}
+          />
+          <Kpi
+            label="Ризикові будинки"
+            value={n(cur.houses_risky)}
+            sub={`за складом населення · напружених ще ${n(cur.houses_tense)}`}
+            trend={{
+              text: d(cur.houses_risky, prev.houses_risky),
+              good: cur.houses_risky <= prev.houses_risky,
             }}
           />
           <Kpi
@@ -129,7 +160,7 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
             value={n(cur.houses_fading)}
             sub={`з них без конфлікту — ${n(cur.houses_fading_only)}`}
             trend={{
-              text: `${cur.houses_fading - prev.houses_fading >= 0 ? "+" : "−"}${Math.abs(cur.houses_fading - prev.houses_fading)}`,
+              text: d(cur.houses_fading, prev.houses_fading),
               good: cur.houses_fading <= prev.houses_fading,
             }}
           />
@@ -138,14 +169,14 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
             value={pct(cur.low_rating_share)}
             sub="по портфелю, ковзні 3 місяці"
             trend={{
-              text: `${((cur.low_rating_share ?? 0) - (prev.low_rating_share ?? 0)) * 100 >= 0 ? "+" : "−"}${n1(Math.abs(((cur.low_rating_share ?? 0) - (prev.low_rating_share ?? 0)) * 100))} п.п.`,
+              text: pp((cur.low_rating_share ?? 0) - (prev.low_rating_share ?? 0)),
               good: (cur.low_rating_share ?? 0) <= (prev.low_rating_share ?? 0),
             }}
           />
         </div>
 
         <Section
-          title="Динаміка популяції"
+          title="Три осі ризику"
           lead={
             <>
               У {monthLabel(curKey)} уваги потребують{" "}
@@ -159,49 +190,79 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
                   наміром вийти
                 </>
               )}
-              .{" "}
+              .
               {fadingOnly.length > 0 && (
                 <>
+                  {" "}
                   Ще <Hl>{n(fadingOnly.length)}</Hl> згасають без жодного
                   конфлікту — люди просто перестали писати.
+                </>
+              )}
+              {moodOnly.length > 0 && (
+                <>
+                  {" "}
+                  <Hl>{n(moodOnly.length)}</Hl> будинків тримає в черзі лише
+                  склад населення: сходинка спокійна, але напружених мешканців
+                  більше, ніж у 95% портфеля.
                 </>
               )}
             </>
           }
         >
-          <Panel
-            title="Будинки за стадіями ризику"
-            metric={[
-              "Будинків у зоні уваги",
-              "Організація і вище",
-              "Будинків у згасанні",
-            ]}
-            note="Стадії 0–5: норма → роздратування → юридизація → організація → намір → пішли. Згасання — окремий режим, не сходинка. Ряд стрибкий навмисно: одна кампанія на весь ЖК піднімає всі його будинки одночасно — так у липні 2026 одне звернення про протипожежну систему перевело 11 будинків у «організацію» за два дні."
-          >
-            <BklitLine
-              aspectRatio="3 / 1"
-              data={inWindow(base).map((r) => ({
-                month: r.report_month_key,
-                attention: r.houses_attention,
-                stage3plus: r.houses_stage3plus,
-                fading: r.houses_fading_only,
-              }))}
-              series={[
-                { key: "attention", label: "Потребують уваги", slot: 1 },
-                { key: "stage3plus", label: "Організація і вище", slot: 2 },
-                { key: "fading", label: "Лише згасання", slot: 3 },
-              ]}
-            />
-          </Panel>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Panel
+              title="Будинки за стадіями конфлікту"
+              metric={["Будинків у зоні уваги", "Організація і вище"]}
+              note="Стадії 0–5: норма → роздратування → юридизація → організація → намір → пішли. Ряд стрибкий навмисно: одна кампанія на весь ЖК піднімає всі його будинки одночасно — так у липні 2026 одне звернення про протипожежну систему перевело 11 будинків у «організацію» за два дні."
+            >
+              <BklitLine
+                aspectRatio="2 / 1"
+                data={inWindow(base).map((r) => ({
+                  month: r.report_month_key,
+                  attention: r.houses_attention,
+                  stage3plus: r.houses_stage3plus,
+                  fading: r.houses_fading_only,
+                }))}
+                series={[
+                  { key: "attention", label: "Потребують уваги", slot: 1 },
+                  { key: "stage3plus", label: "Організація і вище", slot: 2 },
+                  { key: "fading", label: "Лише згасання", slot: 3 },
+                ]}
+              />
+            </Panel>
+
+            <Panel
+              title="Будинки за складом населення"
+              metric="Ризикові будинки"
+              note="Друга вісь: не що відбувається, а хто живе. Настрій — перцентиль частки напружених мешканців усередині портфеля на місяць; знаменник — активні мешканці, не квартири. З квартирами пороги недосяжні: максимум по портфелю 4,8%."
+            >
+              <BklitLine
+                aspectRatio="2 / 1"
+                data={inWindow(base).map((r) => ({
+                  month: r.report_month_key,
+                  risky: r.houses_risky,
+                  tense: r.houses_tense,
+                  noisy: r.houses_noisy,
+                }))}
+                series={[
+                  { key: "risky", label: "Ризикові", slot: 1 },
+                  { key: "tense", label: "Напружені", slot: 2 },
+                  { key: "noisy", label: "Шумні", slot: 3 },
+                ]}
+              />
+            </Panel>
+          </div>
         </Section>
 
         <Section
           title="Черга роботи"
           lead={
             <>
-              Відсортовано за стадією. «Місяців поспіль» рахується у вікні{" "}
-              {windowMonths} місяців: один місяць у списку і рік поспіль — різні
-              історії, хоча стадія однакова.
+              Відсортовано за стадією з урахуванням гістерезису: у чергу
+              рахується максимум за півроку, а не поточний місяць. Причина
+              конкретна — будинок 10 «Варшавський Плюс» за місяць до виходу
+              випадав зі списку, бо кампанія вийшла за тримісячне вікно.
+              «Місяців поспіль» рахується у вікні {windowMonths} місяців.
             </>
           }
         >
@@ -218,6 +279,33 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
                   { header: "Будинок", value: (h) => h.house_number },
                   { header: "Квартир", value: (h) => h.n_apartments },
                   { header: "Стадія", value: (h) => h.risk_stage_ua, width: 18 },
+                  {
+                    header: "Стадія макс. за 6 міс",
+                    value: (h) => h.risk_stage_max_6m,
+                    width: 20,
+                  },
+                  { header: "Настрій", value: (h) => h.house_mood, width: 14 },
+                  {
+                    header: "Активних мешканців",
+                    value: (h) => h.n_active_residents,
+                    width: 18,
+                  },
+                  {
+                    header: "Напружених",
+                    value: (h) => h.n_restless_plus,
+                    width: 14,
+                  },
+                  {
+                    header: "Революціонерів",
+                    value: (h) => h.n_revolutionary,
+                    width: 16,
+                  },
+                  {
+                    header: "Приріст напруги за 3 міс",
+                    value: (h) => h.contagion_3m,
+                    format: "0.0%",
+                    width: 22,
+                  },
                   {
                     header: "Місяців поспіль",
                     value: (h) => monthsFlagged.get(houseKey(h)) ?? 0,
@@ -264,6 +352,7 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
                 <TableRow>
                   <TableHead>Будинок</TableHead>
                   <TableHead>Стадія</TableHead>
+                  <TableHead>Настрій</TableHead>
                   <TableHead className="text-right">Квартир</TableHead>
                   <TableHead className="text-right">Місяців поспіль</TableHead>
                   <TableHead>Через що</TableHead>
@@ -282,7 +371,25 @@ export default async function ChurnPage({ searchParams }: PageProps<"/churn">) {
                       className="whitespace-nowrap"
                       style={{ color: stageTone(h.risk_stage) }}
                     >
-                      {h.risk_stage >= 2 ? h.risk_stage_ua : "— згасання"}
+                      {h.risk_stage >= 2
+                        ? h.risk_stage_ua
+                        : h.risk_stage_max_6m >= 3
+                          ? `була ${h.risk_stage_max_6m} за півроку`
+                          : h.is_fading
+                            ? "— згасання"
+                            : "— склад"}
+                    </TableCell>
+                    <TableCell
+                      className="text-xs whitespace-nowrap"
+                      style={{ color: moodTone(h.house_mood) }}
+                    >
+                      {h.house_mood}
+                      {h.share_pctile !== null && (
+                        <span className="text-muted-foreground">
+                          {" · "}
+                          {pct(h.share_restless_plus, 0)}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {n(h.n_apartments)}
