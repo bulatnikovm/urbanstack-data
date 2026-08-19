@@ -274,6 +274,95 @@ export type OrdersHouseMonthly = {
   n_apartments: number;
 };
 
+/** Інтегральна оцінка ЖК за останньою хвилею кожної категорії. */
+export type CsatComplex = {
+  complex_id: string;
+  complex_name: string;
+  avg_adjacent: number | null;
+  avg_building: number | null;
+  avg_security: number | null;
+  wave_adjacent: string | null;
+  wave_building: string | null;
+  wave_security: string | null;
+  /** Прибудинкова + Будинкова. NULL = немає однієї зі складових, не нуль. */
+  integral_uk: number | null;
+  /** Інтегральний УК + Охорона. */
+  integral_total: number | null;
+  rating_uk: number;
+  votes_latest: number;
+  comments_latest: number;
+  low_grades_latest: number;
+  votes_all_time: number;
+  comments_all_time: number;
+  avg_grade_all_time: number | null;
+  low_grades_all_time: number;
+  n_billing_accounts: number | null;
+  n_users_confirmed: number | null;
+  reach_of_accounts: number | null;
+  reach_of_confirmed: number | null;
+};
+
+/**
+ * Хвиля × ЖК × будинок.
+ *
+ * ⚠️ `grade_sum` замість готової середньої — навмисно. Середню рахувати як
+ * SUM(grade_sum)/SUM(votes) на потрібному рівні; усереднення готових
+ * середніх по будинках дає ЖК неправильний бал (будинок із двома голосами
+ * важить як будинок із двомастами).
+ */
+export type CsatWave = {
+  wave_label: string;
+  survey_category_ua: string;
+  wave_month_key: string;
+  complex_id: string;
+  complex_name: string;
+  house_id: string | null;
+  house_number: string;
+  house_address: string;
+  votes: number;
+  comments: number;
+  grade_sum: number;
+  grade_5: number;
+  grade_4: number;
+  grade_3: number;
+  grade_2: number;
+  grade_1: number;
+};
+
+/** Коментар мешканця. Персональних ідентифікаторів немає — найдрібніший розріз будинок. */
+export type CsatComment = {
+  answer_id: number;
+  wave_label: string;
+  survey_category_ua: string;
+  wave_month_key: string;
+  complex_id: string;
+  complex_name: string;
+  house_number: string;
+  house_address: string;
+  grade: number;
+  is_detractor: boolean;
+  is_negative: boolean;
+  comment: string;
+  answered_on: string;
+  /** Теми через "|" — порожній рядок, якщо словник нічого не впізнав. */
+  themes: string;
+  categories: string;
+};
+
+export type CsatProblem = {
+  /**
+   * "category" або "theme". Рівні лежать окремими рядками, бо категорію
+   * НЕ можна отримати сумуванням її тем: коментар, що згадує і прибирання,
+   * і територію, дає +1 кожній темі, але в категорії він один.
+   */
+  level: "category" | "theme";
+  problem_category_ua: string;
+  problem_theme_ua: string;
+  complex_id: string;
+  complex_name: string;
+  comments: number;
+};
+
 export type Meta = {
   snapshot_at: string;
   dataset: string;
@@ -615,6 +704,38 @@ export function getLoadPeriod(
       ),
   };
 }
+
+// ── CSAT ────────────────────────────────────────────────────────────────
+
+export const getCsatComplexes = () => load<CsatComplex>("agg_csat_complex");
+export const getCsatWaves = () => loadCompact<CsatWave>("agg_csat_waves");
+export const getCsatComments = () =>
+  loadCompact<CsatComment>("agg_csat_comments");
+export const getCsatProblems = () => load<CsatProblem>("agg_csat_problems");
+
+/**
+ * Хвилі в хронологічному порядку.
+ *
+ * ⚠️ Сортувати можна ТІЛЬКИ за `wave_month_key`, а не за текстом мітки:
+ * «Будинкова черв. 2026» і «Охорона груд. 2025» алфавітно йдуть у зворотному
+ * до часу порядку. Ключ хвилі в марті (`wave_sort_id`) сюди свідомо не їде —
+ * попри назву він не константа в межах хвилі (це min(survey_id) на РЯДОК
+ * хвиля×ЖК×будинок), тому як ключ хвилі не годиться.
+ * Другий ключ — назва: у межах місяця буває дві хвилі різних категорій.
+ */
+export function csatWaveOrder(rows: CsatWave[]): string[] {
+  const byLabel = new Map<string, string>();
+  for (const r of rows) byLabel.set(r.wave_label, r.wave_month_key);
+  return [...byLabel.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]))
+    .map(([label]) => label);
+}
+
+/** Середня оцінка набору рядків — завжди через суми, ніколи середнє середніх. */
+export const csatAvg = (rows: Array<{ grade_sum: number; votes: number }>) => {
+  const votes = rows.reduce((a, r) => a + r.votes, 0);
+  return votes > 0 ? rows.reduce((a, r) => a + r.grade_sum, 0) / votes : null;
+};
 
 export const getChurnStages = () =>
   load<ChurnStageMonthly>("agg_churn_stage_monthly");

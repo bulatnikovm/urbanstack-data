@@ -30,3 +30,42 @@ models:
       wave_sort_id — хронологічний ключ (min survey_id хвилі) для сортування
       колонок у зведеній таблиці Looker, бо wave_label текстово не сортується
       по часу впереміш між категоріями.
+
+  - name: mart_survey_complex_integral
+    description: >
+      Grain — complex_id. Інтегральна оцінка ЖК за останньою хвилею кожної
+      категорії: Інтегральний УК (Прибудинкова + Будинкова), Інтегральний
+      загальний (+ Охорона) і місце в рейтингу за УК. Відтворює лист
+      «Динаміка» ручного xlsx-звіту, але сам їде за свіжістю хвиль.
+      NULL у інтегралі означає «немає однієї зі складових», не «нуль».
+    columns:
+      - name: complex_id
+        tests:
+          - not_null
+          - unique
+      - name: rating_uk
+        tests: [not_null]
+
+  - name: mart_survey_comments
+    description: >
+      Grain — answer_id. Стрічка коментарів CSAT з мітками тем (масив).
+      Персональних ідентифікаторів немає: найдрібніший розріз — будинок.
+    columns:
+      - name: answer_id
+        tests:
+          - not_null
+          - unique
+      - name: grade
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]
+              quote: false
+
+  - name: int_survey_comment_flags
+    description: >
+      Grain — answer_id × problem_theme_ua. Розбір негативних коментарів
+      (оцінка <= 3) за словником survey_problem_lexicon. Один коментар може
+      мати кілька тем — це навмисно.
+      ⚠️ Покриття 87% негативних коментарів; решта не містить жодного
+      патерна словника. Precision не заміряна.

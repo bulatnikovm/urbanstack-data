@@ -316,6 +316,93 @@ const QUERIES = {
   `,
 
   /**
+   * CSAT: інтегральна оцінка ЖК. 10 рядків — їде як є.
+   */
+  agg_csat_complex: `
+    select
+      complex_id, complex_name,
+      avg_adjacent, avg_building, avg_security,
+      wave_adjacent, wave_building, wave_security,
+      integral_uk, integral_total, rating_uk,
+      votes_latest, comments_latest, low_grades_latest,
+      votes_all_time, comments_all_time, avg_grade_all_time, low_grades_all_time,
+      n_billing_accounts, n_users_confirmed,
+      reach_of_accounts, reach_of_confirmed
+    from \`${PROJECT}.${DATASET}.mart_survey_complex_integral\`
+    order by rating_uk
+  `,
+
+  /**
+   * CSAT: матриця «ЖК × хвиля × будинок». 583 рядки.
+   *
+   * ⚠️ Віддаємо grade_sum і votes, а НЕ готову середню: середню треба
+   * рахувати як SUM(grade_sum)/SUM(votes) на потрібному рівні. Усереднення
+   * готових середніх по будинках дає ЖК неправильний бал — будинок із двома
+   * голосами важить як будинок із двомастами.
+   */
+  agg_csat_waves: `
+    select
+      wave_label, survey_category_ua,
+      format_date('%Y-%m', wave_month) as wave_month_key,
+      complex_id, complex_name, house_id, house_number, house_address,
+      votes, comments, grade_sum,
+      grade_5, grade_4, grade_3, grade_2, grade_1
+    from \`${PROJECT}.${DATASET}.mart_survey_wave_summary\`
+    order by wave_month, complex_name, house_number
+  `,
+
+  /**
+   * CSAT: стрічка коментарів, 1 516 рядків. Масиви тем розгортаємо в рядок
+   * через кому — на сторінці це мітки, а JSON з вкладеними масивами тут
+   * нічого не додає.
+   */
+  agg_csat_comments: `
+    select
+      answer_id, wave_label, survey_category_ua,
+      format_date('%Y-%m', wave_month) as wave_month_key,
+      complex_id, complex_name, house_number, house_address,
+      grade, is_detractor, is_negative,
+      comment,
+      format_date('%Y-%m-%d', date(answered_at)) as answered_on,
+      array_to_string(themes, '|')     as themes,
+      array_to_string(categories, '|') as categories
+    from \`${PROJECT}.${DATASET}.mart_survey_comments\`
+    order by answered_at desc, answer_id
+  `,
+
+  /**
+   * CSAT: скільки негативних коментарів згадує кожну тему, по ЖК.
+   *
+   * Два рівні окремими рядками (`level`), а не один: категорію НЕ можна
+   * отримати сумуванням її тем. Коментар «брудно в холі й газон не косять»
+   * дає +1 «Прибиранню» і +1 «Території», але в категорії «Чистота та
+   * благоустрій» він один. Перша версія сумувала теми й показувала 650
+   * замість 495.
+   *
+   * Усередині одного рівня сумувати по ЖК теж не можна (той самий коментар
+   * належить одному ЖК, тому тут якраз можна) — а от складати теми між
+   * собою заради «разом» не можна ніде.
+   */
+  agg_csat_problems: `
+    select
+      'theme' as level,
+      problem_category_ua, problem_theme_ua,
+      complex_id, complex_name,
+      count(distinct answer_id) as comments
+    from \`${PROJECT}.${DATASET}.int_survey_comment_flags\`
+    group by 1, 2, 3, 4, 5
+    union all
+    select
+      'category' as level,
+      problem_category_ua, problem_category_ua as problem_theme_ua,
+      complex_id, complex_name,
+      count(distinct answer_id) as comments
+    from \`${PROJECT}.${DATASET}.int_survey_comment_flags\`
+    group by 1, 2, 3, 4, 5
+    order by level, problem_category_ua, comments desc
+  `,
+
+  /**
    * Шукач аномалій і антирейтинг будинків. Вікно 12 місяців — ~16 тис.
    * рядків; повна історія дала б 51 тис., а порівнювати місяць треба з
    * тим самим місяцем торік, глибше нікуди.
@@ -376,6 +463,31 @@ const COMPACT = {
     "complex_name",
     "category_ua",
     "type_ua",
+  ],
+  // Коментарі: сам ТЕКСТ у словник не йде (він унікальний), а от усе
+  // навколо нього — хвиля, ЖК, адреса, набір тем — повторюється на кожному
+  // з 1,5 тис. рядків і разом з іменами полів дає більшу частину файлу.
+  agg_csat_comments: [
+    "wave_label",
+    "survey_category_ua",
+    "wave_month_key",
+    "complex_id",
+    "complex_name",
+    "house_number",
+    "house_address",
+    "answered_on",
+    "themes",
+    "categories",
+  ],
+  agg_csat_waves: [
+    "wave_label",
+    "survey_category_ua",
+    "wave_month_key",
+    "complex_id",
+    "complex_name",
+    "house_id",
+    "house_number",
+    "house_address",
   ],
 };
 

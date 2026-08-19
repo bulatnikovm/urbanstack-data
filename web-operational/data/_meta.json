@@ -1,10 +1,10 @@
 {
-  "snapshot_at": "2026-08-19T12:17:39.969Z",
+  "snapshot_at": "2026-08-19T14:12:05.819Z",
   "project": "analytics-454817",
   "dataset": "dbt_operational",
   "tables": {
     "mart_campaigns": {
-      "rows": 122,
+      "rows": 123,
       "compact": false
     },
     "agg_complex_overview_monthly": {
@@ -45,6 +45,22 @@
     },
     "agg_load_monthly": {
       "rows": 816,
+      "compact": false
+    },
+    "agg_csat_complex": {
+      "rows": 10,
+      "compact": false
+    },
+    "agg_csat_waves": {
+      "rows": 583,
+      "compact": true
+    },
+    "agg_csat_comments": {
+      "rows": 1499,
+      "compact": true
+    },
+    "agg_csat_problems": {
+      "rows": 185,
       "compact": false
     },
     "agg_orders_house_monthly": {
