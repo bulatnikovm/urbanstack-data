@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Gauge, ShieldAlert, Users } from "lucide-react";
+import {
+  Building2,
+  Flame,
+  Gauge,
+  Inbox,
+  ShieldAlert,
+  Timer,
+  Users,
+} from "lucide-react";
 
 import { UrbanStackMark } from "@/components/brand";
 import {
@@ -20,9 +28,9 @@ import {
 type AppSidebarProps = { footer?: React.ReactNode; isAdmin?: boolean };
 
 /**
- * Групи лишаємо з першого дня, навіть коли сторінок мало: далі сюди
- * переїжджають заявки, SLA і опитування з Looker, і структура має бути
- * готова до цього, а не переверстуватись під кожну нову сторінку.
+ * Три групи: що в нас є (портфель), як ми працюємо (заявки і сервіс), чи
+ * лишаються з нами люди (клієнтський досвід). Останньою має зʼявитись CSAT —
+ * її місце в «Клієнтському досвіді», поруч із ризиком відтоку.
  *
  * «Огляд ЖК» — на корені `/`: перше, що хоче побачити людина, яка відкрила
  * дашборд, це скільки в нас будинків/квартир/користувачів, а не одразу
@@ -35,9 +43,20 @@ type AppSidebarProps = { footer?: React.ReactNode; isAdmin?: boolean };
  */
 const NAV = [
   {
+    group: "Портфель",
+    items: [{ href: "/", label: "Огляд ЖК", icon: Building2, page: "" }],
+  },
+  {
+    group: "Заявки і сервіс",
+    items: [
+      { href: "/sla", label: "Операційна ефективність", icon: Timer, page: "" },
+      { href: "/requests", label: "Аналітика звернень", icon: Inbox, page: "" },
+      { href: "/load", label: "Антирейтинг і навантаження", icon: Flame, page: "" },
+    ],
+  },
+  {
     group: "Клієнтський досвід",
     items: [
-      { href: "/", label: "Огляд ЖК", icon: Building2, page: "" },
       { href: "/churn", label: "Ризик відтоку", icon: ShieldAlert, page: "" },
       { href: "/segments", label: "Напруга і сегменти", icon: Gauge, page: "" },
     ],

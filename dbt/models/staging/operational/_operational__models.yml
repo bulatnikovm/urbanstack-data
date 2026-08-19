@@ -17,6 +17,14 @@ models:
           - not_null
           - unique
 
+  - name: stg_dim9000__task_locations
+    description: 1:1 перейменування колонок tasks_locations. Гео задачі, зокрема задачі співробітника без заявки.
+    columns:
+      - name: task_id
+        tests:
+          - not_null
+          - unique
+
   - name: stg_dim9000__order_status_transitions
     description: Тільки type='transition' рядки history_order_updates — надійні before/after.status.
     columns:

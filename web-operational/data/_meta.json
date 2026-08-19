@@ -1,25 +1,55 @@
 {
-  "snapshot_at": "2026-08-19T07:22:26.997Z",
+  "snapshot_at": "2026-08-19T12:17:39.969Z",
   "project": "analytics-454817",
   "dataset": "dbt_operational",
   "tables": {
     "mart_campaigns": {
-      "rows": 122
+      "rows": 122,
+      "compact": false
     },
     "agg_complex_overview_monthly": {
-      "rows": 816
+      "rows": 816,
+      "compact": false
     },
     "agg_churn_stage_monthly": {
-      "rows": 31
+      "rows": 31,
+      "compact": false
     },
     "agg_houses_monthly": {
-      "rows": 1344
+      "rows": 1344,
+      "compact": false
     },
     "agg_segment_monthly": {
-      "rows": 31
+      "rows": 31,
+      "compact": false
     },
     "agg_segment_complex_monthly": {
-      "rows": 306
+      "rows": 306,
+      "compact": false
+    },
+    "agg_sla_monthly": {
+      "rows": 816,
+      "compact": false
+    },
+    "agg_sla_yearly": {
+      "rows": 72,
+      "compact": false
+    },
+    "agg_status_totals": {
+      "rows": 45,
+      "compact": false
+    },
+    "agg_categories_monthly": {
+      "rows": 8625,
+      "compact": true
+    },
+    "agg_load_monthly": {
+      "rows": 816,
+      "compact": false
+    },
+    "agg_orders_house_monthly": {
+      "rows": 15801,
+      "compact": true
     }
   }
 }

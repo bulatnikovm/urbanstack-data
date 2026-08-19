@@ -18,6 +18,36 @@ function load<T>(name: string): T[] {
   return JSON.parse(readFileSync(join(DATA_DIR, `${name}.json`), "utf8"));
 }
 
+type Compact = {
+  cols: string[];
+  dict: Record<string, string[]>;
+  rows: (number | null)[][];
+};
+
+/**
+ * Читання вивантажень у словниковому форматі (див. COMPACT у
+ * scripts/export-data.mjs). Повертає такі самі обʼєкти, що й `load`, тому
+ * сторінки різниці не бачать — стиснення живе тільки на межі файлу.
+ *
+ * Формат зʼявився через розмір: `agg_orders_house_monthly` наївним JSON
+ * важив 6,1 МБ на 15,8 тис. рядків, і цей файл перезаписується щодня
+ * автооновленням. Платить за це історія git, а не браузер: дані читаються
+ * на сервері й у клієнтський бандл не потрапляють.
+ */
+function loadCompact<T>(name: string): T[] {
+  const doc = JSON.parse(
+    readFileSync(join(DATA_DIR, `${name}.json`), "utf8")
+  ) as Compact;
+  return doc.rows.map((row) => {
+    const out: Record<string, unknown> = {};
+    doc.cols.forEach((col, i) => {
+      const d = doc.dict[col];
+      out[col] = d ? d[row[i] as number] : row[i];
+    });
+    return out as T;
+  });
+}
+
 // ── Типи mart'ів (дзеркалять схему dbt_operational) ─────────────────────
 
 export type ComplexOverview = {
@@ -155,6 +185,95 @@ export type Campaign = {
   sample_text: string;
 };
 
+/** SLA по ЖК і місяцях. Основа сторінки «Операційна ефективність». */
+export type SlaMonthly = {
+  report_month_key: string;
+  complex_id: string;
+  complex_name: string;
+  created_count: number;
+  completed_count: number;
+  canceled_count: number;
+  completed_same_month_count: number;
+  /** Наростаючий незакритий залишок на кінець місяця. */
+  backlog_end_of_month: number;
+};
+
+export type SlaYearly = {
+  report_year: number;
+  complex_id: string;
+  complex_name: string;
+  created_count: number;
+  completed_count: number;
+  canceled_count: number;
+  in_progress_count: number;
+};
+
+export type StatusTotal = {
+  complex_id: string;
+  status: string;
+  order_count: number;
+};
+
+/** Звернення в розрізі категорії й типу, вікно 24 місяці. */
+export type CategoryMonthly = {
+  report_month_key: string;
+  complex_id: string;
+  complex_name: string;
+  category_ua: string;
+  type_ua: string;
+  /** Усі подані за місяць, разом зі скасованими згодом. */
+  created_count: number;
+  /** Подані й не скасовані — те, що реально стало роботою. */
+  valid_created_count: number;
+  completed_count: number;
+  canceled_count: number;
+};
+
+/** Навантаження, скарги, черга 30+, внутрішні задачі — по ЖК і місяцях. */
+export type LoadMonthly = {
+  report_month_key: string;
+  complex_id: string;
+  complex_name: string;
+  n_spaces: number;
+  total_orders: number;
+  problem_count: number;
+  complaint_count: number;
+  offer_count: number;
+  question_count: number;
+  service_count: number;
+  other_type_count: number;
+  problem_complaint_count: number;
+  backlog_30d: number;
+  tasks_from_orders: number;
+  /** Чисельник «задач на проблему» — без нього показник не переагрегувати. */
+  problem_complaint_tasks: number;
+  employee_task_count: number;
+  total_tasks: number;
+  load_rate: number | null;
+  complaint_load: number | null;
+  complaint_rate: number | null;
+  task_ratio: number | null;
+};
+
+/** Найдетальніший зріз: будинок × тип обʼєкта × категорія × тип, 12 місяців. */
+export type OrdersHouseMonthly = {
+  report_month_key: string;
+  complex_id: string;
+  complex_name: string;
+  house_id: string;
+  house_number: string;
+  property_kind_ua: string;
+  category_ua: string;
+  type_ua: string;
+  /** Усі подані, разом зі скасованими згодом. */
+  created_count: number;
+  /** Подані й не скасовані. */
+  valid_count: number;
+  completed_count: number;
+  canceled_count: number;
+  n_apartments: number;
+};
+
 export type Meta = {
   snapshot_at: string;
   dataset: string;
@@ -277,6 +396,222 @@ export function getOverviewPeriod(
         (x) =>
           x.report_month_key === monthKey &&
           (x.n_houses_active > 0 || x.n_apartments > 0 || x.n_users_total > 0)
+      ),
+  };
+}
+
+// ── Заявки і сервіс ─────────────────────────────────────────────────────
+
+export const getSla = () => load<SlaMonthly>("agg_sla_monthly");
+export const getSlaYearly = () => load<SlaYearly>("agg_sla_yearly");
+export const getStatusTotals = () => load<StatusTotal>("agg_status_totals");
+export const getLoad = () => load<LoadMonthly>("agg_load_monthly");
+export const getCategories = () =>
+  loadCompact<CategoryMonthly>("agg_categories_monthly");
+export const getOrdersHouse = () =>
+  loadCompact<OrdersHouseMonthly>("agg_orders_house_monthly");
+
+export type CompanySla = {
+  report_month_key: string;
+  created_count: number;
+  completed_count: number;
+  canceled_count: number;
+  completed_same_month_count: number;
+  backlog_end_of_month: number;
+};
+
+/** Компанія загалом: сума по ЖК. Грануляція ЖК × місяць без fan-out. */
+export function companySla(rows: SlaMonthly[]): CompanySla[] {
+  const byMonth = new Map<string, CompanySla>();
+  for (const r of rows) {
+    const acc = byMonth.get(r.report_month_key) ?? {
+      report_month_key: r.report_month_key,
+      created_count: 0,
+      completed_count: 0,
+      canceled_count: 0,
+      completed_same_month_count: 0,
+      backlog_end_of_month: 0,
+    };
+    acc.created_count += r.created_count;
+    acc.completed_count += r.completed_count;
+    acc.canceled_count += r.canceled_count;
+    acc.completed_same_month_count += r.completed_same_month_count;
+    acc.backlog_end_of_month += r.backlog_end_of_month;
+    byMonth.set(r.report_month_key, acc);
+  }
+  return [...byMonth.values()].sort((a, b) =>
+    a.report_month_key.localeCompare(b.report_month_key)
+  );
+}
+
+export type CompanyLoad = {
+  report_month_key: string;
+  n_spaces: number;
+  total_orders: number;
+  problem_count: number;
+  complaint_count: number;
+  offer_count: number;
+  question_count: number;
+  service_count: number;
+  other_type_count: number;
+  problem_complaint_count: number;
+  backlog_30d: number;
+  tasks_from_orders: number;
+  problem_complaint_tasks: number;
+  employee_task_count: number;
+  total_tasks: number;
+};
+
+/**
+ * Компанія загалом по навантаженню.
+ *
+ * ⚠️ Частки (load_rate, complaint_rate, task_ratio) тут НЕ підсумовуються і
+ * не усереднюються — вони рахуються заново з сум. Середнє відношень дало б
+ * ЖК із двома заявками таку саму вагу, як ЖК із тисячею; ця пастка вже
+ * ловилась на пончику ОС у продуктовому дашборді.
+ */
+export function companyLoad(rows: LoadMonthly[]): CompanyLoad[] {
+  const byMonth = new Map<string, CompanyLoad>();
+  for (const r of rows) {
+    const acc = byMonth.get(r.report_month_key) ?? {
+      report_month_key: r.report_month_key,
+      n_spaces: 0,
+      total_orders: 0,
+      problem_count: 0,
+      complaint_count: 0,
+      offer_count: 0,
+      question_count: 0,
+      service_count: 0,
+      other_type_count: 0,
+      problem_complaint_count: 0,
+      backlog_30d: 0,
+      tasks_from_orders: 0,
+      problem_complaint_tasks: 0,
+      employee_task_count: 0,
+      total_tasks: 0,
+    };
+    acc.n_spaces += r.n_spaces;
+    acc.total_orders += r.total_orders;
+    acc.problem_count += r.problem_count;
+    acc.complaint_count += r.complaint_count;
+    acc.offer_count += r.offer_count;
+    acc.question_count += r.question_count;
+    acc.service_count += r.service_count;
+    acc.other_type_count += r.other_type_count;
+    acc.problem_complaint_count += r.problem_complaint_count;
+    acc.backlog_30d += r.backlog_30d;
+    acc.tasks_from_orders += r.tasks_from_orders;
+    acc.problem_complaint_tasks += r.problem_complaint_tasks;
+    acc.employee_task_count += r.employee_task_count;
+    acc.total_tasks += r.total_tasks;
+    byMonth.set(r.report_month_key, acc);
+  }
+  return [...byMonth.values()].sort((a, b) =>
+    a.report_month_key.localeCompare(b.report_month_key)
+  );
+}
+
+/**
+ * Спільна обгортка періоду для сторінок заявок.
+ *
+ * Ці сторінки ПОКАЗУЮТЬ поточний незавершений місяць (як «Огляд ЖК»): кожен
+ * місяць тут самостійний підрахунок подій, а не ковзне вікно, тому неповний
+ * місяць означає просто «дані станом на сьогодні». На сторінках ризику й
+ * сегментів рішення протилежне — там тримісячні вікна, і неповний місяць
+ * викривлює їх; не переносити механічно.
+ */
+function buildPeriod<T extends { report_month_key: string }>(
+  all: T[],
+  params?: Record<string, string | string[] | undefined>
+) {
+  const bounds = {
+    min: all[0].report_month_key,
+    max: all.at(-1)!.report_month_key,
+  };
+  const r: Range = params
+    ? resolveRange(params, bounds)
+    : { from: bounds.min, to: bounds.max };
+
+  const base = all.filter(
+    (x) => x.report_month_key >= r.from && x.report_month_key <= r.to
+  );
+  const cur = base.at(-1) ?? all.at(-1)!;
+  const curIdx = all.findIndex(
+    (x) => x.report_month_key === cur.report_month_key
+  );
+  const prev = all[Math.max(0, curIdx - 1)];
+
+  return {
+    all,
+    base,
+    bounds,
+    range: r,
+    cur,
+    prev,
+    curKey: cur.report_month_key,
+    prevKey: prev.report_month_key,
+    isPartial: cur.report_month_key === currentMonthKey(),
+    daysElapsed: new Date().getDate(),
+    daysInMonth: new Date(
+      new Date().getFullYear(),
+      new Date().getMonth() + 1,
+      0
+    ).getDate(),
+    inWindow: <R extends { report_month_key: string }>(rows: R[]) =>
+      rows.filter(
+        (x) => x.report_month_key >= r.from && x.report_month_key <= r.to
+      ),
+  };
+}
+
+/** Період сторінки «Операційна ефективність». */
+export function getSlaPeriod(
+  params?: Record<string, string | string[] | undefined>
+) {
+  const raw = getSla();
+  return {
+    ...buildPeriod(companySla(raw), params),
+    raw,
+    byComplex: (monthKey: string) =>
+      raw.filter((x) => x.report_month_key === monthKey && x.created_count > 0),
+  };
+}
+
+/**
+ * Період сторінки «Аналітика звернень».
+ *
+ * Межі беруться з `agg_load_monthly` (повна історія), а не з категорій:
+ * категорії вивантажуються вікном 24 місяці, і якби межі йшли звідти, на
+ * сторінці мовчки зникала б уся історія до 2024-го. Блоки, що читають
+ * категорії, самі порожні поза вікном — це видно, на відміну від обрізаного
+ * дейт-пікера.
+ */
+export function getRequestsPeriod(
+  params?: Record<string, string | string[] | undefined>
+) {
+  const raw = getLoad();
+  return { ...buildPeriod(companyLoad(raw), params), raw };
+}
+
+/** Період сторінки «Антирейтинг: скарги та навантаження». */
+export function getLoadPeriod(
+  params?: Record<string, string | string[] | undefined>
+) {
+  const raw = getLoad();
+  return {
+    ...buildPeriod(companyLoad(raw), params),
+    raw,
+    /**
+     * ЖК місяця, у яких узагалі щось відбувалось. Порожній ЖК (БЦ «Арсенал»
+     * — одне приміщення, нуль заявок) інакше стоїть у кожному рейтингу з
+     * нулем і читається як «дуже добре», хоча означає «даних немає».
+     */
+    byComplex: (monthKey: string) =>
+      raw.filter(
+        (x) =>
+          x.report_month_key === monthKey &&
+          x.n_spaces > 0 &&
+          (x.total_orders > 0 || x.total_tasks > 0)
       ),
   };
 }

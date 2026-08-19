@@ -210,7 +210,201 @@ const QUERIES = {
     group by 1, 2
     order by 1, 2
   `,
+
+  /**
+   * SLA по місяцях у розрізі ЖК. 12 ЖК × 68 місяців = 816 рядків, тому
+   * без обрізання: сторінка SLA показує весь ряд від запуску CRM, і
+   * незакритий залишок (наростаюча сума) без початку ряду не має сенсу.
+   *
+   * Компанійський тотал рахується в застосунку сумуванням по ЖК — окремого
+   * ряду не заводимо, щоб не мати двох джерел однієї цифри.
+   */
+  agg_sla_monthly: `
+    select
+      format_date('%Y-%m', s.report_month) as report_month_key,
+      s.complex_id,
+      d.complex_name,
+      s.created_count,
+      s.completed_count,
+      s.canceled_count,
+      s.completed_same_month_count,
+      s.backlog_end_of_month
+    from \`${PROJECT}.${DATASET}.mart_monthly_sla\` s
+    join \`${PROJECT}.${DATASET}.dim_complex\` d on d.complex_id = s.complex_id
+    order by s.report_month, d.complex_name
+  `,
+
+  /** Заявки по роках × ЖК. 12 ЖК × 6 років — десятки рядків. */
+  agg_sla_yearly: `
+    select
+      y.report_year,
+      y.complex_id,
+      d.complex_name,
+      y.created_count,
+      y.completed_count,
+      y.canceled_count,
+      y.in_progress_count
+    from \`${PROJECT}.${DATASET}.mart_yearly_totals\` y
+    join \`${PROJECT}.${DATASET}.dim_complex\` d on d.complex_id = y.complex_id
+    order by y.report_year, d.complex_name
+  `,
+
+  /**
+   * Статуси заявок за весь час. mart_status_donut має грануляцію
+   * ЖК × місяць × статус (кілька тисяч рядків) — тут згортаємо до
+   * ЖК × статус, бо на дашборді це пончик "з моменту заснування".
+   */
+  agg_status_totals: `
+    select
+      complex_id,
+      status,
+      sum(order_count) as order_count
+    from \`${PROJECT}.${DATASET}.mart_status_donut\`
+    group by 1, 2
+    order by 1, 2
+  `,
+
+  /**
+   * Звернення в розрізі категорії й типу. Вікно 24 місяці: повний ряд з
+   * 2021 дає ~35 тис. рядків, а на сторінці показується поточний місяць і
+   * динаміка за два роки — довший хвіст нікуди не малюється.
+   */
+  agg_categories_monthly: `
+    select
+      format_date('%Y-%m', c.report_month) as report_month_key,
+      c.complex_id,
+      d.complex_name,
+      c.category_ua,
+      c.type_ua,
+      c.created_count,
+      c.valid_created_count,
+      c.completed_count,
+      c.canceled_count
+    from \`${PROJECT}.${DATASET}.mart_monthly_categories\` c
+    join \`${PROJECT}.${DATASET}.dim_complex\` d on d.complex_id = c.complex_id
+    where c.report_month >= date_sub(date_trunc(current_date(), month), interval 23 month)
+    order by c.report_month, d.complex_name, c.category_ua, c.type_ua
+  `,
+
+  /** Навантаження/скарги/черга/задачі по ЖК і місяцях — 816 рядків. */
+  agg_load_monthly: `
+    select
+      format_date('%Y-%m', l.report_month) as report_month_key,
+      l.complex_id,
+      d.complex_name,
+      l.n_spaces,
+      l.total_orders,
+      l.problem_count,
+      l.complaint_count,
+      l.offer_count,
+      l.question_count,
+      l.service_count,
+      l.other_type_count,
+      l.problem_complaint_count,
+      l.backlog_30d,
+      l.tasks_from_orders,
+      l.problem_complaint_tasks,
+      l.employee_task_count,
+      l.total_tasks,
+      l.load_rate,
+      l.complaint_load,
+      l.complaint_rate,
+      l.task_ratio
+    from \`${PROJECT}.${DATASET}.mart_complex_load_monthly\` l
+    join \`${PROJECT}.${DATASET}.dim_complex\` d on d.complex_id = l.complex_id
+    order by l.report_month, d.complex_name
+  `,
+
+  /**
+   * Шукач аномалій і антирейтинг будинків. Вікно 12 місяців — ~16 тис.
+   * рядків; повна історія дала б 51 тис., а порівнювати місяць треба з
+   * тим самим місяцем торік, глибше нікуди.
+   *
+   * property_kind_ua лишається в грануляції: без нього не побудувати
+   * "Відхилені заявки по типу об'єкта".
+   */
+  agg_orders_house_monthly: `
+    select
+      format_date('%Y-%m', report_month) as report_month_key,
+      complex_id,
+      complex_name,
+      house_id,
+      house_number,
+      property_kind_ua,
+      category_ua,
+      type_ua,
+      created_count,
+      valid_count,
+      completed_count,
+      canceled_count,
+      n_apartments
+    from \`${PROJECT}.${DATASET}.mart_orders_house_monthly\`
+    where report_month >= date_sub(date_trunc(current_date(), month), interval 11 month)
+    order by report_month, complex_name, house_number, category_ua, type_ua
+  `,
 };
+
+/**
+ * Вивантаження, які пишуться СЛОВНИКОВИМ форматом замість масиву обʼєктів.
+ * Значення перелічених колонок замінюються на індекс у словнику, рядок стає
+ * масивом чисел. Читає це `loadCompact()` у lib/data.ts і повертає такі самі
+ * обʼєкти, тому сторінки різниці не бачать.
+ *
+ * Навіщо. Ці файли комітяться в репозиторій КОЖНОГО дня (автооновлення), і
+ * платить за розмір історія git, а не браузер — дані читаються на сервері.
+ * Наївний JSON давав 6,1 МБ на `agg_orders_house_monthly`, з яких більша
+ * частина — назви полів і однакові рядки ("Прибудинкова територія", UUID
+ * будинку), повторені 15 801 раз. Після кодування — близько 0,5 МБ.
+ *
+ * Кодуємо тільки два найбільші вивантаження: на файлах у сотні кілобайт
+ * виграш не вартий зайвого шару.
+ */
+const COMPACT = {
+  agg_orders_house_monthly: [
+    "report_month_key",
+    "complex_id",
+    "complex_name",
+    "house_id",
+    "house_number",
+    "property_kind_ua",
+    "category_ua",
+    "type_ua",
+  ],
+  agg_categories_monthly: [
+    "report_month_key",
+    "complex_id",
+    "complex_name",
+    "category_ua",
+    "type_ua",
+  ],
+};
+
+/** Масив обʼєктів → {cols, dict, rows}. */
+function encodeCompact(rows, dictCols) {
+  if (rows.length === 0) return { cols: [], dict: {}, rows: [] };
+  const cols = Object.keys(rows[0]);
+  const dictSet = new Set(dictCols);
+  const dict = {};
+  const index = {};
+  for (const c of dictCols) {
+    dict[c] = [];
+    index[c] = new Map();
+  }
+  const encoded = rows.map((row) =>
+    cols.map((c) => {
+      if (!dictSet.has(c)) return row[c];
+      const v = row[c];
+      let i = index[c].get(v);
+      if (i === undefined) {
+        i = dict[c].length;
+        dict[c].push(v);
+        index[c].set(v, i);
+      }
+      return i;
+    })
+  );
+  return { cols, dict, rows: encoded };
+}
 
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
 
@@ -243,13 +437,17 @@ async function main() {
     const clean = rows.map((row) =>
       Object.fromEntries(Object.entries(row).map(([k, v]) => [k, normalize(v)]))
     );
+    const payload = COMPACT[name] ? encodeCompact(clean, COMPACT[name]) : clean;
     await writeFile(
       join(OUT_DIR, `${name}.json`),
-      JSON.stringify(clean, null, 0) + "\n",
+      JSON.stringify(payload, null, 0) + "\n",
       "utf8"
     );
-    meta.tables[name] = { rows: clean.length };
-    console.log(`  ${name.padEnd(34)} ${String(clean.length).padStart(6)} рядків`);
+    meta.tables[name] = { rows: clean.length, compact: Boolean(COMPACT[name]) };
+    const tag = COMPACT[name] ? " (словниковий формат)" : "";
+    console.log(
+      `  ${name.padEnd(34)} ${String(clean.length).padStart(6)} рядків${tag}`
+    );
   };
 
   for (const [table, orderBy] of Object.entries(MANIFEST)) {

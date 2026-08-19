@@ -7,6 +7,89 @@ models:
       (Δ 2-6% на 6 з 7 місяців жовт.25-квіт.26, лют.26 — виняток +16.5%,
       потребує окремого розбору).
 
+      Створення рахується по created_at, закриття (виконано/скасовано) — по
+      closed_at, тому "виконано" за місяць МОЖЕ перевищувати "створено":
+      закривали накопичене. Для питання "скільки встигаємо по гарячому" є
+      sla_rate_same_month, який за побудовою не більший за 1.
+    columns:
+      - name: complex_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_complex')
+                field: complex_id
+      - name: report_month
+        tests: [not_null]
+      - name: created_count
+        tests: [not_null]
+      - name: sla_rate_same_month
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+      - name: cancel_rate_same_month
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [complex_id, report_month]
+
+  - name: mart_complex_load_monthly
+    description: >
+      Grain — complex_id × report_month. Навантаження на ЖК: типи звернень,
+      скарги, черга 30+, внутрішні задачі. Знаменник (n_spaces) — приміщення
+      ЖК point-in-time, а не поточний стан: у Looker він був статичний, через
+      що ЖК, які пішли з УК, лишались у знаменнику назавжди.
+    columns:
+      - name: complex_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_complex')
+                field: complex_id
+      - name: report_month
+        tests: [not_null]
+      - name: complaint_rate
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [complex_id, report_month]
+
+  - name: mart_orders_house_monthly
+    description: >
+      Grain — complex_id × house_id × property_kind_ua × category_ua ×
+      type_ua × report_month. Найдетальніший зріз заявок на дашборді:
+      шукач аномалій, відхилені по типу об'єкта, антирейтинг будинків.
+      Глибше за будинок свідомо не йдемо (приміщення = ~164 тис. комбінацій
+      і рішення все одно приймаються по будинку).
+    columns:
+      - name: house_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_house')
+                field: house_id
+      - name: created_count
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [house_id, property_kind_ua, category_ua, type_ua, report_month]
+
   - name: mart_status_donut
     description: Grain — complex_id × report_month × status.
 
@@ -58,9 +141,20 @@ models:
 
   - name: mart_yearly_totals
     description: >
-      Grain — report_year (компанія загалом). 2023-2025 збігаються з xlsx
-      в межах 1%. 2022 розходиться — той самий відомий розрив, що і в PDF
-      (різний старт колл-центру/додатку).
+      Grain — complex_id × report_year. Компанійський тотал — сума по ЖК.
+      2023-2025 збігаються з xlsx в межах 1%. 2022 розходиться — той самий
+      відомий розрив, що і в PDF (різний старт колл-центру/додатку).
+      in_progress_count = не закрито в межах ТОГО САМОГО року, а не поточна
+      черга (поточну дає mart_monthly_sla.backlog_end_of_month).
+    columns:
+      - name: complex_id
+        tests: [not_null]
+      - name: report_year
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [complex_id, report_year]
 
   - name: mart_monthly_complex_overview
     description: >
@@ -105,7 +199,20 @@ models:
             combination_of_columns: [report_month, complex_id]
 
   - name: mart_monthly_categories
-    description: Grain — complex_id × report_month × category_ua × type_ua × is_valid.
+    description: >
+      Grain — complex_id × report_month × category_ua × type_ua. Ті самі
+      лічильники й та сама методика дат, що в mart_monthly_sla, тому суми по
+      всіх категоріях і типах сходяться з ним рядок-у-рядок.
+    columns:
+      - name: complex_id
+        tests: [not_null]
+      - name: created_count
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [complex_id, report_month, category_ua, type_ua]
 
   - name: mart_house_rating
     description: >
