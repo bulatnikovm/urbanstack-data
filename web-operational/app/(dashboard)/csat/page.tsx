@@ -96,10 +96,14 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
   const lowPrev = prev.reduce((a, w) => a + w.grade_1 + w.grade_2, 0);
   const votesPrev = prev.reduce((a, w) => a + w.votes, 0);
 
+  const votesTotal = complexes.reduce((a, c) => a + c.votes_latest, 0);
+  const apartmentsTotal = complexes.reduce((a, c) => a + (c.n_apartments ?? 0), 0);
   const reachConfirmed = rate(
-    complexes.reduce((a, c) => a + c.votes_latest, 0),
+    votesTotal,
     complexes.reduce((a, c) => a + (c.n_users_confirmed ?? 0), 0)
   );
+  // Правка Артема: репрезентативність вибірки міряється до КІЛЬКОСТІ КВАРТИР.
+  const reachApartments = rate(votesTotal, apartmentsTotal);
 
   // ── Динаміка по хвилях ────────────────────────────────────────────────
   const trend = waveOrder.map((label) => {
@@ -108,18 +112,34 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
     return {
       wave: label,
       short: label.replace(/\s*\(\d+-\d+\)$/, ""),
+      month: rows[0]?.wave_month_key ?? "",
       category: cat,
       avg: csatAvg(rows),
       votes: rows.reduce((a, w) => a + w.votes, 0),
       comments: rows.reduce((a, w) => a + w.comments, 0),
     };
   });
-  const trendChart = trend.map((t) => ({
-    month: t.short,
-    ...Object.fromEntries(
-      CATEGORIES.map((c) => [c, t.category === c ? (t.avg ?? 0) : null])
-    ),
-  }));
+  /**
+   * Вісь X — СПРАВЖНІЙ ключ місяця ("2026-05"), а не текст мітки хвилі.
+   * LineChart тут часовий: він парсить значення осі як дату, і на
+   * «Охорона трав. 2026» ламався в нечитабельне «січ. 25 р. — січ. 26».
+   *
+   * Точка = місяць, ряд = категорія. У червні 2026 було дві хвилі різних
+   * категорій — це дві точки в одному місяці, кожна у своєму ряду.
+   * Місяці без хвилі категорії лишаються `null` (не 0): тултип такі ряди
+   * тепер пропускає, а «0» означало б «поставили нуль балів».
+   */
+  const trendChart = [...new Set(trend.map((t) => t.month))]
+    .sort()
+    .map((month) => ({
+      month,
+      ...Object.fromEntries(
+        CATEGORIES.map((c) => [
+          c,
+          trend.find((t) => t.month === month && t.category === c)?.avg ?? null,
+        ])
+      ),
+    }));
 
   // ── Матриця ЖК × хвиля ────────────────────────────────────────────────
   const complexNames = [...new Set(waves.map((w) => w.complex_name))].sort();
@@ -152,6 +172,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
     {
       complex: string;
       address: string;
+      apartments: number;
       votes: number;
       grade_sum: number;
       low: number;
@@ -162,6 +183,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
     const acc = houseMap.get(w.house_id) ?? {
       complex: w.complex_name,
       address: w.house_address,
+      apartments: w.n_apartments ?? 0,
       votes: 0,
       grade_sum: 0,
       low: 0,
@@ -177,6 +199,9 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
       ...h,
       avg: h.votes > 0 ? h.grade_sum / h.votes : 0,
       lowShare: rate(h.low, h.votes),
+      // Правка Артема: на рівні будинку вибірка міряється до квартир ЦЬОГО
+      // будинку, а не до квартир ЖК.
+      reach: rate(h.votes, h.apartments),
     }))
     .filter((h) => h.votes >= MIN_VOTES)
     .sort((a, b) => a.avg - b.avg);
@@ -298,9 +323,12 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
           />
           <Kpi
             label="Участь"
-            value={pct(reachConfirmed)}
-            sub={`${n(votesLatest)} голосів від підтверджених`}
-            trend={{ text: "останні хвилі", good: null }}
+            value={pct(reachApartments)}
+            sub={`${n(votesLatest)} голосів на ${n(apartmentsTotal)} квартир`}
+            trend={{
+              text: `${pct(reachConfirmed)} від підтверджених`,
+              good: null,
+            }}
           />
         </div>
 
@@ -361,11 +389,18 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
                   },
                   { header: "Голосів", value: (c) => c.votes_latest },
                   { header: "Коментарів", value: (c) => c.comments_latest },
+                  { header: "Квартир", value: (c) => c.n_apartments },
                   {
-                    header: "Участь від підтв.",
+                    header: "Від квартир",
+                    value: (c) => c.reach_of_apartments,
+                    format: "0.0%",
+                    width: 13,
+                  },
+                  {
+                    header: "Від підтверджених",
                     value: (c) => c.reach_of_confirmed,
                     format: "0.0%",
-                    width: 17,
+                    width: 18,
                   },
                 ])}
               />
@@ -382,7 +417,8 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
                   <TableHead className="text-right">Інт. УК</TableHead>
                   <TableHead className="text-right">Інт. загальний</TableHead>
                   <TableHead className="text-right">Голосів</TableHead>
-                  <TableHead className="text-right">Участь</TableHead>
+                  <TableHead className="text-right">Від квартир</TableHead>
+                  <TableHead className="text-right">Від підтв.</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -412,7 +448,12 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
                     <TableCell className="text-right tabular-nums">
                       {n(c.votes_latest)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {c.reach_of_apartments === null
+                        ? "—"
+                        : pct(c.reach_of_apartments, 0)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
                       {c.reach_of_confirmed === null
                         ? "—"
                         : pct(c.reach_of_confirmed, 0)}
@@ -440,7 +481,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
           <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
             <Panel
               title="Оцінка по хвилях"
-              note="Середня рахується як сума балів / кількість голосів, а не як середня з будинкових середніх."
+              note="Точка — місяць хвилі. Розрив у лінії означає, що опитування цієї категорії того місяця не було, а не нульову оцінку."
             >
               <BklitLine
                 aspectRatio="5 / 2"
@@ -562,9 +603,13 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
             <>
               З <Hl>{n(votesLatest)}</Hl> голосів останніх хвиль{" "}
               <Hl>{pct(rate(lowLatest, votesLatest))}</Hl> — це оцінки 1 або 2,
-              і <Hl>{n(commentsLatest)}</Hl> людей додали текст. Участь
-              рахується від підтверджених користувачів, а не від усіх рахунків:
-              людина без застосунку опитування просто не бачить.
+              і <Hl>{n(commentsLatest)}</Hl> людей додали текст. Вибірка
+              міряється до <Hl>кількості квартир</Hl>: цей знаменник не
+              залежить від того, скільки людей поставили застосунок, тому
+              тільки його можна порівнювати між ЖК як міру достатності. У
+              рейтингу поруч є й частка від підтверджених користувачів — вона
+              каже інше: наскільки активна саме та аудиторія, до якої
+              опитування взагалі дійшло.
             </>
           }
         >
@@ -578,14 +623,14 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
 
             <Panel
               title="Участь по ЖК"
-              note="Частка підтверджених користувачів ЖК, які проголосували в останніх хвилях."
+              note="Голоси до кількості квартир ЖК. Саме цей знаменник показує, чи достатня вибірка: він не залежить від того, скільки людей поставили застосунок."
             >
               <RankedBars
                 data={complexes
-                  .filter((c) => c.reach_of_confirmed !== null)
+                  .filter((c) => c.reach_of_apartments !== null)
                   .map((c) => ({
                     label: c.complex_name,
-                    value: c.reach_of_confirmed ?? 0,
+                    value: c.reach_of_apartments ?? 0,
                   }))
                   .sort((a, b) => b.value - a.value)}
                 kind="pct"
@@ -614,7 +659,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
         >
           <Panel
             title="Антирейтинг будинків"
-            note={`Топ-${TOP_HOUSES} знизу. Будинок відповіді визначається за респондентом, а не за полем опитування — покриття 99,8%.`}
+            note={`Топ-${TOP_HOUSES} знизу. «Вибірка» — голоси до кількості квартир САМЕ ЦЬОГО будинку. Будинок відповіді визначається за респондентом, а не за полем опитування — покриття 99,8%.`}
             action={
               <ExportXlsx
                 fileName="urbanstack-csat-houses"
@@ -623,6 +668,13 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
                   { header: "ЖК", value: (h) => h.complex, width: 22 },
                   { header: "Будинок", value: (h) => h.address, width: 34 },
                   { header: "Голосів", value: (h) => h.votes },
+                  { header: "Квартир", value: (h) => h.apartments },
+                  {
+                    header: "Вибірка",
+                    value: (h) => h.reach,
+                    format: "0.0%",
+                    width: 10,
+                  },
                   {
                     header: "Середня",
                     value: (h) => h.avg,
@@ -646,6 +698,8 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
                   <TableHead>ЖК</TableHead>
                   <TableHead>Будинок</TableHead>
                   <TableHead className="text-right">Голосів</TableHead>
+                  <TableHead className="text-right">Квартир</TableHead>
+                  <TableHead className="text-right">Вибірка</TableHead>
                   <TableHead className="text-right">Середня</TableHead>
                   <TableHead className="text-right">Частка 1–2</TableHead>
                 </TableRow>
@@ -662,6 +716,12 @@ export default async function CsatPage({ searchParams }: PageProps<"/csat">) {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {n(h.votes)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {h.apartments > 0 ? n(h.apartments) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {h.apartments > 0 ? pct(h.reach, 0) : "—"}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
                       {n1(h.avg)}

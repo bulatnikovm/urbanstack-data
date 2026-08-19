@@ -298,8 +298,16 @@ export type CsatComplex = {
   low_grades_all_time: number;
   n_billing_accounts: number | null;
   n_users_confirmed: number | null;
+  n_apartments: number | null;
   reach_of_accounts: number | null;
   reach_of_confirmed: number | null;
+  /**
+   * Голоси / кількість КВАРТИР. Правка Артема: «чи достатня вибірка»
+   * міряється саме так — знаменник не залежить від того, скільки людей
+   * поставили застосунок, тому єдина з трьох часток, яку можна порівнювати
+   * між ЖК як міру репрезентативності.
+   */
+  reach_of_apartments: number | null;
 };
 
 /**
@@ -322,6 +330,8 @@ export type CsatWave = {
   votes: number;
   comments: number;
   grade_sum: number;
+  /** Квартир у будинку — знаменник репрезентативності. NULL у рядку «ЖК загалом». */
+  n_apartments: number | null;
   grade_5: number;
   grade_4: number;
   grade_3: number;

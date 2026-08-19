@@ -88,7 +88,8 @@ audience as (
     select
         complex_id,
         n_billing_accounts,
-        n_users_confirmed
+        n_users_confirmed,
+        n_apartments
     from {{ ref('mart_monthly_complex_overview') }}
     qualify row_number() over (partition by complex_id order by report_month desc) = 1
 ),
@@ -127,8 +128,15 @@ select
     a.low_grades_all_time,
     au.n_billing_accounts,
     au.n_users_confirmed,
+    au.n_apartments,
     safe_divide(p.votes_latest, nullif(au.n_billing_accounts, 0)) as reach_of_accounts,
-    safe_divide(p.votes_latest, nullif(au.n_users_confirmed, 0))  as reach_of_confirmed
+    safe_divide(p.votes_latest, nullif(au.n_users_confirmed, 0))  as reach_of_confirmed,
+    -- Правка Артема (2026-08-19): «чи достатня вибірка» міряється до
+    -- КІЛЬКОСТІ КВАРТИР, а не до рахунків чи підтверджених користувачів.
+    -- Знаменник не залежить від того, скільки людей поставили застосунок,
+    -- тому це єдина з трьох часток, яку можна порівнювати між ЖК як міру
+    -- репрезентативності, а не як міру проникнення додатка.
+    safe_divide(p.votes_latest, nullif(au.n_apartments, 0))       as reach_of_apartments
 from pivoted p
 left join all_time a  on a.complex_id  = p.complex_id
 left join audience au on au.complex_id = p.complex_id

@@ -326,8 +326,8 @@ const QUERIES = {
       integral_uk, integral_total, rating_uk,
       votes_latest, comments_latest, low_grades_latest,
       votes_all_time, comments_all_time, avg_grade_all_time, low_grades_all_time,
-      n_billing_accounts, n_users_confirmed,
-      reach_of_accounts, reach_of_confirmed
+      n_billing_accounts, n_users_confirmed, n_apartments,
+      reach_of_accounts, reach_of_confirmed, reach_of_apartments
     from \`${PROJECT}.${DATASET}.mart_survey_complex_integral\`
     order by rating_uk
   `,
@@ -345,7 +345,7 @@ const QUERIES = {
       wave_label, survey_category_ua,
       format_date('%Y-%m', wave_month) as wave_month_key,
       complex_id, complex_name, house_id, house_number, house_address,
-      votes, comments, grade_sum,
+      votes, comments, grade_sum, n_apartments,
       grade_5, grade_4, grade_3, grade_2, grade_1
     from \`${PROJECT}.${DATASET}.mart_survey_wave_summary\`
     order by wave_month, complex_name, house_number

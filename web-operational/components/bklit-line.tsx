@@ -24,17 +24,27 @@ const fmt = (v: number, k: Fmt) =>
 export const tooltipTitle = (raw: string, unit: XUnit) =>
   unit === "week" ? weekTooltip(raw) : monthTooltip(raw);
 
-/** Спільні рядки тултипа для всіх Bklit-обгорток. */
+/**
+ * Спільні рядки тултипа для всіх Bklit-обгорток.
+ *
+ * Ряди без значення в цій точці (null/undefined) з тултипа ВИКИДАЮТЬСЯ, а не
+ * показуються нулем. Раніше було `?? 0`, і на графіку оцінок по хвилях
+ * тултип писав «Прибудинкова 0, Будинкова 0» у місяці, де цих опитувань
+ * просто не проводили — тобто «0 балів» замість «не питали».
+ * Справжній нуль — це `0`, а не `null`, тому інші графіки не зачеплені.
+ */
 export const tooltipRows = (
   point: Record<string, unknown>,
   series: Series[],
   kind: Fmt
 ) =>
-  series.map((s) => ({
-    color: `var(--chart-${s.slot})`,
-    label: s.label,
-    value: fmt(Number(point[s.key] ?? 0), kind),
-  }));
+  series
+    .filter((s) => point[s.key] !== null && point[s.key] !== undefined)
+    .map((s) => ({
+      color: `var(--chart-${s.slot})`,
+      label: s.label,
+      value: fmt(Number(point[s.key]), kind),
+    }));
 
 /**
  * Лінії на Bklit UI. Заміна `TrendLines` (shadcn/Recharts) — та сама роль
