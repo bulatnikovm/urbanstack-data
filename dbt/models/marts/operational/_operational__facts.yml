@@ -2,12 +2,21 @@ version: 2
 
 models:
   - name: fact_orders
-    description: Grain — order_id. is_valid відсіює скасовані/відхилені, єдине визначення.
+    description: >
+      Grain — order_id. is_valid відсіює скасовані/відхилені, єдине визначення.
+      closed_at — дата закриття (виконано або скасовано) з fallback на
+      updated_at: у 2022-2023 completed_at порожній у 17-20% закритих заявок,
+      і без fallback ряд "виконано" за ті роки провалюється на п'ятину.
+      Прапорець is_close_date_estimated показує, де дата приблизна.
     columns:
       - name: order_id
         tests:
           - not_null
           - unique
+      - name: property_kind_ua
+        description: Тип об'єкта заявки (Квартира/Паркінг/Комерційне/Комора/Невідомо).
+        tests:
+          - not_null
 
   - name: fact_order_events
     description: Grain — подія (created/completed/canceled/... transition). Заявка може мати кілька подій одного типу.
@@ -22,7 +31,12 @@ models:
                 severity: warn   # transition-подія могла лишитись від заявки, видаленої з orders (рідкісний край)
 
   - name: fact_order_tasks
-    description: Grain — task_id. is_employee_task = order_id IS NULL.
+    description: >
+      Grain — task_id. is_employee_task = order_id IS NULL.
+      Гео береться з tasks_locations (1:1 по task_id), і лише потім
+      добирається через order_id→orders.space_id. До 2026-08-19 був тільки
+      другий шлях, тому всі 55,7 тис. задач співробітників лишались без
+      complex_id — метрику "внутрішні задачі на ЖК" порахувати було нічим.
     columns:
       - name: task_id
         tests:

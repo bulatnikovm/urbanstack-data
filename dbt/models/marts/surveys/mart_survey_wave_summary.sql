@@ -18,6 +18,14 @@
 -- за алфавітом/групуванням, а не за часом) — сортування по wave_sort_id
 -- (зростання) дає справжню хронологію незалежно від категорії.
 
+-- n_apartments — знаменник «репрезентативності вибірки» (правка Артема,
+-- 2026-08-19): скільки квартир БУДИНКА стоїть за цією оцінкою. На рівні
+-- будинку це квартири будинку, на рівні ЖК — сума по його будинках.
+-- Рядок «ЖК загалом» (відповідь без прив'язки до будинку) квартир не має —
+-- там NULL, і в сумі по ЖК він нічого не додає.
+
+with summary as (
+
 select
     wave_label,
     survey_category_ua,
@@ -38,3 +46,11 @@ select
     countif(grade = 1) as grade_1
 from {{ ref('fact_survey_answers') }}
 group by wave_label, survey_category_ua, wave_month, complex_id, complex_name, house_id, house_number, house_address
+
+)
+
+select
+    s.*,
+    h.n_apartments
+from summary s
+left join {{ ref('dim_house') }} h on h.house_id = s.house_id

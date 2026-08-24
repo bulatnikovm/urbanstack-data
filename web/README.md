@@ -1,6 +1,12 @@
 # Продуктовий дашборд UrbanStack
 
 Next.js 16 + shadcn/ui + Recharts поверх `dbt_product`. Фаза 3 з `CLAUDE.md`.
+
+Операційний домен живе в **окремому застосунку** — `../web-operational`
+(окремий деплой, окремий реєстр метрик `docs/metrics_operational.yml`).
+Спільні `components/` і `lib/` там поки що скопійовані, не винесені в пакет —
+див. розділ про дублювання в його README.
+
 План і рішення — [`../docs/dashboard_plan.md`](../docs/dashboard_plan.md).
 
 ## Як влаштовано
@@ -199,19 +205,31 @@ npm run refresh        # export + build
 Заголовок тултипа форматує `monthTooltip()` («Черв. 2026»), а не `monthShort()` —
 останній лишається для підписів осі, де потрібно коротко.
 
-## Авторизація (Auth.js v5, без бази)
+## Авторизація (Auth.js v5 + Supabase)
 
-Google-логін + allowlist в env-змінних — без Postgres, без власної
-реєстрації/паролів (план, §4). Захист двошаровий:
+Google-логін, список доступів — у Supabase (таблиця `dashboard_users`), не
+в env. Раніше список жив у `ALLOWED_EMAILS`/`ADMIN_EMAILS`, і додати колегу
+означало полізти в Vercel і дочекатись редеплою; тепер це робиться зі
+сторінки `/admin` в рантаймі, без коміту. Захист трирівневий:
 
 - `proxy.ts` (Next 16; був `middleware.ts` — конвенцію перейменували)
   редіректить неавторизованих на `/login` ДО рендеру сторінки;
 - `app/(dashboard)/layout.tsx` — усі сторінки дашборду в route group, окремо
-  від `/login`, щоб неавторизований глядач не бачив сайдбар на екрані входу.
+  від `/login`, щоб неавторизований глядач не бачив сайдбар на екрані входу;
+- `lib/access.ts` — сам allowlist: `accessFor(email)` ходить у Supabase
+  PostgREST звичайним `fetch` (без `@supabase/supabase-js`, щоб зайва
+  бібліотека не тягнулась у `proxy`), `fail closed` — недоступна база теж
+  трактується як відмова.
 
-**Роль поки лише `admin`/`viewer`** (`ADMIN_EMAILS` — підмножина
-`ALLOWED_EMAILS`). Гранулярні ролі (product/operations/finance) — Фаза E,
-коли підʼїде другий дашборд.
+**Роль перечитується з бази на КОЖНОМУ запиті** (`auth.config.ts`, callback
+`jwt`), а не лише при вході — інакше відкликаний у `/admin` доступ ще
+хвилини/години працював би зі старим токеном. Ціна — один запит до Supabase
+на запит сторінки; на команді з 5-15 людей це непомітно.
+
+**Ролі — `admin`/`viewer`.** Адмін бачить пункт «Доступи» і може додавати/
+прибирати людей та міняти ролі; останнього адміна прибрати не можна
+(`removeUser` в `lib/access.ts` це блокує). Гранулярніші ролі
+(product/operations/finance) — Фаза E.
 
 ### Як увімкнути (нічого не працює без цього)
 
@@ -222,12 +240,23 @@ Google-логін + allowlist в env-змінних — без Postgres, без 
    - `http://localhost:3000/api/auth/callback/google` (локально)
    - `https://<домен-на-vercel>/api/auth/callback/google` (прод, додати
      пізніше, коли буде відомий домен)
-3. Скопіювати `.env.local.example` → `.env.local`, заповнити:
+3. Supabase-проєкт (URL і `service_role` ключ — Project Settings → API).
+   Таблиця `dashboard_users`: `email` (унікальний індекс по `lower(email)`),
+   `role` (`admin`/`viewer`), `note`, `created_at`, `created_by`. RLS закрита
+   наглухо — читається лише через `service_role` з сервера.
+4. Скопіювати `.env.local.example` → `.env.local`, заповнити:
    - `AUTH_SECRET` — `npx auth secret` або `openssl rand -base64 33`
    - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — з кроку 1
-   - `ALLOWED_EMAILS`, `ADMIN_EMAILS` — через кому
-4. На Vercel ті самі змінні через **Project Settings → Environment
+   - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — з кроку 3
+5. Собі — перший рядок у `dashboard_users` руками (SQL editor у Supabase,
+   `role = 'admin'`): без жодного рядка в таблиці зайти нікому, а `/admin`
+   доступний лише вже впущеному адміну — курка-яйце розв'язується один раз
+   вручну.
+6. На Vercel ті самі змінні через **Project Settings → Environment
    Variables** — `AUTH_SECRET` там окремий, не той, що локально.
+
+⚠️ `SUPABASE_SERVICE_ROLE_KEY` обходить RLS — у браузер не потрапляє ніколи
+(файл `server-only`), на Vercel додавати як звичайну (не Public) змінну.
 
 Без `.env.local` логін впаде на `Configuration` error — це очікувано, ще не
 підключені креди, а не баг коду. Уся решта (типи, збірка, `proxy.ts`)

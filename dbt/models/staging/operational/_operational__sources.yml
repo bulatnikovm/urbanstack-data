@@ -25,6 +25,28 @@ sources:
           співробітника без заявки (order_id IS NULL). category — той самий
           enum, що і orders.category. status — ІНШИЙ enum (closed/canceled/
           in_progress/assigned/done), не плутати з orders.status.
+      - name: tasks_locations
+        description: >
+          Гео задачі (1:1 до order_tasks по task_id). Єдине джерело ЖК/будинку
+          для задач співробітників (order_id IS NULL) — у них немає заявки, а
+          отже й space_id, через який будується гео решти. complex_id
+          заповнений у 100% рядків, house_id — у 89%.
+        columns:
+          - name: task_id
+            tests:
+              - not_null
+              - unique
+      - name: order_reviews
+        description: >
+          Оцінка мешканцем ЗАКРИТТЯ заявки (rating 1-5 + comment). Єдине
+          джерело оцінок задоволеності з прив'язкою до будинку: CSAT-опитування
+          дають house_id лише в 44 із 3 794 відповідей (голосування створюється
+          одне на весь ЖК). ~16 тис. рядків з 2022-05.
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
       - name: history_order_updates
         description: >
           Event log змін заявки, before/after RECORD зі вкладеним status.

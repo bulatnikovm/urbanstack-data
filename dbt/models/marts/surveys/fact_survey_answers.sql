@@ -101,3 +101,8 @@ select
 from resolved r
 left join houses h on h.house_id = r.resolved_house_id
 left join complexes c on c.complex_id = r.area_complex_id
+-- Тестовий ЖК (seed test_complexes, тобто DIM 9000) виключений — як і в
+-- продуктовому та операційному доменах. Досі опитування були єдиним місцем,
+-- де він лишався в цифрах: 34 голоси з 5 057 (0,7%), але в інтегральному
+-- рейтингу ЖК він ставав на 2-ге місце й виглядав як реальний клієнт.
+where not coalesce(h.is_test_complex, c.is_test_complex, false)

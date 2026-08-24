@@ -1,6 +1,97 @@
 version: 2
 
 seeds:
+  - name: survey_problem_lexicon
+    description: >
+      Словник тем негативу в коментарях CSAT-опитувань (int_survey_comment_flags).
+      Відтворює розділ «Аналіз проблем» з ручного xlsx-звіту Микити, але як
+      дані, а не як разову класифікацію в таблиці: щоб наступна хвиля
+      розкладалась сама, без переписування звіту.
+
+      Два рівні: problem_category_ua (6 верхніх категорій, як у звіті) і
+      problem_theme_ua (детальніша тема всередині). Один коментар може
+      потрапити в кілька тем — люди пишуть про все одразу, і розкладати це
+      «по одній головній» означало б викидати половину сказаного.
+
+      ⚠️ v1, зібраний по ~60 прочитаних коментарях. Precision/recall не
+      заміряні. Патерн ловить ПІДРЯДОК, тому короткі корені небезпечні —
+      перед додаванням нового прогнати на реальних коментарях і подивитись,
+      що саме він зачепив.
+    columns:
+      - name: pattern
+        description: RE2-регулярка, застосовується до lower(comment).
+        tests:
+          - not_null
+          - unique
+      - name: problem_category_ua
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - Чистота та благоустрій
+                - Технічне обслуговування
+                - Охорона та безпека
+                - Тарифи та оплата
+                - Сервіс та комунікація
+                - Інфраструктура
+      - name: problem_theme_ua
+        tests:
+          - not_null
+
+  - name: negativity_lexicon
+    description: >
+      Словник лексичних маркерів для розбору тексту заявок (int_order_text_flags).
+      Групи: legal (юридично-ескалаційний регістр), outrage, collective,
+      osbb_intent (намір вийти), osbb_postfact (дім уже вийшов — детекція факту),
+      repeat (фрустрація від невирішеного), profanity.
+      Правити можна без коду — це і є сенс сіда.
+      ⚠️ v1, зібраний по ~50 прочитаних заявках, precision/recall не заміряні.
+    columns:
+      - name: pattern
+        description: RE2-регулярка, застосовується до lower(normalize(description)).
+        tests:
+          - not_null
+          - unique
+      - name: flag_group
+        tests:
+          - not_null
+          - accepted_values:
+              values: [legal, outrage, collective, osbb_intent, osbb_postfact, repeat, profanity]
+      - name: severity
+        description: >
+          Градація Макса на рівні ОКРЕМОГО патерна: trigger (погроза судом,
+          прокуратурою, колективною скаргою, зборами; намір ОСББ), attention
+          (скарга на якість, невдоволення термінами, роздратування), none
+          (пост-фактум ОСББ — фіксація факту, у скор не входить).
+          Задано патерном, а не групою, навмисно: у групі legal «прокуратура»
+          і «згідно договору» — різні речі.
+        tests:
+          - not_null
+          - accepted_values:
+              values: [trigger, attention, none]
+
+  - name: negativity_rules
+    description: >
+      Матриця балів Макса як дані: пріоритет (1 текст / 2 оцінка / 3 дії)
+      × градація (safe / attention / trigger) → бали. Змінити вагу = змінити
+      рядок у CSV, без правок SQL. Пріоритет 3 поки не має джерела сигналів
+      (потрібен стейджинг paid_orders + desired_amount) — рядки лежать наперед.
+    columns:
+      - name: priority
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3]
+              quote: false
+      - name: severity
+        tests:
+          - not_null
+          - accepted_values:
+              values: [none, safe, attention, trigger]
+      - name: points
+        tests:
+          - not_null
+
   - name: test_complexes
     description: >
       Хардкод-список QA/тестових ЖК, які треба виключати з operational-метрик.
