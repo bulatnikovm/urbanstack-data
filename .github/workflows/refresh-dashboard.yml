@@ -1,4 +1,4 @@
-name: Оновити продуктовий дашборд
+name: Оновити дашборди
 
 # Раз на добу, після нічного Stitch-синку (~02:00 UTC — CLAUDE.md §2.4).
 # workflow_dispatch — щоб можна було запустити руками з вкладки Actions,
@@ -78,8 +78,18 @@ jobs:
           # мажорними версіями npm).
           node-version: "24"
 
-      - name: Вивантажити марти й реєстр метрик
+      - name: Вивантажити марти й реєстр метрик — продуктовий
         working-directory: web
+        run: |
+          npm ci
+          npm run export-data
+          npm run build-metrics
+
+      # Другий застосунок у тому самому репо (Root Directory =
+      # web-operational у своєму Vercel-проєкті). Окремий npm ci, бо
+      # залежності й lock-файли в них свої.
+      - name: Вивантажити марти й реєстр метрик — операційний
+        working-directory: web-operational
         run: |
           npm ci
           npm run export-data
@@ -89,11 +99,11 @@ jobs:
         run: |
           git config user.name "urbanstack-bot"
           git config user.email "analytics@dim9000.com"
-          git add web/data/
+          git add web/data/ web-operational/data/
           if git diff --cached --quiet; then
             echo "Дані не змінились — коміт не потрібен, деплою теж не буде"
           else
             git commit -m "chore(data): автооновлення $(date -u +'%Y-%m-%d %H:%M') UTC"
             git push origin HEAD:main
-            echo "Дані оновлено — Vercel перезбирає дашборд"
+            echo "Дані оновлено — Vercel перезбирає обидва дашборди"
           fi
