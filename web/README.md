@@ -1,13 +1,18 @@
-# Продуктовий дашборд UrbanStack
+# Дашборди UrbanStack
 
-Next.js 16 + shadcn/ui + Recharts поверх `dbt_product`. Фаза 3 з `CLAUDE.md`.
+Next.js 16 + shadcn/ui + Recharts. Один застосунок — ДВА дашборди:
 
-Операційний домен живе в **окремому застосунку** — `../web-operational`
-(окремий деплой, окремий реєстр метрик `docs/metrics_operational.yml`).
-Спільні `components/` і `lib/` там поки що скопійовані, не винесені в пакет —
-див. розділ про дублювання в його README.
+- **продуктовий** (`dbt_product`) — у корені: `/`, `/activation`,
+  `/engagement`, `/star`, `/health`. Описаний нижче;
+- **операційний** (`dbt_operational`) — під `/operations`: заявки, SLA,
+  задоволеність, ризик відтоку. Описаний окремо —
+  [`README.operational.md`](README.operational.md).
 
-План і рішення — [`../docs/dashboard_plan.md`](../docs/dashboard_plan.md).
+Перемикання — два рядки у шапці сайдбара. Логін, список доступів, реєстр
+метрик і нічне оновлення спільні; що з цього чому спільне — в кінці файлу.
+
+Фаза 3 з `CLAUDE.md`. План і рішення —
+[`../docs/dashboard_plan.md`](../docs/dashboard_plan.md).
 
 ## Як влаштовано
 
@@ -16,8 +21,9 @@ Next.js 16 + shadcn/ui + Recharts поверх `dbt_product`. Фаза 3 з `CLA
 
 ```
 dbt build               під сервіс-акаунтом dbt-runner
-  → npm run export-data    BigQuery → data/*.json  (13 mart'ів, ~1.2 MB)
-  → npm run build-metrics  docs/metrics.yml → data/metrics.json
+  → npm run export-data    BigQuery → data/*.json (13 mart'ів, ~1.2 MB)
+                           + data/operational/*.json (16 файлів, ~2.7 MB)
+  → npm run build-metrics  metrics.yml + metrics_operational.yml → data/metrics.json
   → git commit + push      Vercel бачить пуш і перезбирає
 ```
 
@@ -272,3 +278,28 @@ Google-логін, список доступів — у Supabase (таблиця
   анотації на графіках, кешований наратив у `data/insights.json`
 - `agg_os_monthly` — з ad-hoc запиту в `export-data.mjs` у справжній mart
 - Дрейф даних проти Looker-PDF (−1…9%) — досі не пояснений (план, §9)
+
+## Що спільне в двох дашбордів — і чому
+
+Два домени злиті в один застосунок 2026-08-25. Спільне тут не з економії, а
+тому що інакше воно розходиться:
+
+| Спільне | Чому |
+|---|---|
+| логін і список доступів | одна людина — один вхід; два allowlist це два джерела правди. `/admin` лишився один, продуктовий |
+| компоненти (`components/`, 123 файли) | у двох теках вони вже почали розходитись: `page-header.tsx` і `bklit-line.tsx` в операційному пішли вперед, і правити довелося б двічі |
+| реєстр метрик на виході (`data/metrics.json`) | картки обох дашбордів шукають довідку тим самим `getMetric(label)` зі спільного `dashboard.tsx` |
+| воркфлоу оновлення | один `dbt build` на обидва домени, один коміт |
+
+Роздільним лишилось те, що справді роздільне:
+
+- **джерела реєстру** — `docs/metrics.yml` і `docs/metrics_operational.yml`
+  ведуться окремо (різні власники методології, різний темп). Підпис метрики
+  при цьому має бути унікальним НАСКРІЗНО: `build-metrics` падає на дублікаті,
+  бо саме по підпису шукає UI. Коли той самий показник потрібен в обох
+  доменах — картка вказує запис явно (`metric="Підтверджені (ЖК)"` при підписі
+  «Підтверджені» на екрані);
+- **шар даних** — `lib/data.ts` і `lib/data-operational.ts`, свої типи й своя
+  тека вивантажень. Спільних мартів у доменів немає, зливати нічого;
+- **вивантаження** — окремі скрипти, тож падіння одного лишає другий домен
+  тим, що був.

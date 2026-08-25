@@ -21,6 +21,7 @@ export function PageHeader({
 }: {
   title: string;
   subtitle: string;
+  /** Порожній рядок — прибрати хвіст «· показники за …» із підзаголовка. */
   monthKey: string;
   /**
    * Поточний місяць ще триває. Банер прибрано за проханням Микити — потрібен
@@ -29,8 +30,14 @@ export function PageHeader({
    * що спитає будь-хто, кому кинули посилання.
    */
   partial?: { daysElapsed: number; daysInMonth: number };
-  range: Range;
-  bounds: { min: string; max: string };
+  /**
+   * Дейт-пікер зʼявляється, тільки якщо передано і `range`, і `bounds`.
+   * Сторінка CSAT їх не передає навмисно: опитування живуть ХВИЛЯМИ, а не
+   * місяцями (7 хвиль за 9 місяців, у деяких місяцях їх дві, у деяких
+   * жодної). Місячний діапазон там обіцяв би вибір, якого в даних немає.
+   */
+  range?: Range;
+  bounds?: { min: string; max: string };
 }) {
   const meta = getMeta();
   return (
@@ -43,7 +50,7 @@ export function PageHeader({
             {title}
           </h1>
         </div>
-        <DateRangePicker range={range} bounds={bounds} />
+        {range && bounds && <DateRangePicker range={range} bounds={bounds} />}
         <ThemeToggle />
         <div className="hidden lg:block">
           <Freshness snapshotAt={meta.snapshot_at} />
@@ -51,7 +58,8 @@ export function PageHeader({
       </div>
       <p className="flex flex-wrap items-center gap-x-1.5 pl-9 text-xs text-muted-foreground">
         <span>
-          {subtitle} · показники за {monthLabel(monthKey)}
+          {subtitle}
+          {monthKey ? ` · показники за ${monthLabel(monthKey)}` : ""}
         </span>
         {partial && (
           <span

@@ -7,10 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "export-data": "node scripts/export-data.mjs",
+    "export-data": "node scripts/export-data.mjs && node scripts/export-data-operational.mjs",
     "build-metrics": "node scripts/build-metrics.mjs && node scripts/check-metric-coverage.mjs",
     "check-metrics": "node scripts/check-metric-coverage.mjs",
-    "refresh": "node scripts/export-data.mjs && npm run build-metrics && next build"
+    "refresh": "npm run export-data && npm run build-metrics && next build",
+    "export-data-product": "node scripts/export-data.mjs",
+    "export-data-operational": "node scripts/export-data-operational.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

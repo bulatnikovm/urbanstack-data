@@ -297,6 +297,8 @@ export type Metric = {
   owner?: string;
   status?: MetricStatus;
   note?: string;
+  /** З якого реєстру запис — проставляє build-metrics.mjs. */
+  domain?: "product" | "operational";
 };
 
 /**

@@ -24,7 +24,7 @@ export default async function LoginPage({
         <UrbanStackLogo className="h-14 w-auto text-foreground" />
         <div>
           <h1 className="text-lg font-semibold tracking-tight">
-            Продуктовий дашборд
+            Дашборди
           </h1>
           <p className="text-sm text-muted-foreground">
             Доступ лише для команди
