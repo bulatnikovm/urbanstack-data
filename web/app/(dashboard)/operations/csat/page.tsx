@@ -7,7 +7,7 @@ import {
   getCsatWaves,
   type CsatWave,
 } from "@/lib/data-operational";
-import { n, n1, pct, pp } from "@/lib/format";
+import { monthLabel, n, n1, pct, pp } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
 import { BklitLine } from "@/components/bklit-line";
@@ -140,6 +140,31 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
         ])
       ),
     }));
+
+  /**
+   * Категорія × місяць — прохання Максима 2026-08-26: «додати саме динаміку
+   * в розрізі категорій: Охорона 1, 2, 3 місяць; Прибудинкова 1, 2, 3
+   * місяць». Графік поруч показує те саме лініями, але порівнювати ДВІ
+   * сусідні цифри на око по лінії важко, а операційці потрібні саме цифри.
+   *
+   * Порожня клітинка означає «хвилі цієї категорії того місяця не було» —
+   * розклад у категорій різний: Охорона опитувалась тричі (груд. 2025,
+   * трав. і лип. 2026), Прибудинкова й Будинкова — двічі.
+   */
+  const categoryMonths = [...new Set(trend.map((t) => t.month))].sort();
+  const categoryRows = CATEGORIES.map((c) => ({
+    category: c,
+    cells: categoryMonths.map((month) => {
+      const rows = waves.filter(
+        (w) => w.wave_month_key === month && w.survey_category_ua === c
+      );
+      return {
+        month,
+        avg: csatAvg(rows),
+        votes: rows.reduce((a, w) => a + w.votes, 0),
+      };
+    }),
+  }));
 
   // ── Матриця ЖК × хвиля ────────────────────────────────────────────────
   const complexNames = [...new Set(waves.map((w) => w.complex_name))].sort();
@@ -529,6 +554,79 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
               </Table>
             </Panel>
           </div>
+
+          <Panel
+            title="Категорія × місяць"
+            note="Середня оцінка й кількість голосів у дужках. Прочерк — хвилі цієї категорії того місяця не було: розклад у категорій різний, і це не пропуск даних."
+            action={
+              <ExportXlsx
+                fileName="urbanstack-csat-categories"
+                sheetName="Категорія × місяць"
+                sheet={buildSheet(
+                  categoryRows.flatMap((r) =>
+                    r.cells.map((c) => ({ category: r.category, ...c }))
+                  ),
+                  [
+                    { header: "Категорія", value: (r) => r.category, width: 16 },
+                    { header: "Місяць", value: (r) => r.month, width: 10 },
+                    {
+                      header: "Середня оцінка",
+                      value: (r) => r.avg,
+                      format: "0.00",
+                      width: 14,
+                    },
+                    { header: "Голосів", value: (r) => r.votes },
+                  ]
+                )}
+              />
+            }
+          >
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-card">
+                      Категорія
+                    </TableHead>
+                    {categoryMonths.map((m) => (
+                      <TableHead
+                        key={m}
+                        className="text-right whitespace-nowrap"
+                      >
+                        {monthLabel(m)}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {categoryRows.map((row) => (
+                    <TableRow key={row.category}>
+                      <TableCell className="sticky left-0 bg-card font-medium whitespace-nowrap">
+                        {row.category}
+                      </TableCell>
+                      {row.cells.map((c) => (
+                        <TableCell
+                          key={c.month}
+                          className="text-right tabular-nums whitespace-nowrap"
+                        >
+                          {c.avg === null ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <>
+                              {n1(c.avg)}
+                              <span className="ml-1 text-[11px] text-muted-foreground">
+                                ({n(c.votes)})
+                              </span>
+                            </>
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Panel>
 
           <Panel
             title="Матриця ЖК × хвиля"

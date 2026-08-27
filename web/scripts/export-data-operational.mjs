@@ -234,21 +234,6 @@ const QUERIES = {
     order by s.report_month, d.complex_name
   `,
 
-  /** Заявки по роках × ЖК. 12 ЖК × 6 років — десятки рядків. */
-  agg_sla_yearly: `
-    select
-      y.report_year,
-      y.complex_id,
-      d.complex_name,
-      y.created_count,
-      y.completed_count,
-      y.canceled_count,
-      y.in_progress_count
-    from \`${PROJECT}.${DATASET}.mart_yearly_totals\` y
-    join \`${PROJECT}.${DATASET}.dim_complex\` d on d.complex_id = y.complex_id
-    order by y.report_year, d.complex_name
-  `,
-
   /**
    * Статуси заявок за весь час. mart_status_donut має грануляцію
    * ЖК × місяць × статус (кілька тисяч рядків) — тут згортаємо до
@@ -265,9 +250,15 @@ const QUERIES = {
   `,
 
   /**
-   * Звернення в розрізі категорії й типу. Вікно 24 місяці: повний ряд з
-   * 2021 дає ~35 тис. рядків, а на сторінці показується поточний місяць і
-   * динаміка за два роки — довший хвіст нікуди не малюється.
+   * Звернення в розрізі категорії й типу — ПОВНА історія (15,1 тис. рядків,
+   * ~0,3 МБ у словниковому форматі).
+   *
+   * Раніше тут стояло вікно 24 місяці: сторінка звернень показує поточний
+   * місяць і дворічну динаміку, довший хвіст їй не потрібен. Вікно знято,
+   * коли фільтри «Категорія» і «Тип заявки» повернулись на сторінку SLA
+   * (правка Максима 2026-08-26): SLA малює ряд від запуску CRM, і з
+   * обрізаним джерелом графік мовчки обривався б на 2024-му рівно тоді,
+   * коли хтось обере категорію.
    */
   agg_categories_monthly: `
     select
@@ -279,11 +270,81 @@ const QUERIES = {
       c.created_count,
       c.valid_created_count,
       c.completed_count,
-      c.canceled_count
+      c.canceled_count,
+      c.completed_same_month_count
     from \`${PROJECT}.${DATASET}.mart_monthly_categories\` c
     join \`${PROJECT}.${DATASET}.dim_complex\` d on d.complex_id = c.complex_id
-    where c.report_month >= date_sub(date_trunc(current_date(), month), interval 23 month)
     order by c.report_month, d.complex_name, c.category_ua, c.type_ua
+  `,
+
+  /**
+   * Те саме, але з тегом CRM у грануляції. Окремий файл, а не колонка в
+   * попередньому: тег багатозначний, і заявка з двома мітками дає два
+   * рядки — сума без фільтра по тегу порахувала б її двічі. Сторінка без
+   * фільтра читає agg_categories_monthly, з фільтром — цей файл.
+   *
+   * ⚠️ Джерело тегів — датасет `dim9000_fast` (US), дзеркалений у
+   * `dim9000_fast_eu` кроком `bq cp` у workflow ПЕРЕД `dbt build`. Якщо
+   * дзеркало не оновилось, тут просто не буде свіжих міток — мовчки, без
+   * помилки. Перевірка: max(report_month_key) у цьому файлі.
+   */
+  agg_tags_monthly: `
+    select
+      format_date('%Y-%m', t.report_month) as report_month_key,
+      t.complex_id,
+      d.complex_name,
+      t.category_ua,
+      t.type_ua,
+      t.tag_ua,
+      t.created_count,
+      t.valid_created_count,
+      t.completed_count,
+      t.canceled_count,
+      t.completed_same_month_count
+    from \`${PROJECT}.${DATASET}.mart_monthly_tags\` t
+    join \`${PROJECT}.${DATASET}.dim_complex\` d on d.complex_id = t.complex_id
+    order by t.report_month, d.complex_name, t.tag_ua
+  `,
+
+  /**
+   * NPS: хвиля × ЖК. Десятки рядків — їде як є.
+   *
+   * ⚠️ Компанійський бал рахується в застосунку з ЛІЧИЛЬНИКІВ
+   * (promoters/detractors/votes), а не як середнє з nps_score по ЖК:
+   * інакше «Севен» з одним голосом важив би як «Варшавський 2» зі ста
+   * шістнадцятьма.
+   */
+  agg_nps_complex: `
+    select
+      wave_label,
+      format_date('%Y-%m', wave_month) as wave_month_key,
+      complex_id, complex_name,
+      votes, comments, grade_sum,
+      promoters, passives, detractors, grade_1_2,
+      avg_grade, promoter_share, detractor_share, nps_score,
+      n_apartments, n_users_confirmed, n_billing_accounts,
+      reach_of_apartments, reach_of_confirmed
+    from \`${PROJECT}.${DATASET}.mart_nps_complex\`
+    order by wave_month, complex_name
+  `,
+
+  /**
+   * NPS: стрічка коментарів. Персональних ідентифікаторів немає —
+   * найдрібніший розріз будинок, як і в CSAT.
+   */
+  agg_nps_comments: `
+    select
+      answer_id,
+      wave_label,
+      format_date('%Y-%m', wave_month) as wave_month_key,
+      complex_id, complex_name,
+      coalesce(house_number, 'ЖК загалом')  as house_number,
+      coalesce(house_address, 'ЖК загалом') as house_address,
+      grade, nps_band_ua, comment,
+      format_date('%Y-%m-%d', date(answered_at)) as answered_on
+    from \`${PROJECT}.${DATASET}.fact_nps_answers\`
+    where comment is not null
+    order by answered_at desc, answer_id
   `,
 
   /** Навантаження/скарги/черга/задачі по ЖК і місяцях — 816 рядків. */
@@ -463,6 +524,14 @@ const COMPACT = {
     "complex_name",
     "category_ua",
     "type_ua",
+  ],
+  agg_tags_monthly: [
+    "report_month_key",
+    "complex_id",
+    "complex_name",
+    "category_ua",
+    "type_ua",
+    "tag_ua",
   ],
   // Коментарі: сам ТЕКСТ у словник не йде (він унікальний), а от усе
   // навколо нього — хвиля, ЖК, адреса, набір тем — повторюється на кожному

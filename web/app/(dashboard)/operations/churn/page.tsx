@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { requireAccess } from "@/lib/guard";
 
 /** Ключ будинку: house_id у вивантаження не їде (36 символів × 1 344 рядки). */
 const houseKey = (h: { complex_name: string; house_number: string }) =>
@@ -72,6 +73,7 @@ function drivers(h: HouseMonthly): string[] {
 }
 
 export default async function ChurnPage({ searchParams }: PageProps<"/operations/churn">) {
+  await requireAccess("/operations/churn");
   const sp = await searchParams;
   const { curKey, prevKey, bounds, range, cur, prev, base, inWindow } =
     getChurnPeriod(sp);

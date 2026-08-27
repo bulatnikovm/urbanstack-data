@@ -200,23 +200,20 @@ export type SlaMonthly = {
   backlog_end_of_month: number;
 };
 
-export type SlaYearly = {
-  report_year: number;
-  complex_id: string;
-  complex_name: string;
-  created_count: number;
-  completed_count: number;
-  canceled_count: number;
-  in_progress_count: number;
-};
-
 export type StatusTotal = {
   complex_id: string;
   status: string;
   order_count: number;
 };
 
-/** Звернення в розрізі категорії й типу, вікно 24 місяці. */
+/**
+ * Звернення в розрізі категорії й типу — ПОВНА історія.
+ *
+ * Вікно 24 місяці знято 2026-08-26, коли фільтри «Категорія» і «Тип заявки»
+ * повернулись на сторінку SLA: вона малює ряд від запуску CRM, і з обрізаним
+ * джерелом графік мовчки обривався б на 2024-му рівно тоді, коли хтось обере
+ * категорію.
+ */
 export type CategoryMonthly = {
   report_month_key: string;
   complex_id: string;
@@ -229,7 +226,17 @@ export type CategoryMonthly = {
   valid_created_count: number;
   completed_count: number;
   canceled_count: number;
+  completed_same_month_count: number;
 };
+
+/**
+ * Те саме, що CategoryMonthly, плюс тег CRM у грануляції.
+ *
+ * ⚠️ Тег БАГАТОЗНАЧНИЙ: заявка з мітками «Аварійна» і «Терміново» лежить тут
+ * ДВІЧІ. Сумувати цей набір без фільтра по конкретному тегу не можна — саме
+ * тому він живе окремим файлом, а не колонкою в agg_categories_monthly.
+ */
+export type TagMonthly = CategoryMonthly & { tag_ua: string };
 
 /** Навантаження, скарги, черга 30+, внутрішні задачі — по ЖК і місяцях. */
 export type LoadMonthly = {
@@ -504,11 +511,11 @@ export function getOverviewPeriod(
 // ── Заявки і сервіс ─────────────────────────────────────────────────────
 
 export const getSla = () => load<SlaMonthly>("agg_sla_monthly");
-export const getSlaYearly = () => load<SlaYearly>("agg_sla_yearly");
 export const getStatusTotals = () => load<StatusTotal>("agg_status_totals");
 export const getLoad = () => load<LoadMonthly>("agg_load_monthly");
 export const getCategories = () =>
   loadCompact<CategoryMonthly>("agg_categories_monthly");
+export const getTagged = () => loadCompact<TagMonthly>("agg_tags_monthly");
 export const getOrdersHouse = () =>
   loadCompact<OrdersHouseMonthly>("agg_orders_house_monthly");
 
@@ -623,14 +630,16 @@ export function companyLoad(rows: LoadMonthly[]): CompanyLoad[] {
  */
 function buildPeriod<T extends { report_month_key: string }>(
   all: T[],
-  params?: Record<string, string | string[] | undefined>
+  params?: Record<string, string | string[] | undefined>,
+  /** Дефолтний період сторінки, коли в URL його немає (див. resolveRange). */
+  defaultMonths?: number
 ) {
   const bounds = {
     min: all[0].report_month_key,
     max: all.at(-1)!.report_month_key,
   };
   const r: Range = params
-    ? resolveRange(params, bounds)
+    ? resolveRange(params, bounds, defaultMonths)
     : { from: bounds.min, to: bounds.max };
 
   const base = all.filter(
@@ -665,16 +674,214 @@ function buildPeriod<T extends { report_month_key: string }>(
   };
 }
 
-/** Період сторінки «Операційна ефективність». */
+// ── Фільтри сторінки SLA ────────────────────────────────────────────────
+
+/**
+ * Три розрізи, які були в оригінальному звіті Looker (Категорія, Тип
+ * заявки) плюс тег CRM (правка Максима 2026-08-26). Живуть в URL, як і
+ * період: посилання на «аварійні заявки по електроенергії» можна переслати.
+ */
+export type SlaFilters = {
+  category: string | null;
+  type: string | null;
+  tag: string | null;
+};
+
+export type SliceOption = { value: string; label: string; count: number };
+
+const one = (v: string | string[] | undefined) =>
+  (Array.isArray(v) ? v[0] : v) || null;
+
+export function readSlaFilters(
+  params?: Record<string, string | string[] | undefined>
+): SlaFilters {
+  return {
+    category: one(params?.cat),
+    type: one(params?.type),
+    tag: one(params?.tag),
+  };
+}
+
+/**
+ * Згортання зрізаного джерела (категорії/типи/теги) до тієї самої форми, що
+ * й `agg_sla_monthly`.
+ *
+ * ⚠️ Незакритий залишок («В процесі») тут рахується НАРОСТАЮЧОЮ сумою
+ * created − completed − canceled по місяцях зрізу, а не береться готовим:
+ * готовий `backlog_end_of_month` існує лише на рівні ЖК, і розрізати його по
+ * категорії неможливо в принципі — це стан черги, а не подія місяця. Тому
+ * під фільтром цифра означає «скільки з поданих у цьому зрізі ще не
+ * закрито», і для тегів ряд починається там, де теги почали проставляти.
+ *
+ * Друга відмінність від нефільтрованого джерела: місяці без жодної заявки в
+ * зрізі просто відсутні (у `mart_monthly_sla` під них є календарний спайн).
+ * На графіку це розрив, а не нуль — і так чесніше.
+ */
+function sliceToSla(
+  rows: Array<CategoryMonthly & { tag_ua?: string }>
+): SlaMonthly[] {
+  const acc = new Map<string, SlaMonthly>();
+  for (const r of rows) {
+    const key = `${r.complex_id}|${r.report_month_key}`;
+    const cur = acc.get(key) ?? {
+      report_month_key: r.report_month_key,
+      complex_id: r.complex_id,
+      complex_name: r.complex_name,
+      created_count: 0,
+      completed_count: 0,
+      canceled_count: 0,
+      completed_same_month_count: 0,
+      backlog_end_of_month: 0,
+    };
+    cur.created_count += r.created_count;
+    cur.completed_count += r.completed_count;
+    cur.canceled_count += r.canceled_count;
+    cur.completed_same_month_count += r.completed_same_month_count;
+    acc.set(key, cur);
+  }
+
+  const out = [...acc.values()].sort(
+    (a, b) =>
+      a.complex_id.localeCompare(b.complex_id) ||
+      a.report_month_key.localeCompare(b.report_month_key)
+  );
+  let running = 0;
+  let complex = "";
+  for (const r of out) {
+    if (r.complex_id !== complex) {
+      complex = r.complex_id;
+      running = 0;
+    }
+    running += r.created_count - r.completed_count - r.canceled_count;
+    r.backlog_end_of_month = running;
+  }
+  return out;
+}
+
+/** Скільки заявок стоїть за кожним значенням розрізу у вибраному періоді. */
+function sliceOptions<T extends { created_count: number }>(
+  rows: T[],
+  pick: (row: T) => string
+): SliceOption[] {
+  const acc = new Map<string, number>();
+  for (const r of rows) {
+    const v = pick(r);
+    acc.set(v, (acc.get(v) ?? 0) + r.created_count);
+  }
+  return [...acc.entries()]
+    .filter(([, count]) => count > 0)
+    .map(([value, count]) => ({ value, label: value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+}
+
+/**
+ * Період і зріз сторінки «Операційна ефективність (SLA)».
+ *
+ * Джерело залежить від фільтрів, і це навмисно:
+ *   · без фільтрів   → `agg_sla_monthly` (кожна заявка рівно раз, готовий
+ *                       незакритий залишок, повний календарний спайн);
+ *   · категорія/тип  → `agg_categories_monthly`;
+ *   · тег            → `agg_tags_monthly` (окремий файл, бо тег
+ *                       багатозначний — див. TagMonthly).
+ * Лічильники в усіх трьох рахуються однаково (створено по даті подачі,
+ * виконано/скасовано по даті закриття), тому цифри між станами фільтра
+ * порівнянні.
+ *
+ * Межі дейт-пікера ЗАВЖДИ беруться з нефільтрованого джерела: інакше вибір
+ * рідкісного тега мовчки стискав би доступний період до двох місяців, і
+ * повернути ширший було б нізвідки.
+ */
 export function getSlaPeriod(
   params?: Record<string, string | string[] | undefined>
 ) {
-  const raw = getSla();
+  const filters = readSlaFilters(params);
+  const full = getSla();
+  const isSliced = Boolean(filters.category || filters.type || filters.tag);
+
+  const source: Array<CategoryMonthly & { tag_ua?: string }> = filters.tag
+    ? getTagged().filter((r) => r.tag_ua === filters.tag)
+    : isSliced
+      ? getCategories()
+      : [];
+
+  const matching = source.filter(
+    (r) =>
+      (!filters.category || r.category_ua === filters.category) &&
+      (!filters.type || r.type_ua === filters.type)
+  );
+
+  const raw = isSliced ? sliceToSla(matching) : full;
+
+  // Період рахуємо на ПОВНОМУ ряду: межі, поточний і попередній місяць не
+  // мають залежати від того, чи є в зрізі дані за сусідній місяць.
+  //
+  // Дефолт — 13 місяців (як у Looker), а не вся історія: спайн календаря
+  // починається 2021-м, а перша заявка в CRM — квітень 2022, тож «увесь час»
+  // за замовчуванням давав рік порожнечі зліва й нечитабельні стовпчики на
+  // 68 точках. Дейт-пікер лишається — «Увесь час» доступний одним кліком.
+  const period = buildPeriod(companySla(full), params, 12);
+  const company = companySla(raw);
+  const byMonth = new Map(company.map((r) => [r.report_month_key, r]));
+  const emptyMonth = (key: string): CompanySla => ({
+    report_month_key: key,
+    created_count: 0,
+    completed_count: 0,
+    canceled_count: 0,
+    completed_same_month_count: 0,
+    backlog_end_of_month: 0,
+  });
+
+  const inRange = <T extends { report_month_key: string }>(rows: T[]) =>
+    rows.filter(
+      (r) =>
+        r.report_month_key >= period.range.from &&
+        r.report_month_key <= period.range.to
+    );
+
+  // Довідники для кнопок фільтра рахуються з урахуванням СУСІДНІХ фільтрів:
+  // обрав «Аварійна» — бачиш, скільки в ній проблем і скільки питань.
+  // `tagged` — усі затеговані заявки (звідси лічильники на кнопках тегів,
+  // тому фільтр по тегу тут НЕ застосований: інакше після вибору «Аварійна»
+  // решта тегів показувала б нулі й перемкнутись було б нікуди).
+  // `base` — те, з чого рахуються лічильники категорій і типів, і ось на
+  // ньому обраний тег уже враховано.
+  const tagged = inRange(getTagged());
+  const base = filters.tag
+    ? tagged.filter((r) => r.tag_ua === filters.tag)
+    : inRange(getCategories());
+
   return {
-    ...buildPeriod(companySla(raw), params),
+    ...period,
     raw,
+    filters,
+    isSliced,
+    cur: byMonth.get(period.curKey) ?? emptyMonth(period.curKey),
+    prev: byMonth.get(period.prevKey) ?? emptyMonth(period.prevKey),
+    base: inRange(company),
+    slices: {
+      categories: sliceOptions(
+        base.filter((r) => !filters.type || r.type_ua === filters.type),
+        (r) => r.category_ua
+      ),
+      types: sliceOptions(
+        base.filter(
+          (r) => !filters.category || r.category_ua === filters.category
+        ),
+        (r) => r.type_ua
+      ),
+      tags: sliceOptions(
+        tagged.filter(
+          (r) =>
+            (!filters.category || r.category_ua === filters.category) &&
+            (!filters.type || r.type_ua === filters.type)
+        ),
+        (r) => r.tag_ua
+      ),
+    },
     byComplex: (monthKey: string) =>
       raw.filter((x) => x.report_month_key === monthKey && x.created_count > 0),
+    /** ЖК × місяць у межах вибраного періоду — основа зведених таблиць. */
+    complexMonths: () => inRange(raw),
   };
 }
 
@@ -724,6 +931,84 @@ export const getCsatWaves = () => loadCompact<CsatWave>("agg_csat_waves");
 export const getCsatComments = () =>
   loadCompact<CsatComment>("agg_csat_comments");
 export const getCsatProblems = () => load<CsatProblem>("agg_csat_problems");
+
+// ── NPS ─────────────────────────────────────────────────────────────────
+
+/**
+ * Хвиля × ЖК.
+ *
+ * ⚠️ `nps_score` рахувати вгору (по компанії) МОЖНА ТІЛЬКИ з лічильників:
+ * `sum(promoters)`, `sum(detractors)`, `sum(votes)` — і вже з них частки.
+ * Середнє з `nps_score` по ЖК дало б «Севену» з одним голосом ту саму вагу,
+ * що «Варшавському 2» зі ста шістнадцятьма. Те саме з `avg_grade` — для
+ * цього поруч лежить `grade_sum`.
+ */
+export type NpsComplex = {
+  wave_label: string;
+  wave_month_key: string;
+  complex_id: string;
+  complex_name: string;
+  votes: number;
+  comments: number;
+  grade_sum: number;
+  promoters: number;
+  passives: number;
+  detractors: number;
+  grade_1_2: number;
+  avg_grade: number | null;
+  promoter_share: number | null;
+  detractor_share: number | null;
+  nps_score: number | null;
+  n_apartments: number | null;
+  n_users_confirmed: number | null;
+  n_billing_accounts: number | null;
+  reach_of_apartments: number | null;
+  reach_of_confirmed: number | null;
+};
+
+/** Коментар до NPS. Персональних ідентифікаторів немає — розріз будинок. */
+export type NpsComment = {
+  answer_id: number;
+  wave_label: string;
+  wave_month_key: string;
+  complex_id: string;
+  complex_name: string;
+  house_number: string;
+  house_address: string;
+  grade: number;
+  nps_band_ua: string;
+  comment: string;
+  answered_on: string;
+};
+
+export const getNpsComplexes = () => load<NpsComplex>("agg_nps_complex");
+export const getNpsComments = () => load<NpsComment>("agg_nps_comments");
+
+/**
+ * Зведення набору рядків до одного балу NPS.
+ *
+ * Єдина точка, де рахується компанійська цифра — щоб «середнє із середніх»
+ * не з'явилось випадково в котромусь із блоків сторінки.
+ */
+export function npsRollup(rows: NpsComplex[]) {
+  const votes = rows.reduce((a, r) => a + r.votes, 0);
+  const promoters = rows.reduce((a, r) => a + r.promoters, 0);
+  const passives = rows.reduce((a, r) => a + r.passives, 0);
+  const detractors = rows.reduce((a, r) => a + r.detractors, 0);
+  const gradeSum = rows.reduce((a, r) => a + r.grade_sum, 0);
+  const comments = rows.reduce((a, r) => a + r.comments, 0);
+  return {
+    votes,
+    promoters,
+    passives,
+    detractors,
+    comments,
+    avgGrade: votes > 0 ? gradeSum / votes : null,
+    promoterShare: votes > 0 ? promoters / votes : null,
+    detractorShare: votes > 0 ? detractors / votes : null,
+    score: votes > 0 ? (100 * (promoters - detractors)) / votes : null,
+  };
+}
 
 /**
  * Хвилі в хронологічному порядку.

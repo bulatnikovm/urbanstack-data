@@ -35,6 +35,7 @@ const REGISTRY = join(WEB, "data", "metrics.json");
  */
 const NOT_METRICS = new Set([
   "Немає даних за обраний фільтр",
+  "Даних ще немає",
   "`Команда — ${users.length}`",
 ]);
 

@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { requireAccess } from "@/lib/guard";
 
 /**
  * Що робити з кожним сегментом дії. Це не прикраса: однакові 85 балів в
@@ -42,6 +43,7 @@ const houseKey = (h: { complex_name: string; house_number: string }) =>
 export default async function SegmentsPage({
   searchParams,
 }: PageProps<"/operations/segments">) {
+  await requireAccess("/operations/segments");
   const sp = await searchParams;
   const { curKey, prevKey, bounds, range, cur, prev, base, inWindow } =
     getSegmentPeriod(sp);

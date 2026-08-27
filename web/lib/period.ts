@@ -44,15 +44,30 @@ export function monthsBetween(from: string, to: string): string[] {
  */
 export function resolveRange(
   params: Record<string, string | string[] | undefined>,
-  bounds: { min: string; max: string }
+  bounds: { min: string; max: string },
+  /**
+   * Скільки місяців показувати, коли в URL періоду немає. За замовчуванням
+   * увесь наявний час.
+   *
+   * Свій дефолт потрібен сторінці SLA: там ряд починається 2021-м (спайн
+   * календаря), а реально дивляться останній рік — і на 68 точках стовпчики
+   * «створено/виконано/відхилено» перетворюються на сірий шум, а зведені
+   * таблиці все одно обрізані до 13 місяців. У Looker дефолт був такий самий.
+   */
+  defaultMonths?: number
 ): Range {
   const raw = (k: string) => {
     const v = params[k];
     return Array.isArray(v) ? v[0] : v;
   };
 
-  let from = isMonthKey(raw("from")) ? (raw("from") as string) : bounds.min;
-  let to = isMonthKey(raw("to")) ? (raw("to") as string) : bounds.max;
+  const fallback =
+    defaultMonths === undefined
+      ? bounds
+      : { min: presetRange(defaultMonths, bounds).from, max: bounds.max };
+
+  let from = isMonthKey(raw("from")) ? (raw("from") as string) : fallback.min;
+  let to = isMonthKey(raw("to")) ? (raw("to") as string) : fallback.max;
 
   if (from > to) [from, to] = [to, from];
 
