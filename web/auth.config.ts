@@ -2,6 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 
 import { accessFor } from "@/lib/access";
+import { isRole } from "@/lib/roles";
 
 /**
  * Хто має доступ — тепер у Supabase (`dashboard_users`), а не в env.
@@ -11,7 +12,7 @@ import { accessFor } from "@/lib/access";
  * `ADMIN_EMAILS` / `ALLOWED_EMAILS` більше не читаються. Роль приходить з
  * того ж рядка таблиці, що й сам дозвіл — двох джерел правди немає.
  */
-export type { Role } from "@/lib/access";
+export type { Role } from "@/lib/roles";
 
 export const authConfig = {
   providers: [Google],
@@ -60,8 +61,7 @@ export const authConfig = {
 
     session({ session, token }) {
       if (session.user) {
-        session.user.role =
-          (token.role as "admin" | "viewer" | undefined) ?? "viewer";
+        session.user.role = isRole(token.role) ? token.role : "viewer";
       }
       return session;
     },

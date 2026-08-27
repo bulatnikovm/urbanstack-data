@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
 import { HealthFilters } from "@/components/health-filters";
 import { BklitLine } from "@/components/bklit-line";
+import { requireAccess } from "@/lib/guard";
 
 /** "1.12.3" → [1,12,3], для сортування версій по-людськи, не рядком */
 function versionKey(v: string): number[] {
@@ -57,6 +58,7 @@ function currentWeekKey(): string {
 export default async function HealthPage({
   searchParams,
 }: PageProps<"/health">) {
+  await requireAccess("/health");
   const sp = await searchParams;
   const { curKey, isPartial, daysElapsed, daysInMonth, bounds, range } =
     getPeriod(sp);

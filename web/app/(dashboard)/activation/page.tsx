@@ -11,6 +11,7 @@ import {
 import type { Series } from "@/components/trend-charts";
 import { BklitLine } from "@/components/bklit-line";
 import { BklitBar } from "@/components/bklit-bar";
+import { requireAccess } from "@/lib/guard";
 
 // Дві категорії, не три. У марті count_activated + count_passively_activated
 // == count_new_users ТОТОЖНО (перевірено: залишок = 0 у кожному місяці), тож
@@ -22,6 +23,7 @@ const FUNNEL_SERIES: Series[] = [
 ];
 
 export default async function ActivationPage({ searchParams }: PageProps<"/activation">) {
+  await requireAccess("/activation");
   const sp = await searchParams;
   const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at } = getPeriod(sp);
 

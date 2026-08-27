@@ -30,8 +30,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { requireAccess } from "@/lib/guard";
 
 export default async function EngagementPage({ searchParams }: PageProps<"/engagement">) {
+  await requireAccess("/engagement");
   const sp = await searchParams;
   const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at } = getPeriod(sp);
 

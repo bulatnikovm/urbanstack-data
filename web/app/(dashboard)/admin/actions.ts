@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
-import { addUser, removeUser, type Role } from "@/lib/access";
+import { addUser, removeUser } from "@/lib/access";
+import { isRole, type Role } from "@/lib/roles";
 
 /**
  * ⚠️ Кожна дія ПЕРЕВІРЯЄ РОЛЬ САМА.
@@ -31,7 +32,7 @@ export async function grantAccess(
 
   const email = String(formData.get("email") ?? "");
   const roleRaw = String(formData.get("role") ?? "viewer");
-  const role: Role = roleRaw === "admin" ? "admin" : "viewer";
+  const role: Role = isRole(roleRaw) ? roleRaw : "viewer";
   const note = String(formData.get("note") ?? "");
 
   if (!email.trim()) return { error: "Впиши пошту" };

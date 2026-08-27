@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { requireAccess } from "@/lib/guard";
 
 const SEGMENT_SERIES: Series[] = [
   { key: "alive", label: "Живі", slot: 1 },
@@ -35,6 +36,7 @@ const SEGMENT_SERIES: Series[] = [
 ];
 
 export default async function AudiencePage({ searchParams }: PageProps<"/">) {
+  await requireAccess("/");
   const sp = await searchParams;
   const { base, cur, prev, curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, minKey } = getPeriod(sp);
 

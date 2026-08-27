@@ -20,10 +20,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { requireAccess } from "@/lib/guard";
 
 const STAR_TOTAL = "0. Всього активних";
 
 export default async function StarPage({ searchParams }: PageProps<"/star">) {
+  await requireAccess("/star");
   const sp = await searchParams;
   const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at } = getPeriod(sp);
 

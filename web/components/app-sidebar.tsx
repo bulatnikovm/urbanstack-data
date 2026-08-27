@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Flame,
   Gauge,
+  Heart,
   Inbox,
   LineChart,
   Rocket,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { UrbanStackMark } from "@/components/brand";
+import { canSee, homeFor, type Role } from "@/lib/roles";
 import {
   Sidebar,
   SidebarContent,
@@ -32,7 +34,19 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-type AppSidebarProps = { footer?: React.ReactNode; isAdmin?: boolean };
+type AppSidebarProps = {
+  footer?: React.ReactNode;
+  /**
+   * Меню фільтрується ТИМ САМИМ `canSee`, що й проксі та сторінки — не
+   * власним списком «що кому показувати». Інакше меню й доступ розходяться
+   * вже на другій правці: пункт є, а сторінка віддає 404.
+   *
+   * Ховати пункт — це UI, а не захист: сторінки самі викликають
+   * `requireAccess` (`lib/guard.ts`), а проксі редіректить. Але показувати
+   * кнопку, яка веде в 404, — гірше, ніж не показувати нічого.
+   */
+  role?: Role;
+};
 
 /**
  * Два дашборди в одному застосунку.
@@ -108,6 +122,7 @@ const OPERATIONS_NAV = [
     group: "Клієнтський досвід",
     items: [
       { href: "/operations/csat", label: "Задоволеність", icon: Smile, page: "" },
+    { href: "/operations/nps", label: "NPS", icon: Heart, page: "" },
       { href: "/operations/churn", label: "Ризик відтоку", icon: ShieldAlert, page: "" },
       { href: "/operations/segments", label: "Напруга і сегменти", icon: Gauge, page: "" },
     ],
@@ -116,10 +131,15 @@ const OPERATIONS_NAV = [
 
 const ADMIN_ITEM = { href: "/admin", label: "Доступи", icon: Users, page: "" };
 
-export function AppSidebar({ footer, isAdmin }: AppSidebarProps) {
+export function AppSidebar({ footer, role }: AppSidebarProps) {
   const pathname = usePathname();
+  const visible = (href: string) => canSee(role, href);
+  const showSwitcher = visible("/");
 
-  const isOperations = pathname === "/operations" || pathname.startsWith("/operations/");
+  const isOperations =
+    !showSwitcher ||
+    pathname === "/operations" ||
+    pathname.startsWith("/operations/");
   const current = isOperations ? DASHBOARDS[1] : DASHBOARDS[0];
 
   // Пункт «Доступи» бачить лише адмін. Це виключно UI: сама сторінка
@@ -127,17 +147,25 @@ export function AppSidebar({ footer, isAdmin }: AppSidebarProps) {
   // сховане меню нікого не захищає. Список доступів один на обидва
   // дашборди, тому пункт живе тільки в продуктовому.
   const base = isOperations ? OPERATIONS_NAV : PRODUCT_NAV;
-  const nav =
-    isAdmin && !isOperations
+  const withAdmin =
+    visible(ADMIN_ITEM.href) && !isOperations
       ? [...base, { group: "Адміністрування", items: [ADMIN_ITEM] }]
       : base;
+  // Групи, з яких після фільтра нічого не лишилось, прибираємо цілком —
+  // порожній заголовок «Клієнтський досвід» без пунктів читається як збій.
+  const nav = withAdmin
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => visible(item.href)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href={current.root} />}>
+            <SidebarMenuButton size="lg" render={<Link href={homeFor(role)} />}>
               <>
                 <UrbanStackMark className="size-8 shrink-0 text-foreground [--brand-mark-fg:var(--sidebar)]" />
                 <div className="grid flex-1 text-left leading-tight">
@@ -162,7 +190,7 @@ export function AppSidebar({ footer, isAdmin }: AppSidebarProps) {
           дашборду просто не побачить. Два видимі рядки прибирають це
           питання й заразом коштують один клік замість двох.
         */}
-        <SidebarMenu>
+        <SidebarMenu className={showSwitcher ? undefined : "hidden"}>
           {DASHBOARDS.map((d) => (
             <SidebarMenuItem key={d.id}>
               <SidebarMenuButton

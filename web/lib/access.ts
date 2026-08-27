@@ -17,7 +17,10 @@ import "server-only";
  * окрему RLS-політику, а не тягнути цей ключ.
  */
 
-export type Role = "admin" | "viewer";
+// Тип і правила ролей живуть у `lib/roles.ts` (без `server-only`, бо потрібні
+// й клієнтським компонентам). Тут — тільки робота з базою.
+export type { Role } from "./roles";
+import type { Role } from "./roles";
 
 export type DashboardUser = {
   email: string;

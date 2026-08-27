@@ -1,10 +1,9 @@
-import { notFound } from "next/navigation";
-
 import { auth } from "@/auth";
 import { PageBody, Panel } from "@/components/dashboard";
 import { listUsers } from "@/lib/access";
 
 import { AccessForm } from "./access-form";
+import { requireAccess } from "@/lib/guard";
 
 /**
  * Керування доступами. Не в дейт-піклер-шапці, як решта сторінок — тут
@@ -15,8 +14,12 @@ import { AccessForm } from "./access-form";
  * (див. actions.ts), тут лише те, що видно.
  */
 export default async function AdminPage() {
+  // Область `admin` видана лише ролі admin — правило живе в lib/roles.ts,
+  // а не тут, щоб проксі, сайдбар і сторінка не розходились у трактуванні.
+  // Справжня перевірка прав на ЗАПИС — окремо в actions.ts: Server Action
+  // це публічний ендпоінт, і сховати сторінку недостатньо.
+  await requireAccess("/admin");
   const session = await auth();
-  if (session?.user?.role !== "admin") notFound();
 
   const users = await listUsers();
 
@@ -33,9 +36,9 @@ export default async function AdminPage() {
       <PageBody>
         <Panel
           title={`Команда — ${users.length}`}
-          note="Вхід тільки через Google. Пошта має збігатися з тією, якою людина логіниться; регістр не важливий. Адміністратор бачить цю сторінку й може керувати доступами, перегляд — лише дашборд."
+          note="Вхід тільки через Google. Пошта має збігатися з тією, якою людина логіниться; регістр не важливий. «Адміністратор» — обидва дашборди плюс ця сторінка. «Перегляд» — обидва дашборди. «Тільки операційний» — заявки, SLA, CSAT і NPS; продуктового дашборду, «Ризику відтоку» та «Напруги і сегментів» для такої людини не існує (останні два — профілювання мешканців за текстами звернень, це внутрішній інструмент)."
         >
-          <AccessForm users={users} currentEmail={session.user.email ?? ""} />
+          <AccessForm users={users} currentEmail={session?.user?.email ?? ""} />
         </Panel>
       </PageBody>
     </>

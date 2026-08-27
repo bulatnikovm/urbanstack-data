@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import type { DashboardUser } from "@/lib/access";
 
 import { grantAccess, revokeAccess, type ActionState } from "./actions";
+import { ROLE_HINTS, ROLE_LABELS, type Role } from "@/lib/roles";
 
 const EMPTY: ActionState = {};
 
@@ -38,6 +39,12 @@ function RevokeButton({ email }: { email: string }) {
   );
 }
 
+/**
+ * Порядок в дропдауні — від найчастішого до найрідшого, а не за алфавітом:
+ * колегам зазвичай видають «Перегляд», і він має бути дефолтом.
+ */
+const ROLE_ORDER: Role[] = ["viewer", "operations", "admin"];
+
 export function AccessForm({
   users,
   currentEmail,
@@ -65,8 +72,11 @@ export function AccessForm({
             defaultValue="viewer"
             className="h-9 rounded-md border bg-background px-2 text-sm"
           >
-            <option value="viewer">Перегляд</option>
-            <option value="admin">Адміністратор</option>
+            {ROLE_ORDER.map((r) => (
+              <option key={r} value={r} title={ROLE_HINTS[r]}>
+                {ROLE_LABELS[r]}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -110,7 +120,9 @@ export function AccessForm({
             </div>
 
             <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              {u.role === "admin" ? "Адміністратор" : "Перегляд"}
+              <span title={ROLE_HINTS[u.role] ?? ""}>
+                {ROLE_LABELS[u.role] ?? u.role}
+              </span>
             </span>
 
             <form action={delAction} className="shrink-0">
