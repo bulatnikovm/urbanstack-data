@@ -69,3 +69,49 @@ models:
       мати кілька тем — це навмисно.
       ⚠️ Покриття 87% негативних коментарів; решта не містить жодного
       патерна словника. Precision не заміряна.
+
+  - name: int_nps_waves
+    description: >
+      Хвилі NPS (survey_type='nps'). Тестові опитування відсіюються не
+      списком описів, а тестовим ЖК: усі 25 тестових NPS створені в DIM 9000,
+      тож seed test_complexes закриває їх повністю.
+    columns:
+      - name: survey_id
+        tests:
+          - not_null
+          - unique
+
+  - name: fact_nps_answers
+    description: >
+      Grain — answer_id. Шкала в застосунку 1-10 (не канонічна 0-10);
+      промоутери 9-10, пасивні 7-8, детрактори 1-6. ЖК береться з
+      ОПИТУВАННЯ, а не з респондента — хвиля розсилається по одному
+      опитуванню на ЖК, тобто area.complex_id тут і є дизайн розсилки.
+    columns:
+      - name: answer_id
+        tests:
+          - not_null
+          - unique
+      - name: grade
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+              quote: false
+
+  - name: mart_nps_complex
+    description: >
+      Grain — wave_label × complex_id. nps_score = %промоутерів −
+      %детракторів (−100…+100). Переагрегувати вгору ТІЛЬКИ через
+      лічильники promoters/detractors/votes, ніколи не середнім із
+      nps_score по ЖК.
+    columns:
+      - name: complex_id
+        tests:
+          - not_null
+      - name: votes
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [wave_label, complex_id]

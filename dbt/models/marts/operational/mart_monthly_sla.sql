@@ -22,6 +22,9 @@ with orders as (
     select * from {{ ref('fact_orders') }}
     where not coalesce(is_test_complex, false)
       and complex_id is not null
+      -- Групова заявка рахується ОДИН раз — батьком (рішення Максима
+      -- 2026-08-26, деталі й масштаб — у шапці fact_orders).
+      and not is_child
 ),
 
 backbone as (

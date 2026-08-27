@@ -61,3 +61,20 @@ models:
       - name: citizen_id
         tests:
           - not_null
+
+  - name: int_order_tags
+    description: >
+      Grain — заявка × тег. Міст між тегом (у CRM він на ЗАДАЧІ) і заявкою.
+      Тег дочірньої заявки піднімається на батьківську: дашборд рахує лише
+      батьків, і без підйому тег усередині групової заявки зник би з фільтра
+      (сьогодні no-op — жодна дочірня заявка тегів не має).
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+      - name: tag_ua
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [order_id, tag_id]

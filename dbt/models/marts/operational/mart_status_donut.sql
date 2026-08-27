@@ -10,4 +10,7 @@ select
     count(*) as order_count
 from {{ ref('fact_orders') }}
 where not coalesce(is_test_complex, false)
+  -- Групова заявка рахується ОДИН раз — батьком (рішення Максима
+  -- 2026-08-26, деталі й масштаб — у шапці fact_orders).
+  and not is_child
 group by complex_id, report_month, status, is_valid

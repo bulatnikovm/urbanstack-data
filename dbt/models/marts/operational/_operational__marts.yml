@@ -285,3 +285,24 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [house_id, report_month]
+
+  - name: mart_monthly_tags
+    description: >
+      Grain — complex_id × report_month × category_ua × type_ua × tag_ua.
+      Дзеркало mart_monthly_categories з додатковим виміром — тегом CRM.
+      Окрема модель, бо тег БАГАТОЗНАЧНИЙ: заявка з двома мітками дає два
+      рядки, і сума без фільтра по тегу порахувала б її двічі. Сторінка без
+      фільтра читає mart_monthly_categories, з фільтром — цю модель.
+    columns:
+      - name: complex_id
+        tests:
+          - not_null
+      - name: report_month
+        tests:
+          - not_null
+      - name: tag_ua
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [complex_id, report_month, category_ua, type_ua, tag_ua]

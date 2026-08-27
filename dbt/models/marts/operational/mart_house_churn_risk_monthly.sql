@@ -75,6 +75,15 @@ orders_m as (
     from {{ ref('int_order_text_flags') }} f
     join {{ ref('fact_orders') }} o using (order_id)
     where o.house_id is not null
+      -- Батьківська заявка групової сюди НЕ йде. Її текст пише УК, а не
+      -- мешканець, тож як сигнал негативу він нічого не означає. До
+      -- 2026-08-26 вона відсіювалась сама (у батька не було гео), і коли
+      -- гео зʼявилось — фільтр довелось зробити явним, щоб модель ризику
+      -- рахувала рівно те саме, що й раніше.
+      -- ⚠️ Дочірні заявки тут ЛИШАЮТЬСЯ, і це відкрите питання: вони несуть
+      -- citizen_id мешканця, хоча створила їх теж УК, тобто одна групова
+      -- заявка виглядає як N звернень від N людей. Перевірити окремо.
+      and not o.is_group_parent
     group by 1, 2
 ),
 
@@ -108,6 +117,9 @@ reviews_m as (
     from {{ source('postgresqldim9000_operational', 'order_reviews') }} r
     join {{ ref('fact_orders') }} o on o.order_id = r.order_id
     where o.house_id is not null
+      -- Той самий явний фільтр, що й вище: оцінку закриття групової заявки
+      -- ставить УК, а не мешканець.
+      and not o.is_group_parent
     group by 1, 2
 ),
 

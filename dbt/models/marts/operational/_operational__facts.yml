@@ -17,6 +17,32 @@ models:
         description: Тип об'єкта заявки (Квартира/Паркінг/Комерційне/Комора/Невідомо).
         tests:
           - not_null
+      - name: is_child
+        description: >
+          Дочірня заявка групової (parent_id IS NOT NULL). Марти заявок її НЕ
+          рахують — групова заявка представлена батьком (рішення Максима
+          2026-08-26). 10 061 рядок зі 164 885.
+        tests:
+          - not_null
+      - name: is_group_parent
+        description: >
+          Батьківська заявка групової — представник групи в усіх підрахунках.
+          1 226 рядків. Гео успадковане від дітей: у самого батька
+          space_id IS NULL завжди.
+        tests:
+          - not_null
+      - name: n_child_houses
+        description: >
+          Скільки будинків охопила групова заявка. Для 842 з 1 226 батьків це
+          1, тобто «домінантний будинок» = точна адреса; більші значення
+          показують, де адреса є наближенням.
+        tests:
+          - not_null
+      - name: tags
+        description: >
+          Теги CRM зі сторінки «Заявки» (порожній масив, якщо тегів немає).
+          Джерело — dim9000_fast, а не Stitch-репліка; ланцюжок
+          tags → task_tags_links → order_tasks → orders (див. int_order_tags).
 
   - name: fact_order_events
     description: Grain — подія (created/completed/canceled/... transition). Заявка може мати кілька подій одного типу.

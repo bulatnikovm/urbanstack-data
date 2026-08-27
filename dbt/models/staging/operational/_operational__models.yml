@@ -51,3 +51,27 @@ models:
 
   - name: stg_dim9000__space_user
     description: Зв'язка user_id × space_id, без ролі/дати.
+
+  - name: stg_dim9000__tags
+    description: >
+      Довідник тегів із dim9000_fast_eu. Три незалежні простори в `tag_type`
+      (task / debtor / user) — операційний дашборд бере лише `task`.
+    columns:
+      - name: tag_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_dim9000__task_tags
+    description: >
+      Зв'язка тег × ЗАДАЧА. До заявки тег доходить через
+      order_tasks.order_id — це робить int_order_tags. Сурогатного ключа в
+      джерелі немає, ключ — пара (tag_id, task_id).
+    columns:
+      - name: tag_id
+        tests: [not_null]
+      - name: task_id
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [tag_id, task_id]

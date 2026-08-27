@@ -63,6 +63,31 @@ jobs:
                 threads: 4
           EOF
 
+      # Теги заявок живуть не в Stitch-репліці (`postgresqldim9000` не має їх
+      # жодною колонкою), а в окремому внутрішньому продукті `dim9000_fast`,
+      # який синхронізується в US. BigQuery не джойнить між регіонами, тому
+      # перед збіркою копіюємо дві крихітні таблиці в EU-дзеркало.
+      #
+      # `bq cp -f` уміє крос-регіон і перезаписує ціль повністю — стан
+      # дзеркала завжди дорівнює джерелу, накопичення не буває. ~40 с на
+      # обидві таблиці.
+      #
+      # ⚠️ Крок НЕ падає, якщо копія не вдалась: дашборд без свіжих тегів
+      # корисніший за дашборд, який не оновився взагалі. Ознака проблеми —
+      # `max(report_month_key)` у web/data/operational/agg_tags_monthly.json
+      # відстає від решти вивантажень.
+      - name: gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Синхронізувати теги (US → EU)
+        continue-on-error: true
+        run: |
+          for t in tags task_tags_links; do
+            bq --project_id=analytics-454817 cp -f \
+              "analytics-454817:dim9000_fast.$t" \
+              "analytics-454817:dim9000_fast_eu.$t"
+          done
+
       - name: dbt build
         working-directory: dbt
         run: |
