@@ -8,6 +8,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -65,28 +66,46 @@ export async function UserMenu() {
               }
             />
             <DropdownMenuContent side="top" align="start" className="w-56">
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col gap-0.5">
-                  <span className="truncate text-sm font-medium">{name}</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {email}
-                  </span>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <form
-                action={async () => {
-                  "use server";
-                  await signOut({ redirectTo: "/login" });
-                }}
-              >
-                <DropdownMenuItem
-                  render={<button type="submit" className="w-full" />}
+              {/*
+                ⚠️ `DropdownMenuGroup` тут ОБОВʼЯЗКОВИЙ, і це не оформлення.
+
+                `DropdownMenuLabel` — це `Menu.GroupLabel` з Base UI, а він
+                вимагає контекст `Menu.Group`. Без обгортки компонент кидає
+                «MenuGroupContext is missing» ПІД ЧАС РЕНДЕРУ вмісту меню,
+                тобто рівно тоді, коли на нього клікають. У деві це видно як
+                Runtime Error, а в проді React повторює рендер, знову
+                отримує виняток — і вкладка помирає з «This page couldn't
+                load». Симптом виглядав як падіння браузера, а не як помилка
+                застосунку, тому й прожив непоміченим: меню відкривали рідко.
+
+                Група обгортає і підпис, і пункт: підпис має щось називати.
+                Порожня група з самим лише лейблом задовольнила б Base UI,
+                але для скрінрідера означала б «група ні з чого».
+              */}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="truncate text-sm font-medium">{name}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {email}
+                    </span>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <form
+                  action={async () => {
+                    "use server";
+                    await signOut({ redirectTo: "/login" });
+                  }}
                 >
-                  <LogOut />
-                  Вийти
-                </DropdownMenuItem>
-              </form>
+                  <DropdownMenuItem
+                    render={<button type="submit" className="w-full" />}
+                  >
+                    <LogOut />
+                    Вийти
+                  </DropdownMenuItem>
+                </form>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </SidebarMenuItem>
