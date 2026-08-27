@@ -26,9 +26,9 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Дашборди UrbanStack",
+  title: "Дашборди DIM9000",
   description:
-    "Метрики UrbanStack — продуктові й операційні",
+    "Метрики DIM9000 — продуктові й операційні",
   // Іконка вкладки — `app/icon.svg`, Next підхоплює її за конвенцією.
   // Кольори там зафіксовані (чорна плашка, білі літери): favicon малюється
   // поза сторінкою, `currentColor` там нема від чого успадковувати.

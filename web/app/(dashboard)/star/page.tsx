@@ -154,7 +154,7 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
               note="Зміна до попереднього місяця розрахована в самій марті."
               action={
                 <ExportXlsx
-                  fileName={`urbanstack-star-${curKey}`}
+                  fileName={`dim9000-star-${curKey}`}
                   sheetName="STAR"
                   sheet={buildSheet(cats, [
                     {

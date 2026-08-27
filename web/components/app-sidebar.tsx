@@ -20,7 +20,7 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { UrbanStackMark } from "@/components/brand";
+import { Dim9000Mark } from "@/components/brand";
 import { canSee, homeFor, type Access } from "@/lib/roles";
 import {
   Sidebar,
@@ -190,10 +190,10 @@ export function AppSidebar({ footer, access }: AppSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href={homeFor(access)} />}>
               <>
-                <UrbanStackMark className="size-8 shrink-0 text-foreground [--brand-mark-fg:var(--sidebar)]" />
+                <Dim9000Mark className="size-8 shrink-0 text-foreground [--brand-mark-fg:var(--sidebar)]" />
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold">
-                    UrbanStack
+                    DIM9000
                   </span>
                   <span className="truncate text-xs text-muted-foreground">
                     {current?.label} дашборд

@@ -274,7 +274,7 @@ export default async function ChurnPage({ searchParams }: PageProps<"/operations
             note="Стадія 5 і згасання — це фіксація факту, а не прогноз: там уже треба перевіряти руками, чи будинок ще наш."
             action={
               <ExportXlsx
-                fileName={`urbanstack-churn-${curKey}`}
+                fileName={`dim9000-churn-${curKey}`}
                 sheetName="Ризик відтоку"
                 sheet={buildSheet(queue, [
                   { header: "ЖК", value: (h) => h.complex_name, width: 24 },
@@ -428,7 +428,7 @@ export default async function ChurnPage({ searchParams }: PageProps<"/operations
             note="Останні 14. Дефолтна дія — одна письмова відповідь на кампанію всім учасникам: 13 із 20 найбільших дослівно вимагають саме її."
             action={
               <ExportXlsx
-                fileName={`urbanstack-campaigns-${curKey}`}
+                fileName={`dim9000-campaigns-${curKey}`}
                 sheetName="Кампанії"
                 sheet={buildSheet(escalation, [
                   {

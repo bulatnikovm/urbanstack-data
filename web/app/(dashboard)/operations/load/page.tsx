@@ -269,7 +269,7 @@ export default async function LoadPage({ searchParams }: PageProps<"/operations/
               note={`Топ-${TOP_HOUSES}. Виключення будинків — одне й похідне від даних (дата деактивації + seed тестових ЖК); у старому звіті тут працювала звірка за назвою ЖК і номером будинку рядками.`}
               action={
                 <ExportXlsx
-                  fileName={`urbanstack-house-rating-${curKey}`}
+                  fileName={`dim9000-house-rating-${curKey}`}
                   sheetName="Антирейтинг"
                   sheet={buildSheet(houseRating, [
                     { header: "ЖК", value: (h) => h.complex, width: 24 },
@@ -423,7 +423,7 @@ export default async function LoadPage({ searchParams }: PageProps<"/operations/
               note={`${monthLabel(curKey)}. Задача рівня ЖК будинку не має — це нормально, а не пропуск даних.`}
               action={
                 <ExportXlsx
-                  fileName={`urbanstack-load-${curKey}`}
+                  fileName={`dim9000-load-${curKey}`}
                   sheetName="Навантаження"
                   sheet={buildSheet(complexes, [
                     { header: "ЖК", value: (c) => c.complex_name, width: 26 },

@@ -334,7 +334,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
             note="⚠️ transaction_type='utilities', accepted/rejected; незавершені спроби (new) не рахуються."
             action={
               <ExportXlsx
-                fileName="urbanstack-kvytantsii"
+                fileName="dim9000-kvytantsii"
                 sheetName="Квитанції"
                 sheet={buildSheet(inWindow(receipts).slice().reverse(), [
                   {
@@ -458,7 +458,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
             note="Час у модулі й скільки днів минає до відвалу."
             action={
               <ExportXlsx
-                fileName={`urbanstack-moduli-${curKey}`}
+                fileName={`dim9000-moduli-${curKey}`}
                 sheetName="Модулі"
                 sheet={buildSheet(modules, [
                   {

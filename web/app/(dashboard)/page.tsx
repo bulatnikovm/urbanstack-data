@@ -219,7 +219,7 @@ export default async function AudiencePage({ searchParams }: PageProps<"/">) {
               note="Відсортовано за розміром бази."
               action={
                 <ExportXlsx
-                  fileName={`urbanstack-zhk-${curKey}`}
+                  fileName={`dim9000-zhk-${curKey}`}
                   sheetName="ЖК"
                   sheet={buildSheet(byComplex, [
                     { header: "ЖК", value: (r) => r.complex_name, width: 28 },

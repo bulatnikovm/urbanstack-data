@@ -424,7 +424,7 @@ export default async function RequestsPage({
             note="Глибина — будинок. Глибше (до приміщення) свідомо не йдемо: рішення операційка приймає по будинку."
             action={
               <ExportXlsx
-                fileName={`urbanstack-anomalies-${curKey}`}
+                fileName={`dim9000-anomalies-${curKey}`}
                 sheetName="Аномалії"
                 sheet={buildSheet(anomalies, [
                   { header: "ЖК", value: (a) => a.complex, width: 24 },

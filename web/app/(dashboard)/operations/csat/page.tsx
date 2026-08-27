@@ -377,7 +377,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
             note="Береться остання хвиля кожної категорії. Якщо в ЖК за неї ніхто не проголосував — прочерк, стару хвилю не підставляємо."
             action={
               <ExportXlsx
-                fileName="urbanstack-csat-rating"
+                fileName="dim9000-csat-rating"
                 sheetName="Рейтинг CSAT"
                 sheet={buildSheet(complexes, [
                   { header: "Місце", value: (c) => c.rating_uk },
@@ -560,7 +560,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
             note="Середня оцінка й кількість голосів у дужках. Прочерк — хвилі цієї категорії того місяця не було: розклад у категорій різний, і це не пропуск даних."
             action={
               <ExportXlsx
-                fileName="urbanstack-csat-categories"
+                fileName="dim9000-csat-categories"
                 sheetName="Категорія × місяць"
                 sheet={buildSheet(
                   categoryRows.flatMap((r) =>
@@ -633,7 +633,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
             note="Середня оцінка й кількість голосів у дужках. Прочерк — у цій хвилі ЖК не голосував."
             action={
               <ExportXlsx
-                fileName="urbanstack-csat-matrix"
+                fileName="dim9000-csat-matrix"
                 sheetName="ЖК × хвиля"
                 sheet={buildSheet(waves, [
                   { header: "Хвиля", value: (w) => w.wave_label, width: 32 },
@@ -760,7 +760,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
             note={`Топ-${TOP_HOUSES} знизу. «Вибірка» — голоси до кількості квартир САМЕ ЦЬОГО будинку. Будинок відповіді визначається за респондентом, а не за полем опитування — покриття 99,8%.`}
             action={
               <ExportXlsx
-                fileName="urbanstack-csat-houses"
+                fileName="dim9000-csat-houses"
                 sheetName="Будинки"
                 sheet={buildSheet(houses, [
                   { header: "ЖК", value: (h) => h.complex, width: 22 },
@@ -950,7 +950,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
             note={`Показані ${Math.min(feed.length, FEED_LIMIT)} найсвіжіших; повний набір за фільтром — в Excel. Персональних даних немає: найдрібніший розріз — будинок.`}
             action={
               <ExportXlsx
-                fileName="urbanstack-csat-comments"
+                fileName="dim9000-csat-comments"
                 sheetName="Коментарі"
                 sheet={buildSheet(feed, [
                   { header: "Дата", value: (c) => c.answered_on, width: 12 },

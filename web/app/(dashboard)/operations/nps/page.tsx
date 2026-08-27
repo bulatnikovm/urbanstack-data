@@ -221,7 +221,7 @@ export default async function NpsPage() {
             metric="NPS"
             action={
               <ExportXlsx
-                fileName={`urbanstack-nps-${curMonth}`}
+                fileName={`dim9000-nps-${curMonth}`}
                 sheetName="NPS по ЖК"
                 sheet={buildSheet(byComplex, [
                   { header: "ЖК", value: (r) => r.complex_name, width: 26 },
@@ -320,7 +320,7 @@ export default async function NpsPage() {
             note="Відсортовано від найсвіжіших. Повний набір — в Excel."
             action={
               <ExportXlsx
-                fileName={`urbanstack-nps-comments-${curMonth}`}
+                fileName={`dim9000-nps-comments-${curMonth}`}
                 sheetName="Коментарі NPS"
                 sheet={buildSheet(grades, [
                   { header: "Дата", value: (c) => c.answered_on, width: 12 },

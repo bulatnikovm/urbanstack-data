@@ -174,7 +174,7 @@ export default async function OverviewPage({
             note="Севен може мати 0 будинків, але ненульових користувачів — паркінг-будинок лишається активним, коли житлові вже деактивовані."
             action={
               <ExportXlsx
-                fileName={`urbanstack-overview-${curKey}`}
+                fileName={`dim9000-overview-${curKey}`}
                 sheetName="Огляд ЖК"
                 sheet={buildSheet(complexes, [
                   { header: "ЖК", value: (c) => c.complex_name, width: 26 },

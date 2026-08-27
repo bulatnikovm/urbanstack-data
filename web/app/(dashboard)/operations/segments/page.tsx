@@ -255,7 +255,7 @@ export default async function SegmentsPage({
             note="Знаменник — мешканці, що зверталися до УК за останні 12 місяців. Ті, хто не звертався жодного разу, у частку не входять: про них у нас просто немає сигналу."
             action={
               <ExportXlsx
-                fileName={`urbanstack-segments-${curKey}`}
+                fileName={`dim9000-segments-${curKey}`}
                 sheetName="Напруга по ЖК"
                 sheet={buildSheet(byComplex, [
                   {

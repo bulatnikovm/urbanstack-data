@@ -1,6 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import { signIn } from "@/auth";
-import { UrbanStackLogo } from "@/components/brand";
+import { Dim9000Logo } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -21,7 +21,7 @@ export default async function LoginPage({
       <div className="flex flex-col items-center gap-6 text-center">
         {/* Єдине місце в застосунку, де є простір показати повний логотип
             з дотриманням охоронного поля — тому тут лого, а не іконка. */}
-        <UrbanStackLogo className="h-14 w-auto text-foreground" />
+        <Dim9000Logo />
         <div>
           <h1 className="text-lg font-semibold tracking-tight">
             Дашборди
