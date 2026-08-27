@@ -46,6 +46,26 @@ export function ChartRevealClip({
     return (
       <clipPath id={clipPathId}>
         <rect
+          /**
+           * ⚠️ `key` тут обовʼязковий, і `style` — теж.
+           *
+           * Гілки цього компонента рендерять `<rect>` і `<motion.rect>` —
+           * для React це той самий тип елемента на тій самій позиції, тож
+           * він ПЕРЕВИКОРИСТОВУЄ той самий DOM-вузол і лише оновлює пропси.
+           * А motion під час анімації пише ширину в inline-стиль; у SVG2
+           * `width` — геометрична властивість, і CSS-стиль перебиває
+           * атрибут. Тому після переходу «revealing → ready» вузол лишався
+           * зі стилем `width: <ширина на момент переривання>`, атрибут
+           * `width={paddedWidth}` його не перекривав — і clip назавжди
+           * застигав вужчим за графік. Назовні це виглядало як лінії, що
+           * обриваються десь на третині, при повністю живому графіку:
+           * вісь на всю ширину, тултип працює, значення правильні.
+           *
+           * Окремий `key` дає свіжий вузол без спадку motion, а явний
+           * `style` страхує на випадок, якщо вузол усе-таки перевикористали.
+           */
+          key="static"
+          style={{ width: paddedWidth, height: paddedHeight }}
           height={paddedHeight}
           width={paddedWidth}
           x={-padding}
@@ -66,7 +86,7 @@ export function ChartRevealClip({
           animate={{ width: 0, x: rightEdge }}
           height={paddedHeight}
           initial={{ width: paddedWidth, x: -padding }}
-          key={`conceal-${revealEpoch}`}
+          key={`motion-conceal-${revealEpoch}`}
           onAnimationComplete={() => onComplete?.()}
           transition={transition}
           y={-padding}
@@ -81,7 +101,7 @@ export function ChartRevealClip({
         animate={{ width: paddedWidth }}
         height={paddedHeight}
         initial={{ width: 0 }}
-        key={`reveal-${revealEpoch}`}
+        key={`motion-reveal-${revealEpoch}`}
         transition={transition}
         width={paddedWidth}
         x={-padding}

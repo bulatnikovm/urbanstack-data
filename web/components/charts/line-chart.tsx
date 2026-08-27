@@ -9,6 +9,7 @@ import {
   type ReactElement,
   type ReactNode,
   useCallback,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -180,6 +181,27 @@ function ChartInner({
   containerRef,
   onPhaseChange,
 }: ChartInnerProps) {
+  /**
+   * ⚠️ Id клipPath'а мусить бути УНІКАЛЬНИМ на документ.
+   *
+   * Тут стояв літерал ("chart-grow-clip" / "chart-area-grow-clip"), і на
+   * сторінці з кількома графіками ВСІ вони випускали `<clipPath>` з одним і
+   * тим самим id. `clip-path="url(#…)"` резолвиться в ПЕРШИЙ елемент із цим
+   * id у документі — тобто кожен графік сторінки обрізався clip-rect'ом
+   * ПЕРШОГО графіка. Якщо перший вужчий (сусід у сітці `3fr_2fr`) або ще
+   * анімує появу, решта назавжди лишалась обрізаною на його ширині.
+   *
+   * Симптом виглядав як «лінії не домальовуються»: вісь на всю ширину,
+   * тултип працює, значення правильні, а лінії обриваються вертикально —
+   * причому точки на перехресті видно ПРАВІШЕ за обрив, бо оверлей тултипа
+   * не входить у групу, що клipається. Обрив був у пікселях, а не в точках,
+   * тому не залежав ні від кількості місяців, ні від даних.
+   *
+   * `useId()` дає стабільний між сервером і клієнтом ідентифікатор; чистимо
+   * від службових символів React, щоб рядок був безпечним у `url(#…)`.
+   */
+  const clipPathId = `chart-grow-clip-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+
   const lines = useMemo(() => extractLineConfigs(children), [children]);
 
   return (
@@ -187,7 +209,7 @@ function ChartInner({
       animationDuration={animationDuration}
       animationEasing={animationEasing}
       chartStatus={chartStatus}
-      clipPathId="chart-grow-clip"
+      clipPathId={clipPathId}
       containerRef={containerRef}
       data={data}
       enterTransition={enterTransition}
