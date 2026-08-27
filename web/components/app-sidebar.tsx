@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 import { UrbanStackMark } from "@/components/brand";
-import { canSee, homeFor, type Role } from "@/lib/roles";
+import { canSee, homeFor, type Access } from "@/lib/roles";
 import {
   Sidebar,
   SidebarContent,
@@ -45,7 +45,7 @@ type AppSidebarProps = {
    * `requireAccess` (`lib/guard.ts`), а проксі редіректить. Але показувати
    * кнопку, яка веде в 404, — гірше, ніж не показувати нічого.
    */
-  role?: Role;
+  access?: Access;
 };
 
 /**
@@ -131,26 +131,49 @@ const OPERATIONS_NAV = [
 
 const ADMIN_ITEM = { href: "/admin", label: "Доступи", icon: Users, page: "" };
 
-export function AppSidebar({ footer, role }: AppSidebarProps) {
+export function AppSidebar({ footer, access }: AppSidebarProps) {
   const pathname = usePathname();
-  const visible = (href: string) => canSee(role, href);
-  const showSwitcher = visible("/");
+  /**
+   * Без сесії (локальний перегляд із відкладеним proxy.ts) показуємо все:
+   * ховати меню нема від кого, а порожній сайдбар виглядав би як поломка.
+   * У проді сесія є завжди — туди без неї не пускає проксі.
+   */
+  const visible = (href: string) => !access || canSee(access, href);
 
-  const isOperations =
-    !showSwitcher ||
-    pathname === "/operations" ||
-    pathname.startsWith("/operations/");
-  const current = isOperations ? DASHBOARDS[1] : DASHBOARDS[0];
+  /**
+   * Домен = набір своїх сторінок, а не один кореневий маршрут.
+   *
+   * Перша версія рахувала домен видимим, якщо видно його КОРІНЬ. На цьому
+   * зламалась продуктова команда: їй видно `/operations/churn` і
+   * `/operations/segments` (область `insights`), але не `/operations` —
+   * тобто пункти в меню були недосяжні, бо перемикач вів на закриту
+   * сторінку й зникав разом із нею. Тепер вхід у домен — ПЕРША видима
+   * сторінка цього домену, і домен зникає лише тоді, коли не видно жодної.
+   */
+  const domains = DASHBOARDS.map((d) => {
+    const nav = d.id === "operations" ? OPERATIONS_NAV : PRODUCT_NAV;
+    const items = nav.flatMap((g) => g.items).filter((i) => visible(i.href));
+    return { ...d, nav, entry: items[0]?.href ?? null };
+  }).filter((d) => d.entry !== null);
 
-  // Пункт «Доступи» бачить лише адмін. Це виключно UI: сама сторінка
-  // віддає 404 не-адміну, а Server Actions перевіряють роль окремо —
-  // сховане меню нікого не захищає. Список доступів один на обидва
-  // дашборди, тому пункт живе тільки в продуктовому.
-  const base = isOperations ? OPERATIONS_NAV : PRODUCT_NAV;
-  const withAdmin =
-    visible(ADMIN_ITEM.href) && !isOperations
-      ? [...base, { group: "Адміністрування", items: [ADMIN_ITEM] }]
-      : base;
+  const inOperations =
+    pathname === "/operations" || pathname.startsWith("/operations/");
+  const current =
+    domains.find((d) => d.id === (inOperations ? "operations" : "product")) ??
+    domains[0];
+
+  /**
+   * «Доступи» стоять ПЕРЕД дашбордами і показуються на обох, а не в хвості
+   * продуктового меню (як було). Дві причини: список доступів один на
+   * обидва домени, тож ховати його на одному з них — брехня про структуру;
+   * і це не «ще один звіт», а керування середовищем, тому місце йому
+   * зверху. Бачить лише адмін: `canSee` для `/admin` дивиться на роль, а
+   * не на області.
+   */
+  const base = current?.nav ?? [];
+  const withAdmin = visible(ADMIN_ITEM.href)
+    ? [{ group: "Адміністрування", items: [ADMIN_ITEM] }, ...base]
+    : base;
   // Групи, з яких після фільтра нічого не лишилось, прибираємо цілком —
   // порожній заголовок «Клієнтський досвід» без пунктів читається як збій.
   const nav = withAdmin
@@ -165,7 +188,7 @@ export function AppSidebar({ footer, role }: AppSidebarProps) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href={homeFor(role)} />}>
+            <SidebarMenuButton size="lg" render={<Link href={homeFor(access)} />}>
               <>
                 <UrbanStackMark className="size-8 shrink-0 text-foreground [--brand-mark-fg:var(--sidebar)]" />
                 <div className="grid flex-1 text-left leading-tight">
@@ -173,7 +196,7 @@ export function AppSidebar({ footer, role }: AppSidebarProps) {
                     UrbanStack
                   </span>
                   <span className="truncate text-xs text-muted-foreground">
-                    {current.label} дашборд
+                    {current?.label} дашборд
                   </span>
                 </div>
               </>
@@ -190,13 +213,13 @@ export function AppSidebar({ footer, role }: AppSidebarProps) {
           дашборду просто не побачить. Два видимі рядки прибирають це
           питання й заразом коштують один клік замість двох.
         */}
-        <SidebarMenu className={showSwitcher ? undefined : "hidden"}>
-          {DASHBOARDS.map((d) => (
+        <SidebarMenu className={domains.length > 1 ? undefined : "hidden"}>
+          {domains.map((d) => (
             <SidebarMenuItem key={d.id}>
               <SidebarMenuButton
-                isActive={d.id === current.id}
+                isActive={d.id === current?.id}
                 tooltip={`${d.label} дашборд`}
-                render={<Link href={d.root} />}
+                render={<Link href={d.entry as string} />}
               >
                 <>
                   <d.icon />

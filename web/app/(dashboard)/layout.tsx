@@ -23,7 +23,7 @@ export default async function DashboardLayout({
   return (
     <SidebarProvider>
       <AppSidebar
-        role={session?.user?.role}
+        access={session?.user}
         footer={
           <Suspense fallback={null}>
             <UserMenu />

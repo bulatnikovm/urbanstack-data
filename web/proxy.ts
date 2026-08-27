@@ -25,15 +25,15 @@ export default auth(function proxy(req) {
     return NextResponse.redirect(url);
   }
 
-  // Роль `operations` бачить лише операційний дашборд. Редірект, а не 404:
-  // людина не «залізла кудись не туди», вона просто відкрила корінь сайту
-  // або старе посилання — і має опинитись на своєму дашборді, а не на
-  // сторінці помилки. Справжній захист самих сторінок лишається в них
-  // (`notFound()` у layout продуктової частини): проксі можна обійти
-  // прямим запитом до RSC-ендпоінта.
-  const role = req.auth?.user?.role;
-  if (!canSee(role, req.nextUrl.pathname)) {
-    return NextResponse.redirect(new URL(homeFor(role), req.nextUrl.origin));
+  // Сторінка поза областями цієї людини. Редірект, а не 404: вона не
+  // «залізла кудись не туди», вона просто відкрила корінь сайту або старе
+  // посилання — і має опинитись на своєму дашборді, а не на сторінці
+  // помилки. Справжній захист самих сторінок лишається в них
+  // (`requireAccess` → notFound): проксі можна обійти прямим запитом до
+  // RSC-ендпоінта.
+  const access = req.auth?.user;
+  if (!canSee(access, req.nextUrl.pathname)) {
+    return NextResponse.redirect(new URL(homeFor(access), req.nextUrl.origin));
   }
 
   return NextResponse.next();

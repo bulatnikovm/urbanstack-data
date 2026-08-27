@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { addUser, removeUser } from "@/lib/access";
-import { isRole, type Role } from "@/lib/roles";
+import {
+  ALL_SCOPES,
+  isRole,
+  isScope,
+  type Role,
+  type Scope,
+} from "@/lib/roles";
 
 /**
  * ⚠️ Кожна дія ПЕРЕВІРЯЄ РОЛЬ САМА.
@@ -35,9 +41,24 @@ export async function grantAccess(
   const role: Role = isRole(roleRaw) ? roleRaw : "viewer";
   const note = String(formData.get("note") ?? "");
 
-  if (!email.trim()) return { error: "Впиши пошту" };
+  /**
+   * Області приходять як кілька значень одного поля (галочки). Адміну
+   * підставляємо всі — так само, як робить `accessFor` на читанні: інакше
+   * знята галочка замикала б адміна поза дашбордом.
+   *
+   * Порожній набір — помилка вводу, а не «нехай нічого не бачить»: база
+   * це теж забороняє (CHECK), але сказати людині зрозумілим текстом краще,
+   * ніж віддати 400 від PostgREST.
+   */
+  const scopes: Scope[] =
+    role === "admin" ? [...ALL_SCOPES] : formData.getAll("scopes").map(String).filter(isScope);
 
-  const res = await addUser({ email, role, note, createdBy: admin });
+  if (!email.trim()) return { error: "Впиши пошту" };
+  if (scopes.length === 0) {
+    return { error: "Постав хоча б одну галочку в «Що бачить»" };
+  }
+
+  const res = await addUser({ email, role, scopes, note, createdBy: admin });
   if (!res.ok) return { error: res.error };
 
   revalidatePath("/admin");

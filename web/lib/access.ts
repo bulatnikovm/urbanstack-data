@@ -17,14 +17,21 @@ import "server-only";
  * окрему RLS-політику, а не тягнути цей ключ.
  */
 
-// Тип і правила ролей живуть у `lib/roles.ts` (без `server-only`, бо потрібні
-// й клієнтським компонентам). Тут — тільки робота з базою.
-export type { Role } from "./roles";
-import type { Role } from "./roles";
+// Типи й правила видимості живуть у `lib/roles.ts` (без `server-only`, бо
+// потрібні й клієнтським компонентам). Тут — тільки робота з базою.
+export type { Access, Role, Scope } from "./roles";
+import {
+  ALL_SCOPES,
+  parseScopes,
+  type Access,
+  type Role,
+  type Scope,
+} from "./roles";
 
 export type DashboardUser = {
   email: string;
   role: Role;
+  scopes: Scope[];
   note: string | null;
   created_at: string;
   created_by: string | null;
@@ -75,7 +82,7 @@ async function query<T>(path: string, init?: RequestInit): Promise<T | null> {
  * хвилинна недоступність Supabase розлогінить одразу всіх.
  */
 export type AccessResult =
-  | { status: "ok"; role: Role }
+  | ({ status: "ok" } & Access)
   | { status: "denied" }
   | { status: "error" };
 
@@ -86,7 +93,7 @@ export async function accessFor(email: string): Promise<AccessResult> {
   let res: Response;
   try {
     res = await fetch(
-      `${rest.endpoint}?select=role&email=eq.${encodeURIComponent(norm(email))}`,
+      `${rest.endpoint}?select=role,scopes&email=eq.${encodeURIComponent(norm(email))}`,
       { headers: rest.headers, cache: "no-store" }
     );
   } catch (e) {
@@ -99,9 +106,18 @@ export async function accessFor(email: string): Promise<AccessResult> {
     return { status: "error" };
   }
 
-  const rows = (await res.json()) as Array<{ role: Role }>;
-  const role = rows[0]?.role;
-  return role ? { status: "ok", role } : { status: "denied" };
+  const rows = (await res.json()) as Array<{ role: Role; scopes: unknown }>;
+  const row = rows[0];
+  if (!row?.role) return { status: "denied" };
+  /**
+   * Адміну області НЕ звужуються ніколи. Інакше перша ж помилка в
+   * галочках замикає єдиного адміна поза дашбордом, і повертати доступ
+   * доведеться руками через SQL — рівно те, від чого захищає перевірка
+   * «останнього адміна» в removeUser.
+   */
+  const scopes =
+    row.role === "admin" ? [...ALL_SCOPES] : parseScopes(row.scopes);
+  return { status: "ok", role: row.role, scopes };
 }
 
 export async function listUsers(): Promise<DashboardUser[]> {
@@ -111,6 +127,7 @@ export async function listUsers(): Promise<DashboardUser[]> {
 export async function addUser(input: {
   email: string;
   role: Role;
+  scopes: Scope[];
   note?: string;
   createdBy: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -128,6 +145,7 @@ export async function addUser(input: {
     body: JSON.stringify({
       email,
       role: input.role,
+      scopes: input.scopes,
       note: input.note?.trim() || null,
       created_by: input.createdBy,
     }),

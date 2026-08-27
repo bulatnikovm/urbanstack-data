@@ -2,7 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 
 import { accessFor } from "@/lib/access";
-import { isRole } from "@/lib/roles";
+import { isRole, parseScopes } from "@/lib/roles";
 
 /**
  * Хто має доступ — тепер у Supabase (`dashboard_users`), а не в env.
@@ -12,7 +12,7 @@ import { isRole } from "@/lib/roles";
  * `ADMIN_EMAILS` / `ALLOWED_EMAILS` більше не читаються. Роль приходить з
  * того ж рядка таблиці, що й сам дозвіл — двох джерел правди немає.
  */
-export type { Role } from "@/lib/roles";
+export type { Access, Role, Scope } from "@/lib/roles";
 
 export const authConfig = {
   providers: [Google],
@@ -52,6 +52,7 @@ export const authConfig = {
       }
       if (access.status === "ok") {
         token.role = access.role;
+        token.scopes = access.scopes;
       }
       // status === "error" — база не відповіла: лишаємо токен як є.
       // Розлогінювати всіх через хвилинний збій Supabase було б гірше за
@@ -62,6 +63,10 @@ export const authConfig = {
     session({ session, token }) {
       if (session.user) {
         session.user.role = isRole(token.role) ? token.role : "viewer";
+        // Порожній набір = нічого не видно. Це строгіше за «показати все
+        // про всяк випадок» і саме тому дефолт саме такий: зіпсований
+        // токен має закривати доступ, а не відкривати.
+        session.user.scopes = parseScopes(token.scopes);
       }
       return session;
     },

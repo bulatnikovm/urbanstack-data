@@ -22,5 +22,16 @@ import { canSee } from "@/lib/roles";
  */
 export async function requireAccess(pathname: string) {
   const session = await auth();
-  if (!canSee(session?.user?.role, pathname)) notFound();
+  /**
+   * ⚠️ Сесії немає взагалі — це НЕ наша справа, а проксі: він відповідає на
+   * питання «чи ти увійшов» і редіректить на /login ще до рендеру. Ця
+   * перевірка відповідає на інше питання — «що тобі видно», і має сенс
+   * тільки для того, хто вже увійшов.
+   *
+   * Розділення не косметичне: без нього локальний перегляд (де proxy.ts
+   * свідомо відкладений, а Google OAuth не налаштований) перетворюється на
+   * суцільний 404, і подивитись дашборд стає нічим.
+   */
+  if (!session?.user) return;
+  if (!canSee(session.user, pathname)) notFound();
 }
