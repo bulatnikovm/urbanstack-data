@@ -134,7 +134,3 @@ export function snapshotLabel(iso: string): string {
   }).format(d);
 }
 
-/** Скільки годин минуло від зрізу — для бейджа свіжості */
-export function hoursSince(iso: string): number {
-  return (Date.now() - new Date(iso).getTime()) / 36e5;
-}

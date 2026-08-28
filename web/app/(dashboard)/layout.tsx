@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
+import { StaleNotice } from "@/components/stale-notice";
 import { UserMenu } from "@/components/user-menu";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
@@ -30,7 +31,16 @@ export default async function DashboardLayout({
           </Suspense>
         }
       />
-      <SidebarInset className="min-w-0">{children}</SidebarInset>
+      <SidebarInset className="min-w-0">
+        {/*
+          Смуга «дані не оновились» — над сторінкою, а не всередині кожної:
+          свіжість зрізу однакова для всіх сторінок обох дашбордів, і
+          питання «чому цифри ті самі, що вчора» виникає на будь-якій із
+          них. У нормальний день компонент не малює нічого.
+        */}
+        <StaleNotice />
+        {children}
+      </SidebarInset>
     </SidebarProvider>
   );
 }

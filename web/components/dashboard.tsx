@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { MetricInfo } from "@/components/metric-info";
 import { cn } from "@/lib/utils";
 import { getMetrics } from "@/lib/data";
-import { hoursSince, snapshotLabel } from "@/lib/format";
+import { snapshotLabel } from "@/lib/format";
+import { assessFreshness } from "@/lib/freshness";
 
 // ── Обгортка контенту сторінки ──────────────────────────────────────────
 
@@ -160,8 +161,14 @@ export function Panel({
 // постфактум, що дивився на позаминулий тиждень.
 
 export function Freshness({ snapshotAt }: { snapshotAt: string }) {
-  const h = hoursSince(snapshotAt);
-  const state = h < 36 ? "fresh" : h < 24 * 7 ? "stale" : "broken";
+  /*
+    Стан рахує `assessFreshness` — по київських ДОБАХ, а не по годинах від
+    зрізу. Стара версія («до 36 годин — зелена») мовчала рівно в тому
+    випадку, заради якого існувала: 28.08.2026 нічний прогін не стартував,
+    на екрані був учорашній зріз, а минуло лише 19 годин — крапка лишалась
+    зеленою. Деталі й вікно очікування — в `lib/freshness.ts`.
+  */
+  const { state } = assessFreshness(snapshotAt);
   return (
     <div className="flex items-center gap-2 text-xs">
       <span
@@ -170,7 +177,7 @@ export function Freshness({ snapshotAt }: { snapshotAt: string }) {
           background:
             state === "fresh"
               ? "var(--status-good)"
-              : state === "stale"
+              : state === "late"
                 ? "var(--status-warning)"
                 : "var(--status-critical)",
         }}
@@ -183,7 +190,7 @@ export function Freshness({ snapshotAt }: { snapshotAt: string }) {
       </span>
       {state !== "fresh" && (
         <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-          {state === "stale" ? "потребує оновлення" : "застарілі"}
+          {state === "late" ? "не оновилось сьогодні" : "застарілі"}
         </Badge>
       )}
     </div>
