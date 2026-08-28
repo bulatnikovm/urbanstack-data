@@ -1,11 +1,26 @@
 name: Оновити дашборди
 
-# Раз на добу, після нічного Stitch-синку (~02:00 UTC — CLAUDE.md §2.4).
+# Після нічного Stitch-синку (~02:00 UTC — CLAUDE.md §2.4).
 # workflow_dispatch — щоб можна було запустити руками з вкладки Actions,
 # не чекаючи розкладу, коли треба перевірити свіжі дані одразу.
+#
+# ⚠️ ДВА розклади, і обидва не «рівно о шостій» — це не педантизм.
+# `schedule` у GitHub Actions робить не гарантію, а спробу: у пікові хвилини
+# запуски відкладаються, а під навантаженням МОВЧКИ скасовуються зовсім
+# (документовано в GitHub Actions: «may be delayed or dropped during periods
+# of high load»). Рівно те й сталось: 27.08 запуск «шостої ранку» стартував
+# о 17:23 UTC, а 28.08 не стартував узагалі — дашборд стояв на позавчорашніх
+# даних, хоча в Actions жодної червоної помітки не було.
+#
+# Звідси два рішення:
+#   · хвилина НЕ нульова (`:17`) — на початок години припадає пік черги, і
+#     саме там запуски губляться найчастіше;
+#   · другий прогін опівдні як страховка. Він не подвоює роботу: job
+#     `guard` нижче пропускає його, якщо дані за сьогодні вже оновлені.
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "17 6 * * *"
+    - cron: "17 12 * * *"
   workflow_dispatch: {}
 
 # Пише коміти в цей репозиторій — потрібен явний запис, бо
@@ -14,7 +29,45 @@ permissions:
   contents: write
 
 jobs:
+  # Чи треба взагалі щось робити.
+  #
+  # Потрібен рівно для страхувального полуденного запуску: якщо ранковий
+  # відпрацював, у `web/data/` уже лежить сьогоднішній коміт, і другий
+  # `dbt build` — це зайві гроші в BigQuery заради того самого результату.
+  # Ручний запуск (`workflow_dispatch`) не питає нічого й іде завжди: його
+  # натискають саме тоді, коли хочуть перезібрати незалежно від стану.
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          # Історія потрібна, щоб побачити дату останнього коміту в data/
+          fetch-depth: 0
+
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "Ручний запуск — оновлюємо без перевірок"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last=$(git log -1 --format=%cd --date=format:'%Y-%m-%d' -- web/data/)
+          today=$(date -u +'%Y-%m-%d')
+          if [ "$last" = "$today" ]; then
+            echo "Дані вже оновлені сьогодні ($last) — пропускаємо"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Останнє оновлення даних: $last, сьогодні $today — оновлюємо"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   refresh:
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
     runs-on: ubuntu-latest
     # Окремого кроку деплою тут НЕМАЄ навмисно. Раніше web/ виносився
     # `git subtree split` у другий репозиторій (urbanstack-dashboard), до
