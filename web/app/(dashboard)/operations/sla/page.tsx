@@ -1,6 +1,7 @@
 import {
   getSlaPeriod,
   getStatusTotals,
+  type SliceSel,
   type SlaMonthly,
 } from "@/lib/data-operational";
 import { delta, monthLabel, n, pct, pp } from "@/lib/format";
@@ -231,10 +232,45 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
     (a, b) => b.created_count - a.created_count
   );
 
+  /**
+   * Опис зрізу словами. Напрям пишемо явно: «крім» і «саме ці» — це
+   * протилежні цифри під тим самим списком значень, і з посилання, яке
+   * комусь переслали, має бути видно, який із двох станів на екрані.
+   *
+   * Форми слова передаємо руками (називний однина/множина, родовий
+   * однина/множина): «крім категорія» — це той рівень недбалості, після
+   * якого решті тексту на сторінці теж не вірять.
+   */
+  const selLabel = (
+    sel: SliceSel,
+    forms: { one: string; many: string; ofOne: string; ofMany: string }
+  ) => {
+    if (sel.values.length === 0) return null;
+    const list = sel.values.map((v) => `«${v}»`).join(", ");
+    const single = sel.values.length === 1;
+    return sel.mode === "ex"
+      ? `крім ${single ? forms.ofOne : forms.ofMany} ${list}`
+      : `${single ? forms.one : forms.many} ${list}`;
+  };
   const sliceLabel = [
-    filters.category,
-    filters.type && `тип «${filters.type}»`,
-    filters.tag && `тег «${filters.tag}»`,
+    selLabel(filters.category, {
+      one: "категорія",
+      many: "категорії",
+      ofOne: "категорії",
+      ofMany: "категорій",
+    }),
+    selLabel(filters.type, {
+      one: "тип",
+      many: "типи",
+      ofOne: "типу",
+      ofMany: "типів",
+    }),
+    selLabel(filters.tag, {
+      one: "тег",
+      many: "теги",
+      ofOne: "тега",
+      ofMany: "тегів",
+    }),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -438,13 +474,20 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
               />
             </Panel>
 
+            {/*
+              `fill` + `contentClassName="flex-1"` — щоб лінія зайняла всю
+              висоту картки. Сусідня панель ширша (3fr проти 2fr), у грід-ряду
+              картки однакової висоти, і графік із пропорцією 2/1 закінчувався
+              на третину раніше за неї — під лінією зяяла порожнеча.
+            */}
             <Panel
               title="В процесі"
               note="Наростаючий незакритий залишок на кінець місяця: усе подане мінус усе закрите й відхилене."
               metric="В процесі"
+              contentClassName="flex min-h-0 flex-1 flex-col"
             >
               <BklitLine
-                aspectRatio="2 / 1"
+                fill
                 data={base.map((r) => ({
                   month: r.report_month_key,
                   backlog: r.backlog_end_of_month,

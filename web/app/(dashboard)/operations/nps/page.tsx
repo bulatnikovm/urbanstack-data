@@ -4,7 +4,7 @@ import {
   npsRollup,
   type NpsComplex,
 } from "@/lib/data-operational";
-import { monthLabel, n, n1, pct } from "@/lib/format";
+import { monthLabel, n, n1, n2, pct } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
 import { BklitDonut } from "@/components/bklit-donut";
@@ -138,7 +138,14 @@ export default async function NpsPage() {
           />
           <Kpi
             label="Середній бал"
-            value={total.avgGrade === null ? "—" : n1(total.avgGrade)}
+            /*
+              Два знаки після коми, а не один: `n1` друкує рівне 5,0 як
+              «5», і бал читався як груба ціла оцінка («просто 5 якось не
+              точно» — Максим, 2026-08-28), хоча це середнє з сотень
+              голосів. Різниця між 4,96 і 5,04 — це і є те, що видно на
+              дистанції між хвилями.
+            */
+            value={total.avgGrade === null ? "—" : n2(total.avgGrade)}
             sub="зі шкали 1-10"
           />
           <Kpi
@@ -282,7 +289,7 @@ export default async function NpsPage() {
                       {r.nps_score === null ? "—" : n1(r.nps_score)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {n1(r.avg_grade)}
+                      {n2(r.avg_grade)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {n(r.votes)}
@@ -426,7 +433,7 @@ function NpsBars({ rows }: { rows: NpsComplex[] }) {
               className="text-right text-[11px] tabular-nums text-muted-foreground"
               title="Середній бал зі шкали 1-10"
             >
-              {n1(r.avg_grade)}
+              {n2(r.avg_grade)}
             </span>
           </li>
         );

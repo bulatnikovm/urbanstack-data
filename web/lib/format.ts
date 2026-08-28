@@ -7,6 +7,23 @@ export const n = (v: number | null | undefined) =>
 export const n1 = (v: number | null | undefined) =>
   v === null || v === undefined ? "—" : nf1.format(v);
 
+const nf2 = new Intl.NumberFormat("uk-UA", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/**
+ * Число з ДВОМА знаками після коми ЗАВЖДИ — "5,04", а не "5".
+ *
+ * `n1` цього не дає: у нього `maximumFractionDigits`, тож рівна п'ятірка
+ * друкується як «5», і середній бал NPS виглядав як груба ціла оцінка
+ * («просто 5 якось не точно» — Максим, 2026-08-28), хоча реально це
+ * середнє з сотень голосів. Тут мінімум дорівнює максимуму, тому дробова
+ * частина не зникає навіть коли вона нульова.
+ */
+export const n2 = (v: number | null | undefined) =>
+  v === null || v === undefined ? "—" : nf2.format(v);
+
 /** Частка 0..1 → "55,7%" */
 export const pct = (v: number | null | undefined, digits = 1) =>
   v === null || v === undefined

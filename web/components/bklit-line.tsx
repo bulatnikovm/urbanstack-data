@@ -67,6 +67,7 @@ export function BklitLine({
   xKey = "month",
   xUnit = "month",
   aspectRatio = "2 / 1",
+  fill = false,
   className = "w-full",
 }: {
   data: Array<Record<string, string | number>>;
@@ -79,15 +80,31 @@ export function BklitLine({
    * `style.aspectRatio`, і inline завжди перебиває клас (перевірено
    * 2026-08-06: клас показував 3/1, реально малювалось 2/1). */
   aspectRatio?: string;
+  /**
+   * Забути про пропорцію й зайняти всю висоту, яку дав батько.
+   *
+   * Потрібно, коли графік стоїть у ряду поруч із вищим сусідом: у CSS-грід
+   * картки ряду однакової висоти, а графік із фіксованою пропорцією
+   * зупиняється там, де закінчилась його ширина × коефіцієнт. Вузька
+   * колонка «В процесі» поруч зі стовпчиками 3fr малювалась у півтора рази
+   * нижчою, і під лінією лишалась третина порожньої картки (зауваження
+   * Микити 2026-08-28).
+   *
+   * ⚠️ Працює ЛИШЕ якщо батько має визначену висоту (напр. `flex-1` у
+   * розтягнутій картці): `ParentSize` міряє контейнер, і без висоти
+   * отримає нуль. Тому вмикати треба разом із `contentClassName="flex-1"`
+   * на `Panel`.
+   */
+  fill?: boolean;
   className?: string;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className={fill ? "flex h-full flex-col gap-2" : "flex flex-col gap-2"}>
       <LineChart
         data={data}
         xDataKey={xKey}
-        aspectRatio={aspectRatio}
-        className={className}
+        aspectRatio={fill ? undefined : aspectRatio}
+        className={fill ? `${className} min-h-0 flex-1` : className}
         margin={{ top: 24, right: 12, bottom: 28, left: 12 }}
       >
         <Grid horizontal fadeHorizontal={false} />

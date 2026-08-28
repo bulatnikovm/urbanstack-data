@@ -680,11 +680,27 @@ function buildPeriod<T extends { report_month_key: string }>(
  * Три розрізи, які були в оригінальному звіті Looker (Категорія, Тип
  * заявки) плюс тег CRM (правка Максима 2026-08-26). Живуть в URL, як і
  * період: посилання на «аварійні заявки по електроенергії» можна переслати.
+ *
+ * ── Вибір за виключенням (правка Максима 2026-08-28) ──────────────────────
+ * Кожен розріз — це НАБІР значень плюс напрям: показати саме їх (`in`) чи
+ * показати все, КРІМ них (`ex`). У Looker це було окремим режимом дропдауна
+ * («Тип заявки (Виключить 1)»), і саме його бракувало: коли типів двадцять,
+ * а прибрати треба два, перелічувати вісімнадцять — не робота.
+ *
+ * `ex` — це не те саме, що «обрати решту вручну». Різниця видно на нових
+ * значеннях: у списку виключень новий тег заявки почне рахуватись одразу
+ * (його ж не виключали), а в списку включень — мовчки випаде з цифри, поки
+ * хтось не помітить і не додасть.
+ *
+ * Порожній набір означає «усі» в обох режимах, а не «нічого»: інакше
+ * перемикання режиму на порожньому фільтрі обнуляло б сторінку.
  */
+export type SliceSel = { mode: "in" | "ex"; values: string[] };
+
 export type SlaFilters = {
-  category: string | null;
-  type: string | null;
-  tag: string | null;
+  category: SliceSel;
+  type: SliceSel;
+  tag: SliceSel;
 };
 
 export type SliceOption = { value: string; label: string; count: number };
@@ -692,13 +708,49 @@ export type SliceOption = { value: string; label: string; count: number };
 const one = (v: string | string[] | undefined) =>
   (Array.isArray(v) ? v[0] : v) || null;
 
+/** Чи проходить значення крізь один розріз. Порожній набір пропускає все. */
+export const sliceHits = (sel: SliceSel, value: string) =>
+  sel.values.length === 0
+    ? true
+    : sel.mode === "ex"
+      ? !sel.values.includes(value)
+      : sel.values.includes(value);
+
+export const sliceActive = (sel: SliceSel) => sel.values.length > 0;
+
+/**
+ * Значення розрізу — ПОВТОРЮВАНИМИ параметрами (`?cat=A&cat=B`), а не одним
+ * через кому.
+ *
+ * Не стилістика: категорія «Домофон, відео, СКД» містить коми в самій
+ * назві, тож будь-який роздільник довелось би екранувати й розекрановувати
+ * руками. Повторюваний параметр — рідний формат і для URLSearchParams, і
+ * для `searchParams` у Next (він сам віддає масив).
+ *
+ * Напрям — окремим параметром `<key>mode=ex`. Префікс на значенні (`!Скарга`)
+ * був би коротшим, але тоді «виключити» не існує без вибраних значень, а
+ * саме порожній стан із уже перемкнутим режимом людина бачить першим,
+ * відкривши фільтр.
+ */
+const readSel = (
+  params: Record<string, string | string[] | undefined> | undefined,
+  key: string
+): SliceSel => {
+  const raw = params?.[key];
+  const values = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter(Boolean);
+  return {
+    mode: one(params?.[`${key}mode`]) === "ex" ? "ex" : "in",
+    values: [...new Set(values)],
+  };
+};
+
 export function readSlaFilters(
   params?: Record<string, string | string[] | undefined>
 ): SlaFilters {
   return {
-    category: one(params?.cat),
-    type: one(params?.type),
-    tag: one(params?.tag),
+    category: readSel(params, "cat"),
+    type: readSel(params, "type"),
+    tag: readSel(params, "tag"),
   };
 }
 
@@ -796,18 +848,23 @@ export function getSlaPeriod(
 ) {
   const filters = readSlaFilters(params);
   const full = getSla();
-  const isSliced = Boolean(filters.category || filters.type || filters.tag);
+  const isSliced =
+    sliceActive(filters.category) ||
+    sliceActive(filters.type) ||
+    sliceActive(filters.tag);
 
-  const source: Array<CategoryMonthly & { tag_ua?: string }> = filters.tag
-    ? getTagged().filter((r) => r.tag_ua === filters.tag)
+  const source: Array<CategoryMonthly & { tag_ua?: string }> = sliceActive(
+    filters.tag
+  )
+    ? getTagged().filter((r) => sliceHits(filters.tag, r.tag_ua))
     : isSliced
       ? getCategories()
       : [];
 
   const matching = source.filter(
     (r) =>
-      (!filters.category || r.category_ua === filters.category) &&
-      (!filters.type || r.type_ua === filters.type)
+      sliceHits(filters.category, r.category_ua) &&
+      sliceHits(filters.type, r.type_ua)
   );
 
   const raw = isSliced ? sliceToSla(matching) : full;
@@ -846,8 +903,8 @@ export function getSlaPeriod(
   // `base` — те, з чого рахуються лічильники категорій і типів, і ось на
   // ньому обраний тег уже враховано.
   const tagged = inRange(getTagged());
-  const base = filters.tag
-    ? tagged.filter((r) => r.tag_ua === filters.tag)
+  const base = sliceActive(filters.tag)
+    ? tagged.filter((r) => sliceHits(filters.tag, r.tag_ua))
     : inRange(getCategories());
 
   return {
@@ -860,20 +917,18 @@ export function getSlaPeriod(
     base: inRange(company),
     slices: {
       categories: sliceOptions(
-        base.filter((r) => !filters.type || r.type_ua === filters.type),
+        base.filter((r) => sliceHits(filters.type, r.type_ua)),
         (r) => r.category_ua
       ),
       types: sliceOptions(
-        base.filter(
-          (r) => !filters.category || r.category_ua === filters.category
-        ),
+        base.filter((r) => sliceHits(filters.category, r.category_ua)),
         (r) => r.type_ua
       ),
       tags: sliceOptions(
         tagged.filter(
           (r) =>
-            (!filters.category || r.category_ua === filters.category) &&
-            (!filters.type || r.type_ua === filters.type)
+            sliceHits(filters.category, r.category_ua) &&
+            sliceHits(filters.type, r.type_ua)
         ),
         (r) => r.tag_ua
       ),

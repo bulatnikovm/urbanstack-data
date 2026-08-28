@@ -7,8 +7,8 @@ import {
 import { delta, monthLabel, n, n1, pct, pp } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
-import { BklitArea } from "@/components/bklit-area";
 import { BklitDonut } from "@/components/bklit-donut";
+import { SparkGrid } from "@/components/spark-grid";
 import { RankedBars } from "@/components/ranked-bars";
 import { ExportXlsx } from "@/components/export-xlsx";
 import { buildSheet } from "@/lib/xlsx";
@@ -37,11 +37,15 @@ import {
 const rate = (part: number, total: number) => (total > 0 ? part / total : 0);
 
 /**
- * Скільки категорій показувати окремими рядами на графіку динаміки.
- * Три — бо монохромна палітра дашборду має рівно три слоти (`--chart-1..3`);
- * решта категорій згортається в «Інше».
+ * Скільки категорій показувати окремими графіками в динаміці.
+ *
+ * Було три — за кількістю монохромних слотів (`--chart-1..3`), бо всі ряди
+ * малювались на ОДНОМУ полотні одне поверх одного. Після переходу на малі
+ * множини (кожна категорія — власна клітинка) цього обмеження немає, і
+ * пʼятірка показує вже не тільки «прибудинкову й електрику», а й те, що
+ * ворушиться нижче. Решта, як і раніше, згортається в «Інше».
  */
-const TOP_CATEGORIES = 3;
+const TOP_CATEGORIES = 5;
 
 export default async function RequestsPage({
   searchParams,
@@ -81,18 +85,31 @@ export default async function RequestsPage({
   // Динаміка: топ-категорії окремо, решта — «Інше». Ряди будуються по
   // місяцях вибраного вікна, а не по всіх наявних, інакше дейт-пікер
   // ні на що не впливав би.
+  //
+  // Порядок рядів — за поточним місяцем (той самий, що в рейтингу вище), а
+  // «Інше» завжди останнє: це не категорія, а залишок, і ставити його
+  // всередину списку за розміром означало б плутати одне з іншим.
   const monthKeys = [...new Set(categories.map((r) => r.report_month_key))].sort();
-  const trend = monthKeys.map((month) => {
-    const row: Record<string, string | number> = { month };
-    for (const name of topCategoryNames) row[name] = 0;
-    row["Інше"] = 0;
-    for (const r of categories) {
-      if (r.report_month_key !== month) continue;
-      const key = topCategoryNames.has(r.category_ua) ? r.category_ua : "Інше";
-      row[key] = (row[key] as number) + r.valid_created_count;
-    }
-    return row;
-  });
+  const trendNames = [
+    ...categoryRanked
+      .slice(0, TOP_CATEGORIES)
+      .map((c) => c.label),
+    "Інше",
+  ];
+  const trendSeries = trendNames.map((name) => ({
+    label: name,
+    values: monthKeys.map((month) =>
+      categories
+        .filter(
+          (r) =>
+            r.report_month_key === month &&
+            (name === "Інше"
+              ? !topCategoryNames.has(r.category_ua)
+              : r.category_ua === name)
+        )
+        .reduce((a, r) => a + r.valid_created_count, 0)
+    ),
+  }));
 
   // ── Типи звернень ─────────────────────────────────────────────────────
   const byType = new Map<string, number>();
@@ -309,27 +326,19 @@ export default async function RequestsPage({
           title="Динаміка категорій"
           lead={
             <>
-              Три найбільші категорії окремими рядами, решта згорнута в
+              Пʼять найбільших категорій окремими графіками, решта згорнута в
               «Інше». Тут і далі рахуються лише дійсні заявки — скасовані не
               стали роботою. Дані по категоріях вивантажуються вікном
-              24 місяці: якщо обрати давніший період, графік буде порожній,
+              24 місяці: якщо обрати давніший період, блок буде порожній,
               хоча решта сторінки лишиться при даних.
             </>
           }
         >
           <Panel
             title="Динаміка категорій"
-            note="Ряди накладаються, не стекуються: порівнювати треба форму кожної категорії, а не сумарну висоту."
+            note="Кожна категорія — власний графік, але масштаб у всіх спільний: висота клітинок порівнювана між собою. Число праворуч — останній місяць періоду."
           >
-            <BklitArea
-              aspectRatio="3 / 1"
-              data={trend}
-              series={[...topCategoryNames].map((name, i) => ({
-                key: name,
-                label: name,
-                slot: (i + 1) as 1 | 2 | 3,
-              }))}
-            />
+            <SparkGrid months={monthKeys} series={trendSeries} />
           </Panel>
         </Section>
 

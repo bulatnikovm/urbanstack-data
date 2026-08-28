@@ -20,7 +20,6 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { Dim9000Mark } from "@/components/brand";
 import { canSee, homeFor, type Access } from "@/lib/roles";
 import {
   Sidebar,
@@ -187,19 +186,26 @@ export function AppSidebar({ footer, access }: AppSidebarProps) {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <SidebarMenu>
-          <SidebarMenuItem>
+          {/*
+            Знака (плашки з «D») тут немає — прибраний на прохання Микити
+            2026-08-28. Лишився словесний знак: назва застосунку в шапці
+            потрібна (операційним дашбордом користуються люди поза
+            UrbanStack, і вони мають бачити, чий це інструмент), а плашка
+            дублювала те саме вдруге, поруч із іконкою вкладки.
+
+            У згорнутому сайдбарі рядок ховається цілком: без знака в ньому
+            нічого показувати, а порожня кнопка на 32 пікселі читається як
+            збій рендеру. Навігацію в згорнутому стані тримають іконки
+            перемикача дашбордів нижче.
+          */}
+          <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
             <SidebarMenuButton size="lg" render={<Link href={homeFor(access)} />}>
-              <>
-                <Dim9000Mark className="size-8 shrink-0 text-foreground [--brand-mark-fg:var(--sidebar)]" />
-                <div className="grid flex-1 text-left leading-tight">
-                  <span className="truncate text-sm font-semibold">
-                    DIM9000
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {current?.label} дашборд
-                  </span>
-                </div>
-              </>
+              <div className="grid flex-1 text-left leading-tight">
+                <span className="truncate text-sm font-semibold">DIM9000</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {current?.label} дашборд
+                </span>
+              </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
