@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-08-28T12:54:50.440Z",
+  "snapshot_at": "2026-08-29T12:50:32.580Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
@@ -13,7 +13,7 @@
       "rows": 316
     },
     "mart_user_segments": {
-      "rows": 12
+      "rows": 13
     },
     "mart_activation_monthly": {
       "rows": 37
