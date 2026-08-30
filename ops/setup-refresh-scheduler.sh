@@ -74,6 +74,16 @@ fi
 
 URI="https://api.github.com/repos/$REPO/actions/workflows/$WORKFLOW/dispatches"
 
+# ⚠️ Content-Type задається ЯВНО: за замовчуванням Cloud Scheduler ставить
+# `application/octet-stream`, а GitHub на такий запит чекає JSON. Перевірено
+# на тимчасовій задачі-двійнику — без цього рядка заголовок саме octet-stream.
+#
+# ⚠️ І ще одне, знайдене там само: у `create` прапорець зветься `--headers`,
+# а в `update` — виключно `--update-headers`; на `--headers` він відповідає
+# «unrecognized arguments». Тобто перший запуск проходив би, а повторний —
+# той, яким перевипускають протухлий токен, — падав би.
+HEADERS="Accept=application/vnd.github+json,Content-Type=application/json,X-GitHub-Api-Version=2022-11-28,Authorization=Bearer $GH_DISPATCH_TOKEN"
+
 # Перевірка токена ДО створення задачі.
 #
 # Без неї помилка в токені (не той скоуп, зайвий пробіл, скопійований
@@ -98,9 +108,11 @@ esac
 if gcloud scheduler jobs describe "$JOB" \
      --location="$LOCATION" --project="$PROJECT" >/dev/null 2>&1; then
   VERB="update"
+  HEADER_FLAG="--update-headers=$HEADERS"
   echo "Задача $JOB уже є — оновлюю."
 else
   VERB="create"
+  HEADER_FLAG="--headers=$HEADERS"
   echo "Задачі $JOB немає — створюю."
 fi
 
@@ -115,7 +127,7 @@ gcloud scheduler jobs "$VERB" http "$JOB" \
   --uri="$URI" \
   --http-method=POST \
   --message-body='{"ref":"main"}' \
-  --headers="Accept=application/vnd.github+json,X-GitHub-Api-Version=2022-11-28,Authorization=Bearer $GH_DISPATCH_TOKEN" \
+  "$HEADER_FLAG" \
   --attempt-deadline=30s \
   --max-retry-attempts=3 \
   --min-backoff=60s \

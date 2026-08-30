@@ -73,20 +73,68 @@ try {
 
 $uri = "https://api.github.com/repos/$Repo/actions/workflows/$Workflow/dispatches"
 
-# Перевіряємо через $LASTEXITCODE, а не $?: у PowerShell 5.1 $? після
-# нативної програми буває $false навіть при коді 0 — досить, щоб вона щось
-# написала в stderr, а gcloud туди пише регулярно. З $? скрипт при другому
-# запуску вирішив би, що задачі немає, і впав на ALREADY_EXISTS.
-gcloud scheduler jobs describe $Job --location=$Location --project=$Project 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) {
+# ⚠️ З цієї точки й до кінця — `Continue`, а не `Stop`.
+#
+# `gcloud` на Windows це не exe, а `gcloud.ps1`, який усередині запускає
+# python. Будь-який рядок, що python пише в stderr, PowerShell загортає в
+# NativeCommandError — і при `$ErrorActionPreference = 'Stop'` це стає
+# ФАТАЛЬНОЮ помилкою, навіть коли команда відпрацювала штатно. Саме на
+# цьому скрипт і зупинявся 2026-08-30: `describe` неіснуючої задачі чесно
+# написав «NOT_FOUND» у stderr, що було очікуваною відповіддю «задачі
+# немає», а скрипт від неї помер, не дійшовши до створення.
+#
+# Тому нижче стан кожної команди перевіряється явно, через $LASTEXITCODE.
+$ErrorActionPreference = 'Continue'
+
+# Наявність задачі дивимось через `list`, а не `describe`: `list` повертає
+# нуль і порожній вивід, коли нічого не знайшлось, тобто «немає» тут —
+# нормальна відповідь, а не помилка з stderr.
+$jobNames = & gcloud scheduler jobs list --location=$Location --project=$Project --format="value(name)" 2>$null
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Не вдалось отримати список задач Cloud Scheduler — перевір доступ до проєкту $Project." -ForegroundColor Red
+  exit 1
+}
+
+$exists = $false
+foreach ($name in $jobNames) {
+  if ($name -match "/$Job$") { $exists = $true }
+}
+
+# ⚠️ Content-Type ЗАДАЄТЬСЯ ЯВНО. За замовчуванням Cloud Scheduler ставить
+# `application/octet-stream` (перевірено на тимчасовій задачі-двійнику), а
+# GitHub на такий запит чекає JSON. Ще одна тиха поломка, яку видно було б
+# лише через добу.
+$headers = "Accept=application/vnd.github+json,Content-Type=application/json,X-GitHub-Api-Version=2022-11-28,Authorization=Bearer $token"
+
+# ⚠️ У `create` прапорець зветься `--headers`, а в `update` — виключно
+# `--update-headers`; на `--headers` він відповідає «unrecognized arguments»
+# (перевірено). Тобто перший запуск проходив би, а повторний — той, яким
+# перевипускають протухлий токен, — падав би.
+if ($exists) {
   $verb = 'update'
+  $headerFlag = "--update-headers=$headers"
   Write-Host "Задача $Job уже є — оновлюю."
 } else {
   $verb = 'create'
+  $headerFlag = "--headers=$headers"
   Write-Host "Задачі $Job немає — створюю."
 }
 
-$headers = "Accept=application/vnd.github+json,X-GitHub-Api-Version=2022-11-28,Authorization=Bearer $token"
+# ⚠️ Тіло запиту — ФАЙЛОМ, а не рядком `--message-body={"ref":"main"}`.
+#
+# PowerShell 5.1 вирізає подвійні лапки всередині аргументів, які передає
+# нативній програмі: перевірено — gcloud отримав би `{ref:main}` замість
+# `{"ref":"main"}`. Задача при цьому створилась би без єдиної скарги, а
+# GitHub щоранку відповідав би 400 на биту JSON. Тобто зламалось би рівно
+# так, як ми весь цей тиждень і ловимо: тихо.
+#
+# Заголовок із пробілом (`Authorization=Bearer …`) так само перевірений —
+# він доїжджає цілим, бо аргументи йдуть масивом; ламаються саме лапки.
+#
+# `-Encoding ascii` обовʼязковий: `Set-Content` за замовчуванням у 5.1
+# може дописати BOM, а BOM на початку тіла — це вже не валідний JSON.
+$bodyFile = Join-Path $env:TEMP "refresh-dashboard-dispatch.json"
+Set-Content -Path $bodyFile -Value '{"ref":"main"}' -Encoding ascii -NoNewline
 
 # Аргументи масивом і виклик через `&`: у PowerShell 5.1 передача рядка зі
 # ПРОБІЛОМ усередині (`Authorization=Bearer xxx`) нативній програмі —
@@ -100,8 +148,8 @@ $gcloudArgs = @(
   "--time-zone=$TimeZone",
   "--uri=$uri",
   '--http-method=POST',
-  '--message-body={"ref":"main"}',
-  "--headers=$headers",
+  "--message-body-from-file=$bodyFile",
+  $headerFlag,
   '--attempt-deadline=30s',
   '--max-retry-attempts=3',
   '--min-backoff=60s',
@@ -109,7 +157,9 @@ $gcloudArgs = @(
 )
 
 & gcloud @gcloudArgs
-if ($LASTEXITCODE -ne 0) {
+$created = $LASTEXITCODE
+Remove-Item $bodyFile -ErrorAction SilentlyContinue
+if ($created -ne 0) {
   Write-Host "gcloud повернув помилку — задачу не створено." -ForegroundColor Red
   exit 1
 }
