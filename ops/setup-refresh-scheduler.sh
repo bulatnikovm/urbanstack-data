@@ -74,6 +74,27 @@ fi
 
 URI="https://api.github.com/repos/$REPO/actions/workflows/$WORKFLOW/dispatches"
 
+# Перевірка токена ДО створення задачі.
+#
+# Без неї помилка в токені (не той скоуп, зайвий пробіл, скопійований
+# плейсхолдер) не проявиться ніде: gcloud створить задачу, вона щоранку
+# буде отримувати 401 і мовчки нічого не робити. Виявиться це аж наступного
+# дня — смугою «Дані не оновились сьогодні» на дашборді.
+#
+# Перевіряємо читанням самого воркфлоу: якщо токен бачить його, значить він
+# валідний і виданий на цей репозиторій. Права на ЗАПИС цим не
+# підтверджуються — для цього є тестовий запуск у кінці.
+echo "Перевіряю токен…"
+code=$(curl -s -o /dev/null -w '%{http_code}'   -H "Accept: application/vnd.github+json"   -H "Authorization: Bearer $GH_DISPATCH_TOKEN"   "https://api.github.com/repos/$REPO/actions/workflows/$WORKFLOW")
+
+case "$code" in
+  200) echo "  токен валідний, воркфлоу видно" ;;
+  401) echo "  401: токен недійсний (протух, з помилкою або це плейсхолдер)." >&2; exit 1 ;;
+  404) echo "  404: токен не бачить $REPO — перевір, що він виданий на цей" >&2
+       echo "       репозиторій і має право Actions." >&2; exit 1 ;;
+  *)   echo "  несподівана відповідь GitHub: $code" >&2; exit 1 ;;
+esac
+
 if gcloud scheduler jobs describe "$JOB" \
      --location="$LOCATION" --project="$PROJECT" >/dev/null 2>&1; then
   VERB="update"
