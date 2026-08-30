@@ -156,6 +156,13 @@ $gcloudArgs = @(
   "--description=Щоденне оновлення дашбордів: дергає workflow_dispatch у $Repo. Розклад тут, а не в GitHub Actions - schedule там best-effort і пропускає запуски."
 )
 
+# `--format=none` не косметика: без нього `create` друкує повний YAML
+# задачі, а в ньому — заголовок Authorization із токеном ВІДКРИТИМ ТЕКСТОМ.
+# Тобто скрипт, який спеціально ховає ввід токена, тут же виводив би його на
+# екран (і в буфер терміналу, і в скріншот, який кинуть у чат). Підсумкову
+# таблицю нижче друкуємо самі — без заголовків.
+$gcloudArgs += '--format=none'
+
 & gcloud @gcloudArgs
 $created = $LASTEXITCODE
 Remove-Item $bodyFile -ErrorAction SilentlyContinue

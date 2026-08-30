@@ -131,7 +131,8 @@ gcloud scheduler jobs "$VERB" http "$JOB" \
   --attempt-deadline=30s \
   --max-retry-attempts=3 \
   --min-backoff=60s \
-  --description="Щоденне оновлення дашбордів: дергає workflow_dispatch у $REPO. Розклад тут, а не в GitHub Actions — schedule там best-effort і пропускає запуски."
+  --description="Щоденне оновлення дашбордів: дергає workflow_dispatch у $REPO. Розклад тут, а не в GitHub Actions — schedule там best-effort і пропускає запуски." \
+  --format=none
 
 echo
 gcloud scheduler jobs describe "$JOB" --location="$LOCATION" --project="$PROJECT" \
