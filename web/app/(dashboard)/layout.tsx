@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
+import { isWatcher } from "@/lib/live";
+import { LivePresence } from "@/components/live-presence";
 import { StaleNotice } from "@/components/stale-notice";
 import { UserMenu } from "@/components/user-menu";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -40,6 +42,23 @@ export default async function DashboardLayout({
         */}
         <StaleNotice />
         {children}
+        {/*
+          Живі курсори. Компонент монтується ВСІМ, у кого є сесія — інакше
+          не буде кого показувати, — але малює щось лише спостерігачеві.
+          Рішення «хто спостерігач» приймається тут, на сервері: у
+          клієнтський бандл їде вже готове `canWatch`, і перемкнути його в
+          DevTools не можна. Деталі — lib/live.ts.
+        */}
+        {session?.user?.email && (
+          <LivePresence
+            me={{
+              email: session.user.email,
+              name: session.user.name ?? "",
+              image: session.user.image ?? null,
+            }}
+            canWatch={isWatcher(session.user.email)}
+          />
+        )}
       </SidebarInset>
     </SidebarProvider>
   );
