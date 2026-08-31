@@ -1,6 +1,7 @@
 import {
   getSlaPeriod,
   getStatusTotals,
+  sliceActive,
   type SliceSel,
   type SlaMonthly,
 } from "@/lib/data-operational";
@@ -93,35 +94,78 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
   // ── Зведена по місяцях (метрики в рядках, місяці в колонках) ──────────
   const monthsDesc = [...base].reverse().slice(0, PIVOT_MONTHS);
 
+  /**
+   * Рядок зведеної рахується з НАБОРУ місяців, а не з одного рядка — і саме
+   * тому підсумкова колонка «Разом» рахується правильно.
+   *
+   * Прохання Миколи (2026-08-31): «загальні відсотки виконання, розраховані
+   * від абсолюту, як це було в попередньому продукті». У Looker праворуч від
+   * місяців стояла колонка підсумку, і відсоток у ній — це СУМА виконаних
+   * поділена на СУМУ створених за весь період, а не середнє з місячних
+   * відсотків. Різниця не косметична: середнє з відсотків дає однакову вагу
+   * місяцю з трьомастами заявками й місяцю з десятьма тисячами.
+   *
+   * Оскільки формула однакова для однієї клітинки й для підсумку, тут
+   * фізично неможливо порахувати їх по-різному.
+   */
+  type SlaRow = (typeof base)[number];
+  const sum = (rows: SlaRow[], pick: (r: SlaRow) => number) =>
+    rows.reduce((acc, r) => acc + pick(r), 0);
+
   const SUMMARY_ROWS: Array<{
     label: string;
-    value: (r: (typeof base)[number]) => string;
+    value: (rows: SlaRow[]) => string;
     accent?: boolean;
+    /** «В процесі» — це СТАН на кінець місяця, а не подія; підсумовувати
+     *  його по місяцях не можна (вийшла б сума залишків). У колонці
+     *  «Разом» показуємо залишок останнього місяця періоду. */
+    totalMode?: "last";
   }> = [
-    { label: "Створено заявок", value: (r) => n(r.created_count) },
-    { label: "Виконано (загалом)", value: (r) => n(r.completed_count) },
+    { label: "Створено заявок", value: (rs) => n(sum(rs, (r) => r.created_count)) },
+    {
+      label: "Виконано (загалом)",
+      value: (rs) => n(sum(rs, (r) => r.completed_count)),
+    },
     {
       label: "Виконано (Міс. / Міс.)",
-      value: (r) => n(r.completed_same_month_count),
+      value: (rs) => n(sum(rs, (r) => r.completed_same_month_count)),
     },
-    { label: "Відхилені заявки", value: (r) => n(r.canceled_count) },
+    {
+      label: "Відхилені заявки",
+      value: (rs) => n(sum(rs, (r) => r.canceled_count)),
+    },
     {
       label: "% Відхилених",
-      value: (r) => pct(rate(r.canceled_count, r.created_count)),
+      value: (rs) =>
+        pct(rate(sum(rs, (r) => r.canceled_count), sum(rs, (r) => r.created_count))),
       accent: true,
     },
     {
       label: "% Виконання (загалом)",
-      value: (r) => pct(rate(r.completed_count, r.created_count)),
+      value: (rs) =>
+        pct(rate(sum(rs, (r) => r.completed_count), sum(rs, (r) => r.created_count))),
       accent: true,
     },
     {
       label: "% Виконання (Міс. в Міс.)",
-      value: (r) => pct(rate(r.completed_same_month_count, r.created_count)),
+      value: (rs) =>
+        pct(
+          rate(
+            sum(rs, (r) => r.completed_same_month_count),
+            sum(rs, (r) => r.created_count)
+          )
+        ),
       accent: true,
     },
-    { label: "В процесі", value: (r) => n(r.backlog_end_of_month) },
+    {
+      label: "В процесі",
+      value: (rs) => n(rs.length ? rs[rs.length - 1].backlog_end_of_month : 0),
+      totalMode: "last",
+    },
   ];
+
+  /** Місяці підсумку — за зростанням, щоб «останній» справді був останнім. */
+  const totalRows = [...monthsDesc].reverse();
 
   // ── Зведені по ЖК ─────────────────────────────────────────────────────
   const pivotMonthKeys = monthsDesc.map((m) => m.report_month_key);
@@ -300,6 +344,16 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
             це наростаючий залишок САМЕ цього зрізу (скільки з поданих ще не
             закрито), а не черга ЖК цілком: стан черги розрізати по категорії
             чи тегу неможливо. Пончик статусів унизу фільтр не враховує.
+            {sliceActive(filters.tag) && (
+              <>
+                {" "}
+                Заявки без жодної мітки — це окреме значення{" "}
+                <Hl>«Без тега»</Hl>, а не порожнеча: виключивши один тег, ти
+                лишаєш їх у цифрі. Зворотний бік багатозначності — заявка з
+                двома мітками рахується в кожній зі своїх, тому зріз по тегах
+                буває на пів відсотка більшим за загальну кількість.
+              </>
+            )}
           </p>
         )}
 
@@ -362,13 +416,41 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
         >
           <Panel
             title="Зведена по місяцях"
-            note={`Показано ${monthsDesc.length} останніх місяців вибраного періоду. Групова заявка рахується один раз — батьківською, дочірні не рахуються.`}
+            note={`Показано ${monthsDesc.length} останніх місяців вибраного періоду. «Разом» — за ці ${monthsDesc.length} місяців; відсотки в ньому рахуються від абсолюту (сума виконаних на суму створених), а не як середнє з місячних. У вигрузці підсумок за ВЕСЬ вибраний період. Групова заявка рахується один раз — батьківською, дочірні не рахуються.`}
             metric="Зведена по місяцях"
             action={
               <ExportXlsx
                 fileName={`dim9000-sla-monthly-${curKey}`}
                 sheetName="Місяць в місяць"
-                sheet={buildSheet([...base].reverse(), [
+                sheet={buildSheet(
+                  [
+                    // Рядок підсумку — ПЕРШИМ, тими самими формулами, що й
+                    // на екрані (прохання Миколи: відсотки від абсолюту
+                    // мають бути й у вигрузці). Відсоткові колонки нижче
+                    // рахуються з полів рядка, тому в підсумку вони самі
+                    // виходять «від абсолюту»: сума виконаних на суму
+                    // створених, а не середнє з місячних відсотків.
+                    //
+                    // Порожній період (жодного місяця в зрізі) підсумку не
+                    // отримує: рядок «Разом: 0 з 0» — це не інформація.
+                    ...(base.length
+                      ? [
+                          {
+                            ...base[base.length - 1],
+                            report_month_key: "Разом",
+                            created_count: sum(base, (r) => r.created_count),
+                            completed_count: sum(base, (r) => r.completed_count),
+                            completed_same_month_count: sum(
+                              base,
+                              (r) => r.completed_same_month_count
+                            ),
+                            canceled_count: sum(base, (r) => r.canceled_count),
+                          },
+                        ]
+                      : []),
+                    ...[...base].reverse(),
+                  ],
+                  [
                   { header: "Місяць", value: (r) => r.report_month_key, width: 10 },
                   { header: "Створено заявок", value: (r) => r.created_count },
                   { header: "Виконано (загалом)", value: (r) => r.completed_count },
@@ -405,6 +487,9 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
                     <TableHead className="sticky left-0 z-10 bg-card">
                       Місяць
                     </TableHead>
+                    <TableHead className="text-right font-semibold whitespace-nowrap">
+                      Разом
+                    </TableHead>
                     {monthsDesc.map((m) => (
                       <TableHead
                         key={m.report_month_key}
@@ -421,6 +506,12 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
                       <TableCell className="sticky left-0 z-10 bg-card font-medium whitespace-nowrap">
                         {row.label}
                       </TableCell>
+                      {/* Підсумок стоїть ПЕРЕД місяцями, одразу біля назви
+                          показника: місяців тринадцять, і в кінці рядка
+                          його довелось би шукати прокруткою. */}
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {row.value(totalRows)}
+                      </TableCell>
                       {monthsDesc.map((m) => (
                         <TableCell
                           key={m.report_month_key}
@@ -430,7 +521,7 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
                               : "text-right tabular-nums"
                           }
                         >
-                          {row.value(m)}
+                          {row.value([m])}
                         </TableCell>
                       ))}
                     </TableRow>
