@@ -1,6 +1,16 @@
 import { auth } from "@/auth";
 import { PageBody, Panel } from "@/components/dashboard";
 import { listUsers } from "@/lib/access";
+import { listVisitors } from "@/lib/visits";
+import { n, snapshotLabel } from "@/lib/format";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 import { AccessForm } from "./access-form";
 import { requireAccess } from "@/lib/guard";
@@ -22,6 +32,7 @@ export default async function AdminPage() {
   const session = await auth();
 
   const users = await listUsers();
+  const { people } = await listVisitors();
 
   return (
     <>
@@ -39,6 +50,52 @@ export default async function AdminPage() {
           note="Вхід тільки через Google. Пошта має збігатися з тією, якою людина логіниться; регістр не важливий. «Адміністратор» — обидва дашборди плюс ця сторінка. «Перегляд» — обидва дашборди. «Тільки операційний» — заявки, SLA, CSAT і NPS; продуктового дашборду, «Ризику відтоку» та «Напруги і сегментів» для такої людини не існує (останні два — профілювання мешканців за текстами звернень, це внутрішній інструмент)."
         >
           <AccessForm users={users} currentEmail={session?.user?.email ?? ""} />
+        </Panel>
+
+        <Panel
+          title="Хто заходив"
+          note="Останні 2 000 переглядів сторінок. Живі курсори показують, хто тут ПРЯМО ЗАРАЗ, і при семи людях порожня панель — це майже завжди «зараз нікого», а не «ніхто не ходить». Це — відповідь на друге питання."
+        >
+          {people.length === 0 ? (
+            <p className="px-1 py-6 text-center text-sm text-muted-foreground">
+              Записів ще немає. Журнал почав вестись 01.09.2026 — усе, що було
+              раніше, ніде не збереглось.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Пошта</TableHead>
+                  <TableHead>Востаннє</TableHead>
+                  <TableHead>Остання сторінка</TableHead>
+                  <TableHead className="text-right">Переглядів</TableHead>
+                  <TableHead className="text-right">Днів</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {people.map((p) => (
+                  <TableRow key={p.email}>
+                    <TableCell className="font-medium">{p.email}</TableCell>
+                    <TableCell
+                      className="whitespace-nowrap"
+                      title={p.lastAt}
+                    >
+                      {snapshotLabel(p.lastAt)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {p.lastPath}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {n(p.views)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {n(p.days)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </Panel>
       </PageBody>
     </>

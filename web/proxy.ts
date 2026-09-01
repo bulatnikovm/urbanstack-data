@@ -36,7 +36,20 @@ export default auth(function proxy(req) {
     return NextResponse.redirect(new URL(homeFor(access), req.nextUrl.origin));
   }
 
-  return NextResponse.next();
+  /**
+   * Прокидаємо маршрут у заголовок запиту — layout інакше його не знає.
+   *
+   * Серверний компонент не має доступу до свого URL (це не помилка, а
+   * дизайн: так layout лишається однаковим для всіх сторінок). А журналу
+   * відвідувань потрібно саме «на яку сторінку зайшли», тож шлях кладе сюди
+   * той, хто його бачить, — проксі.
+   *
+   * ⚠️ Локально, коли proxy.ts свідомо відкладений для перегляду без
+   * логіна, заголовка немає, і журнал запише «/». На проді проксі є завжди.
+   */
+  const withPath = new Headers(req.headers);
+  withPath.set("x-current-path", req.nextUrl.pathname);
+  return NextResponse.next({ request: { headers: withPath } });
 });
 
 export const config = {

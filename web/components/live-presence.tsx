@@ -117,6 +117,15 @@ export function LivePresence({
     notify();
   }, [on]);
 
+  /**
+   * Стан підключення до каналу.
+   *
+   * Без нього фіча не має способу довести, що вона жива: порожня панель
+   * однаково виглядає і коли нікого немає, і коли не доїхали змінні
+   * оточення чи впав вебсокет («а може, воно не працює» — Микита,
+   * 2026-09-01). Тепер це два різні стани й дві різні крапки.
+   */
+  const [status, setStatus] = useState<string>("CONNECTING");
   const [peers, setPeers] = useState<LivePeer[]>([]);
   /** Курсор + локальна мітка часу отримання — з неї рахується «не
    *  активний» (чому не з presence — див. lib/live.ts). */
@@ -155,6 +164,7 @@ export function LivePresence({
         setCursors((prev) => ({ ...prev, [p.email]: { ...p, at: Date.now() } }));
       })
       .subscribe((status) => {
+        setStatus(status);
         if (status === "SUBSCRIBED") {
           void channel.track({ ...me, watch: watching } satisfies LivePeer);
         }
@@ -163,6 +173,7 @@ export function LivePresence({
     return () => {
       void sb.removeChannel(channel);
       channelRef.current = null;
+      setStatus("CONNECTING");
       setPeers([]);
       setCursors({});
     };
@@ -251,6 +262,7 @@ export function LivePresence({
   if (!URL_ || !KEY_ || !canWatch) return null;
 
   const others = peers.filter((p) => p.email !== me.email);
+  const live = status === "SUBSCRIBED";
 
   return (
     <>
@@ -263,8 +275,32 @@ export function LivePresence({
         однієї приколюхи. Кут — самодостатній і нікому не заважає.
       */}
       <div className="fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-full border bg-card/95 px-2.5 py-1.5 shadow-lg backdrop-blur">
+        {/*
+          Крапка стану каналу. Зелена — підключено, тобто «нікого» справді
+          означає «нікого». Червона — звʼязку немає, і порожній список нічого
+          не доводить.
+        */}
+        <span
+          className="size-1.5 shrink-0 rounded-full"
+          title={
+            live
+              ? "Канал підключено — присутність оновлюється в реальному часі"
+              : `Немає звʼязку з каналом (${status}). Порожній список нічого не означає.`
+          }
+          style={{
+            background: live
+              ? "var(--status-good)"
+              : status === "CONNECTING"
+                ? "var(--status-warning)"
+                : "var(--status-critical)",
+          }}
+        />
         <Users className="size-3.5 shrink-0 text-muted-foreground" />
-        {others.length === 0 ? (
+        {!live ? (
+          <span className="text-[11px] text-muted-foreground">
+            Немає звʼязку
+          </span>
+        ) : others.length === 0 ? (
           <span className="text-[11px] text-muted-foreground">
             Крім тебе — нікого
           </span>
