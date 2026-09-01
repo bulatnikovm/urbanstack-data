@@ -1,10 +1,11 @@
 "use client";
 
-import { Download } from "lucide-react";
+import { Check, Download } from "lucide-react";
 import { useState } from "react";
 import type { SheetData } from "write-excel-file/browser";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { SheetPayload } from "@/lib/xlsx";
 
 type CellType = StringConstructor | NumberConstructor;
@@ -18,7 +19,25 @@ type CellType = StringConstructor | NumberConstructor;
  *
  * Числа їдуть числами, не рядками ("1 134,21 ₴"): у файлі має бути те, що
  * можна підсумувати й відсортувати, а форматування — справа Excel.
+ *
+ * Три стани: спокій → «Готую…» з біжучим сяйвом (`.shimmer-busy` у
+ * globals.css) → «Готово» з галочкою. Останній потрібен, бо збережений файл
+ * зникає в теку завантажень і на екрані не лишає сліду — без нього
+ * незрозуміло, чи клік узагалі спрацював.
  */
+
+/**
+ * Скільки щонайменше тримати стан «Готую…».
+ *
+ * Аркуш на кілька сотень рядків збирається за 50-100 мс, і без затримки
+ * сяйво встигало б лише блимнути — це читається як збій рендеру, а не як
+ * відповідь на клік. 700 мс — приблизно половина циклу анімації, тобто
+ * смуга встигає пройти кнопку рівно один раз.
+ */
+const MIN_BUSY_MS = 700;
+
+/** Скільки тримати «Готово» перед поверненням до звичайного вигляду. */
+const DONE_MS = 1400;
 export function ExportXlsx({
   sheet,
   fileName,
@@ -31,10 +50,12 @@ export function ExportXlsx({
   sheetName?: string;
   label?: string;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const busy = state === "busy";
 
   async function download() {
-    setBusy(true);
+    setState("busy");
+    const started = Date.now();
     try {
       // Динамічний імпорт — ~100 KB генератора не їдуть у бандл сторінки,
       // а завантажуються за кліком. Шлях саме `/browser`: у пакета немає
@@ -76,8 +97,14 @@ export function ExportXlsx({
           width: c.width ?? Math.max(12, c.header.length + 2),
         })),
       }).toFile(`${fileName}.xlsx`);
-    } finally {
-      setBusy(false);
+
+      const left = MIN_BUSY_MS - (Date.now() - started);
+      if (left > 0) await new Promise((r) => setTimeout(r, left));
+      setState("done");
+      setTimeout(() => setState("idle"), DONE_MS);
+    } catch (err) {
+      setState("idle");
+      throw err;
     }
   }
 
@@ -85,12 +112,32 @@ export function ExportXlsx({
     <Button
       variant="outline"
       size="sm"
-      className="h-7 gap-1.5 text-xs"
+      className={cn(
+        "h-7 gap-1.5 text-xs",
+        // `disabled:opacity-100` — кнопка на час збірки справді disabled
+        // (другий клік почав би другий файл), але напівпрозорою вона гасить
+        // і сяйво разом із собою.
+        busy && "shimmer-busy disabled:opacity-100"
+      )}
       onClick={download}
-      disabled={busy || sheet.rows.length === 0}
+      disabled={state !== "idle" || sheet.rows.length === 0}
+      aria-busy={busy}
     >
-      <Download className="size-3.5" />
-      {busy ? "Готую…" : label}
+      {state === "done" ? (
+        <Check className="size-3.5" />
+      ) : (
+        <Download className="size-3.5" />
+      )}
+      {/* Обидва підписи в одній клітинці гріда: ширина кнопки = ширина
+          найдовшого з них, тож на зміні стану вона не смикається. */}
+      <span className="grid">
+        <span className="invisible col-start-1 row-start-1">
+          {label.length >= 7 ? label : "Готую…"}
+        </span>
+        <span className="col-start-1 row-start-1">
+          {state === "busy" ? "Готую…" : state === "done" ? "Готово" : label}
+        </span>
+      </span>
     </Button>
   );
 }

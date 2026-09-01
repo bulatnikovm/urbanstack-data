@@ -256,3 +256,81 @@
   --seq-250: #184f95;
   --grid-line: var(--brand-surface-1);
 }
+
+/* ── Кнопка «Excel» у стані «готую файл» ─────────────────────────────────
+   Біжуче сяйво замість спінера — прийом з Linear, який Микита попросив
+   перенести (2026-09-01).
+
+   Індикатор НЕВИЗНАЧЕНИЙ, і це не лінощі: файл збирається в браузері одним
+   викликом `write-excel-file`, поділити його на відсотки нічим. Смуга зі
+   шкалою малювала б прогрес, якого ми не знаємо; сяйво чесно каже «працюю»,
+   нічого не обіцяючи про «скільки лишилось».
+
+   Кольори — брендові (Cool Gray Blue у світлій темі, біле світло в темній),
+   не індиго з оригіналу: хром дашборду монохромний навмисно (див. правило
+   про Mint Green у навігації вище), і кольорова пляма тут була б чужою. */
+:root {
+  --shimmer: color-mix(in oklab, var(--brand-slate) 55%, transparent);
+  --shimmer-hot: color-mix(in oklab, var(--brand-slate) 85%, transparent);
+  --shimmer-glow: color-mix(in oklab, var(--brand-slate) 45%, transparent);
+}
+
+.dark {
+  --shimmer: color-mix(in oklab, #ffffff 12%, transparent);
+  --shimmer-hot: color-mix(in oklab, #ffffff 22%, transparent);
+  --shimmer-glow: color-mix(in oklab, var(--brand-slate) 30%, transparent);
+}
+
+@keyframes shimmer-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+
+.shimmer-busy {
+  position: relative;
+  overflow: hidden;
+  /* М'яке світло навколо кнопки — та сама половина ефекту, що й сама смуга:
+     без нього сяйво лишається всередині прямокутника й читається як
+     «щось блимнуло», а не як «кнопка світиться». */
+  box-shadow: 0 0 10px 0 var(--shimmer-glow);
+}
+
+/* Вміст кнопки — НАД смугою. Без цього ::after (він малюється останнім)
+   лягає поверх іконки й підпису, і «Готую…» блякне рівно тоді, коли на
+   нього дивляться. */
+.shimmer-busy > * {
+  position: relative;
+  z-index: 1;
+}
+
+.shimmer-busy::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Смуга вдвічі ширша за кнопку (background-size 200%), тому за цикл вона
+     проходить її наскрізь і не «стрибає» на межі повтору. */
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--shimmer) 42%,
+    var(--shimmer-hot) 50%,
+    var(--shimmer) 58%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.3s linear infinite;
+}
+
+/* Кому анімація заважає — лишається стан, але без руху: кнопка просто
+   підсвічена, поки файл збирається. */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-busy::after {
+    animation: none;
+    background: var(--shimmer);
+  }
+}
