@@ -1,16 +1,16 @@
 {
-  "snapshot_at": "2026-08-31T19:02:39.756Z",
+  "snapshot_at": "2026-09-01T06:29:43.363Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
     "mart_user_base_totals_monthly": {
-      "rows": 32
+      "rows": 33
     },
     "mart_user_base_monthly": {
-      "rows": 316
+      "rows": 326
     },
     "mart_user_segments_monthly": {
-      "rows": 316
+      "rows": 326
     },
     "mart_user_segments": {
       "rows": 14
@@ -22,28 +22,28 @@
       "rows": 30
     },
     "mart_engagement_monthly": {
-      "rows": 42
+      "rows": 43
     },
     "mart_utility_receipts_monthly": {
       "rows": 13
     },
     "mart_star_monthly": {
-      "rows": 130
+      "rows": 134
     },
     "mart_module_usage_monthly": {
-      "rows": 304
+      "rows": 316
     },
     "mart_module_retention": {
       "rows": 13
     },
     "mart_version_adoption": {
-      "rows": 828
+      "rows": 831
     },
     "mart_app_health_weekly": {
       "rows": 2506
     },
     "agg_os_monthly": {
-      "rows": 71
+      "rows": 73
     }
   }
 }
