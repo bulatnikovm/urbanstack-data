@@ -1,11 +1,8 @@
 import { Suspense } from "react";
-import { after } from "next/server";
-import { headers } from "next/headers";
-
 import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { isWatcher } from "@/lib/live";
-import { logVisit } from "@/lib/visits";
+import { VisitLogger } from "@/components/visit-logger";
 import { LivePresence } from "@/components/live-presence";
 import { StaleNotice } from "@/components/stale-notice";
 import { UserMenu } from "@/components/user-menu";
@@ -27,23 +24,6 @@ export default async function DashboardLayout({
 }) {
   const session = await auth();
 
-  /**
-   * Журнал відвідувань. `after` — щоб запис у Supabase не стояв між людиною
-   * й сторінкою: колбек виконується ПІСЛЯ того, як відповідь пішла в
-   * браузер. Впасти він теж не може — `logVisit` ковтає будь-яку помилку
-   * (журнал другорядний, дашборд важливіший).
-   *
-   * Пишеться на КОЖЕН перехід між сторінками, і це навмисно: питання не
-   * лише «чи заходив», а й «що дивився».
-   */
-  const visitor = session?.user?.email;
-  if (visitor) {
-    after(async () => {
-      const h = await headers();
-      await logVisit(visitor, h.get("x-current-path") ?? "/");
-    });
-  }
-
   return (
     <SidebarProvider>
       <AppSidebar
@@ -62,6 +42,8 @@ export default async function DashboardLayout({
           них. У нормальний день компонент не малює нічого.
         */}
         <StaleNotice />
+        {/* Журнал відвідувань: пише на кожен перехід, нічого не малює. */}
+        {session?.user?.email && <VisitLogger />}
         {children}
         {/*
           Живі курсори. Компонент монтується ВСІМ, у кого є сесія — інакше

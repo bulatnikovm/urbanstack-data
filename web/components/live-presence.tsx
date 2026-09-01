@@ -17,6 +17,8 @@ import {
   liveChannel,
   liveColor,
   liveLabel,
+  pageLabel,
+  PRESENCE_CHANNEL,
   type CursorPoint,
   type LivePeer,
   type LiveUser,
@@ -132,22 +134,34 @@ export function LivePresence({
   type Seen = CursorPoint & { at: number };
   const [cursors, setCursors] = useState<Record<string, Seen>>({});
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const presenceRef = useRef<RealtimeChannel | null>(null);
+  // Актуальні значення для колбека `subscribe`, який замикається один раз
+  // на все життя каналу й інакше бачив би стан на момент підключення.
+  const pathnameRef = useRef(pathname);
+  const watchingRef = useRef(false);
 
   const watching = canWatch && on;
 
   // Чи є в каналі КИМОСЬ увімкнений перегляд. Поки немає — координати не
   // шле ніхто, і це головна економія трафіку (див. lib/live.ts).
-  const watched = peers.some((p) => p.watch && p.email !== me.email);
+  // Слати координати має сенс лише якщо спостерігач дивиться ЦЮ САМУ
+  // сторінку: курсор на чужій сторінці нікому не показати.
+  const watched = peers.some(
+    (p) => p.watch && p.path === pathname && p.email !== me.email
+  );
 
-  // ── Канал: присутність ──────────────────────────────────────────────
+  // ── Канал присутності: ОДИН на весь дашборд ─────────────────────────
+  // Не перепідключається при переходах між сторінками — змінюється лише
+  // поле `path` у `track` (див. наступний ефект). Інакше кожен перехід рвав
+  // би вебсокет і на секунду «виносив» тебе зі списку в усіх.
   useEffect(() => {
     const sb = supabase();
     if (!sb) return;
 
-    const channel = sb.channel(liveChannel(pathname), {
+    const channel = sb.channel(PRESENCE_CHANNEL, {
       config: { presence: { key: me.email } },
     });
-    channelRef.current = channel;
+    presenceRef.current = channel;
 
     channel
       .on("presence", { event: "sync" }, () => {
@@ -158,39 +172,61 @@ export function LivePresence({
             .filter(Boolean)
         );
       })
-      .on("broadcast", { event: "cursor" }, ({ payload }) => {
-        const p = payload as CursorPoint;
-        if (p.email === me.email) return;
-        setCursors((prev) => ({ ...prev, [p.email]: { ...p, at: Date.now() } }));
-      })
       .subscribe((status) => {
         setStatus(status);
         if (status === "SUBSCRIBED") {
-          void channel.track({ ...me, watch: watching } satisfies LivePeer);
+          void channel.track({
+            ...me,
+            path: pathnameRef.current,
+            watch: watchingRef.current,
+          } satisfies LivePeer);
         }
       });
 
     return () => {
       void sb.removeChannel(channel);
-      channelRef.current = null;
+      presenceRef.current = null;
       setStatus("CONNECTING");
       setPeers([]);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me.email]);
+
+  // Сторінка або тумблер змінились — оновлюємо запис присутності, не
+  // чіпаючи саме зʼєднання.
+  useEffect(() => {
+    pathnameRef.current = pathname;
+    watchingRef.current = watching;
+    const channel = presenceRef.current;
+    if (!channel) return;
+    void channel.track({ ...me, path: pathname, watch: watching } satisfies LivePeer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, watching]);
+
+  // ── Канал курсорів: на сторінку ─────────────────────────────────────
+  // Тут лише координати. Присутність сюди не пишемо: хто де — питання
+  // глобальне, і відповідає на нього канал вище.
+  useEffect(() => {
+    const sb = supabase();
+    if (!sb) return;
+
+    const channel = sb.channel(liveChannel(pathname));
+    channelRef.current = channel;
+
+    channel
+      .on("broadcast", { event: "cursor" }, ({ payload }) => {
+        const p = payload as CursorPoint;
+        if (p.email === me.email) return;
+        setCursors((prev) => ({ ...prev, [p.email]: { ...p, at: Date.now() } }));
+      })
+      .subscribe();
+
+    return () => {
+      void sb.removeChannel(channel);
+      channelRef.current = null;
       setCursors({});
     };
-    // `watching` навмисно НЕ в залежностях: перепідключати канал через
-    // тумблер — це рвати з'єднання на кожен клік. Прапорець оновлюється
-    // окремим `track` нижче.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, me.email]);
-
-  // Тумблер міняє лише прапорець присутності — щоб інші дізнались, що
-  // дивитись більше нікому, і перестали слати.
-  useEffect(() => {
-    const channel = channelRef.current;
-    if (!channel) return;
-    void channel.track({ ...me, watch: watching } satisfies LivePeer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watching]);
 
   // ── Відправка своєї позиції ─────────────────────────────────────────
   useEffect(() => {
@@ -262,11 +298,16 @@ export function LivePresence({
   if (!URL_ || !KEY_ || !canWatch) return null;
 
   const others = peers.filter((p) => p.email !== me.email);
+  // Курсори — лише від тих, хто на цій самій сторінці. Решта видно в
+  // списку присутніх із підписом, де вони.
+  const onThisPage = others.filter((p) => p.path === pathname);
   const live = status === "SUBSCRIBED";
 
   return (
     <>
-      {watching && <CursorLayer cursors={cursors} peers={others} now={now} />}
+      {watching && (
+        <CursorLayer cursors={cursors} peers={onThisPage} now={now} />
+      )}
 
       {/*
         Панель у нижньому правому куті, а не в шапці сторінки. Шапку малює
@@ -310,10 +351,23 @@ export function LivePresence({
               <Avatar
                 key={p.email}
                 peer={p}
+                here={p.path === pathname}
                 idle={now - (cursors[p.email]?.at ?? 0) > CURSOR_IDLE_MS}
               />
             ))}
           </div>
+        )}
+        {/*
+          Підпис «хто де». Заради нього все й затівалось: побачити, що
+          Микола сидить на SLA, корисніше за його стрілку — і видно це
+          навіть коли ти сам на іншій сторінці.
+        */}
+        {live && others.length > 0 && (
+          <span className="max-w-[220px] truncate text-[11px] text-muted-foreground">
+            {others.length === 1
+              ? `${liveLabel(others[0])} · ${pageLabel(others[0].path)}`
+              : `${others.length} онлайн`}
+          </span>
         )}
         <button
           onClick={toggle}
@@ -336,14 +390,27 @@ export function LivePresence({
   );
 }
 
-function Avatar({ peer, idle }: { peer: LivePeer; idle: boolean }) {
+function Avatar({
+  peer,
+  idle,
+  here,
+}: {
+  peer: LivePeer;
+  idle: boolean;
+  /** Людина на тій самій сторінці, що й ти, — тобто її курсор видно. */
+  here: boolean;
+}) {
   const color = liveColor(peer.email);
   return (
     <span
-      title={`${liveLabel(peer)}${idle ? " · не активний" : ""}`}
+      title={`${liveLabel(peer)} · ${pageLabel(peer.path)}${
+        here ? "" : " (інша сторінка)"
+      }${idle ? " · не активний" : ""}`}
       className={cn(
         "flex size-6 items-center justify-center rounded-full border-2 border-card text-[10px] font-medium text-white transition-opacity",
-        idle && "opacity-40"
+        // Пригашуємо і тих, хто мовчить, і тих, хто на іншій сторінці:
+        // яскраві — це ті, чиї курсори ти зараз бачиш.
+        (idle || !here) && "opacity-40"
       )}
       style={{ background: color }}
     >
