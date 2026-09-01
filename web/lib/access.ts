@@ -162,25 +162,87 @@ export async function addUser(input: {
   return { ok: true };
 }
 
+/**
+ * Оновити вже виданий доступ: роль, області, підпис. Пошта — ключ рядка й
+ * не міняється: «та сама людина під іншою адресою» — це інший запис, і
+ * робиться він явно (додати новий, прибрати старий), а не мовчазною
+ * підміною ідентифікатора, на який зав'язаний і журнал відвідувань.
+ */
+export async function updateUser(input: {
+  email: string;
+  role: Role;
+  scopes: Scope[];
+  note?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const rest = REST();
+  if (!rest) return { ok: false, error: "Supabase не налаштований" };
+
+  const target = norm(input.email);
+
+  // Пониження останнього адміна до «Перегляду» — той самий замок, що й
+  // видалення, тільки іншими дверима: керувати списком стане нікому.
+  if (input.role !== "admin") {
+    const guard = await lastAdminGuard(target);
+    if (guard) return guard;
+  }
+
+  // Адміну області не звужуються — дзеркало правила в `accessFor`.
+  const scopes = input.role === "admin" ? [...ALL_SCOPES] : input.scopes;
+
+  const res = await fetch(
+    `${rest.endpoint}?email=eq.${encodeURIComponent(target)}`,
+    {
+      method: "PATCH",
+      headers: { ...rest.headers, Prefer: "return=minimal" },
+      body: JSON.stringify({
+        role: input.role,
+        scopes,
+        note: input.note?.trim() || null,
+      }),
+      cache: "no-store",
+    }
+  );
+  if (!res.ok) {
+    console.error("[access] updateUser:", res.status, await res.text());
+    return { ok: false, error: "Не вдалося зберегти — глянь логи" };
+  }
+  return { ok: true };
+}
+
+/**
+ * Перевірка «це останній адмін?» — спільна для видалення й пониження.
+ *
+ * Повертає готову відмову або `null`, якщо все гаразд.
+ *
+ * ⚠️ Не змогли прочитати список — теж відмова. Тут це важливіше за
+ * зручність: помилка в бік суворості коштує повторного кліку, помилка в
+ * інший бік лишає дашборд без жодного адміна, і повертати доступ
+ * доведеться руками через SQL у Supabase.
+ */
+async function lastAdminGuard(
+  target: string
+): Promise<{ ok: false; error: string } | null> {
+  const admins = await query<Array<{ email: string }>>(
+    "?select=email&role=eq.admin"
+  );
+  if (!admins) {
+    return { ok: false, error: "Не вдалося перевірити список адмінів" };
+  }
+  if (admins.length <= 1 && admins.some((a) => norm(a.email) === target)) {
+    return { ok: false, error: "Це останній адмін — залишишся без доступу" };
+  }
+  return null;
+}
+
 export async function removeUser(
   email: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const rest = REST();
   if (!rest) return { ok: false, error: "Supabase не налаштований" };
 
-  // Останнього адміна прибрати не можна: інакше в дашборд не зайде вже
-  // ніхто, і повертати доступ доведеться руками через SQL.
   const target = norm(email);
-  const admins = await query<Array<{ email: string }>>(
-    "?select=email&role=eq.admin"
-  );
-  if (
-    admins &&
-    admins.length <= 1 &&
-    admins.some((a) => norm(a.email) === target)
-  ) {
-    return { ok: false, error: "Це останній адмін — залишишся без доступу" };
-  }
+  const guard = await lastAdminGuard(target);
+  if (guard) return guard;
 
   const res = await fetch(
     `${rest.endpoint}?email=eq.${encodeURIComponent(target)}`,

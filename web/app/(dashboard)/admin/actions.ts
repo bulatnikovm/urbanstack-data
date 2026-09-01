@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
-import { addUser, removeUser } from "@/lib/access";
+import { addUser, removeUser, updateUser } from "@/lib/access";
 import {
   ALL_SCOPES,
   isRole,
@@ -63,6 +63,41 @@ export async function grantAccess(
 
   revalidatePath("/admin");
   return { ok: `${email.trim().toLowerCase()} — доступ видано` };
+}
+
+/**
+ * Змінити вже виданий доступ. Пошта приходить прихованим полем і слугує
+ * ключем — форма її не редагує (див. `updateUser`).
+ *
+ * Розбір форми свідомо повторює `grantAccess` замість спільного хелпера:
+ * різниця між ними одна (нема перевірки «впиши пошту»), а спільна функція
+ * на два виклики зробила б обидва менш читними, ніж вони є.
+ */
+export async function updateAccess(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireAdmin();
+
+  const email = String(formData.get("email") ?? "");
+  const roleRaw = String(formData.get("role") ?? "viewer");
+  const role: Role = isRole(roleRaw) ? roleRaw : "viewer";
+  const note = String(formData.get("note") ?? "");
+  const scopes: Scope[] =
+    role === "admin"
+      ? [...ALL_SCOPES]
+      : formData.getAll("scopes").map(String).filter(isScope);
+
+  if (!email.trim()) return { error: "Не вказано пошту" };
+  if (scopes.length === 0) {
+    return { error: "Постав хоча б одну галочку в «Що бачить»" };
+  }
+
+  const res = await updateUser({ email, role, scopes, note });
+  if (!res.ok) return { error: res.error };
+
+  revalidatePath("/admin");
+  return { ok: `${email.trim().toLowerCase()} — доступ оновлено` };
 }
 
 export async function revokeAccess(

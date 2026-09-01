@@ -16,6 +16,34 @@ import { AccessForm } from "./access-form";
 import { requireAccess } from "@/lib/guard";
 
 /**
+ * Коротке «востаннє заходив» для рядка списку доступів.
+ *
+ * ⚠️ Рахується НА СЕРВЕРІ й їде в клієнт готовим рядком. Інакше «сьогодні»
+ * бралося б з годинника глядача, і розмітка сервера з розміткою браузера
+ * розходились би при гідратації — рівно той клас помилки, який видно лише
+ * в консолі й лише в частини людей.
+ *
+ * Доба — київська, як і скрізь у дашборді (свіжість даних, місяці): в
+ * інших одиницях «сьогодні» означало б інший день.
+ */
+function lastSeenLabel(iso: string): string {
+  const kyivDay = (d: Date) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Kyiv" }).format(d);
+  const days = Math.round(
+    (Date.parse(kyivDay(new Date())) - Date.parse(kyivDay(new Date(iso)))) /
+      86_400_000
+  );
+  if (days <= 0) return "сьогодні";
+  if (days === 1) return "вчора";
+  if (days < 7) return `${days} дн. тому`;
+  return new Intl.DateTimeFormat("uk-UA", {
+    day: "numeric",
+    month: "short",
+    timeZone: "Europe/Kyiv",
+  }).format(new Date(iso));
+}
+
+/**
  * Керування доступами. Не в дейт-піклер-шапці, як решта сторінок — тут
  * немає періоду, і `PageHeader` з календарем збивав би з пантелику.
  *
@@ -34,6 +62,16 @@ export default async function AdminPage() {
   const users = await listUsers();
   const { people } = await listVisitors();
 
+  /**
+   * «Востаннє заходив» — тим самим запитом, що й панель нижче, тільки
+   * розгорнуте в мапу по пошті. Під час переїзду на корпоративний вхід це
+   * головне, що хочеться бачити просто в списку доступів: хто вже
+   * перелогінився робочою поштою, а в кого рядок є і мовчить.
+   */
+  const lastSeen = Object.fromEntries(
+    people.map((p) => [p.email.toLowerCase(), lastSeenLabel(p.lastAt)])
+  );
+
   return (
     <>
       <header className="flex flex-col gap-1 border-b px-4 py-4 md:px-6">
@@ -47,9 +85,13 @@ export default async function AdminPage() {
       <PageBody>
         <Panel
           title={`Команда — ${users.length}`}
-          note="Вхід тільки через Google. Пошта має збігатися з тією, якою людина логіниться; регістр не важливий. «Адміністратор» — обидва дашборди плюс ця сторінка. «Перегляд» — обидва дашборди. «Тільки операційний» — заявки, SLA, CSAT і NPS; продуктового дашборду, «Ризику відтоку» та «Напруги і сегментів» для такої людини не існує (останні два — профілювання мешканців за текстами звернень, це внутрішній інструмент)."
+          note="Вхід через робочу пошту (M365) або через Google. Пошта в рядку має збігатися з тією, якою людина логіниться; регістр не важливий. Олівець змінює роль, області й підпис уже виданого доступу — саму пошту ні: це ключ рядка, і «та сама людина під іншою адресою» робиться як новий доступ плюс прибраний старий. «Адміністратор» бачить усе плюс цю сторінку; областями керує колонка «Що бачить». «Востаннє» береться з журналу відвідувань, який ведеться з 01.09.2026 — «ще не заходив» означає «немає в журналі», а не обов'язково «жодного разу за весь час»."
         >
-          <AccessForm users={users} currentEmail={session?.user?.email ?? ""} />
+          <AccessForm
+            users={users}
+            currentEmail={session?.user?.email ?? ""}
+            lastSeen={lastSeen}
+          />
         </Panel>
 
         <Panel
