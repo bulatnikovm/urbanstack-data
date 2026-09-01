@@ -230,13 +230,22 @@ export type CategoryMonthly = {
 };
 
 /**
- * Те саме, що CategoryMonthly, плюс тег CRM у грануляції.
+ * Те саме, що CategoryMonthly, плюс НАБІР тегів CRM у грануляції.
  *
- * ⚠️ Тег БАГАТОЗНАЧНИЙ: заявка з мітками «Аварійна» і «Терміново» лежить тут
- * ДВІЧІ. Сумувати цей набір без фільтра по конкретному тегу не можна — саме
- * тому він живе окремим файлом, а не колонкою в agg_categories_monthly.
+ * `tag_set` — теги заявки одним значенням, склеєні через «|»
+ * («Забудовник|заплановано 30+»); заявка без міток — «Без тега».
+ *
+ * Тег багатозначний, і виміром тут колись був окремий тег — рядок на кожну
+ * пару «заявка × тег». Це ламало дві речі одночасно: сума по зрізу
+ * завищувалась (заявка з двома мітками рахувалась двічі), а виключення тега
+ * не прибирало заявку — вона поверталась через свою другу мітку (ANA-10).
+ * З набором кожна заявка присутня РІВНО ОДИН раз, як і в
+ * agg_categories_monthly, тож зріз порівнянний із загальною цифрою.
  */
-export type TagMonthly = CategoryMonthly & { tag_ua: string };
+export type TagMonthly = CategoryMonthly & { tag_set: string };
+
+/** Набір тегів рядка → окремі теги. */
+export const tagsOf = (row: { tag_set: string }) => row.tag_set.split("|");
 
 /** Навантаження, скарги, черга 30+, внутрішні задачі — по ЖК і місяцях. */
 export type LoadMonthly = {
@@ -719,6 +728,32 @@ export const sliceHits = (sel: SliceSel, value: string) =>
 export const sliceActive = (sel: SliceSel) => sel.values.length > 0;
 
 /**
+ * Чи проходить ЗАЯВКА крізь розріз по тегу. Окремо від `sliceHits`, бо тут
+ * зліва не одне значення, а набір міток заявки.
+ *
+ * Семантика — Максима (ANA-10): «при виборі "Забудовник" ми бачимо всі
+ * заявки, де згадується забудовник (може бути 3, 4, 5 тегів, але має бути
+ * один з них); якщо обираємо "Забудовник" та "Порушення" — рахуємо, де є ці
+ * два теги + ще якийсь зайвий, якщо він є». Тобто:
+ *
+ *   · «Показати»  → заявка має ВСІ обрані теги (зайві дозволені —
+ *                   збіг нестрогий, це не пошук точного набору);
+ *   · «Виключити» → заявка не має ЖОДНОГО з обраних.
+ *
+ * Головне тут — рівень: питання стосується заявки, а не рядка. Поки фільтр
+ * діяв на рядок «заявка × тег», «крім Забудовник» прибирало лише рядок
+ * цього тега, і заявка «Забудовник + заплановано 30+» лишалась у цифрі
+ * через другий рядок. На зрізі з тікета це давало 15 298 замість 14 815 —
+ * і помилка була невидима, бо цифра просто трохи більша.
+ */
+export const tagHits = (sel: SliceSel, tags: string[]) =>
+  sel.values.length === 0
+    ? true
+    : sel.mode === "ex"
+      ? sel.values.every((v) => !tags.includes(v))
+      : sel.values.every((v) => tags.includes(v));
+
+/**
  * Значення розрізу — ПОВТОРЮВАНИМИ параметрами (`?cat=A&cat=B`), а не одним
  * через кому.
  *
@@ -770,7 +805,7 @@ export function readSlaFilters(
  * На графіку це розрив, а не нуль — і так чесніше.
  */
 function sliceToSla(
-  rows: Array<CategoryMonthly & { tag_ua?: string }>
+  rows: Array<CategoryMonthly & { tag_set?: string }>
 ): SlaMonthly[] {
   const acc = new Map<string, SlaMonthly>();
   for (const r of rows) {
@@ -827,14 +862,33 @@ function sliceOptions<T extends { created_count: number }>(
 }
 
 /**
+ * Те саме для тегів: рядок несе НАБІР міток, тож заявка з двома мітками
+ * додає одиницю кожній зі своїх опцій.
+ *
+ * Через це сума лічильників у дропдауні більша за кількість заявок — і так
+ * і має бути: це відповідь на питання «скільки заявок має тег X», задане
+ * окремо про кожен тег, а не розбиття цілого на частки.
+ */
+function tagOptions(rows: TagMonthly[]): SliceOption[] {
+  const acc = new Map<string, number>();
+  for (const r of rows) {
+    for (const t of tagsOf(r)) acc.set(t, (acc.get(t) ?? 0) + r.created_count);
+  }
+  return [...acc.entries()]
+    .filter(([, count]) => count > 0)
+    .map(([value, count]) => ({ value, label: value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+}
+
+/**
  * Період і зріз сторінки «Операційна ефективність (SLA)».
  *
  * Джерело залежить від фільтрів, і це навмисно:
  *   · без фільтрів   → `agg_sla_monthly` (кожна заявка рівно раз, готовий
  *                       незакритий залишок, повний календарний спайн);
  *   · категорія/тип  → `agg_categories_monthly`;
- *   · тег            → `agg_tags_monthly` (окремий файл, бо тег
- *                       багатозначний — див. TagMonthly).
+ *   · тег            → `agg_tags_monthly` (окремий файл, бо виміром там є
+ *                       НАБІР міток заявки — див. TagMonthly).
  * Лічильники в усіх трьох рахуються однаково (створено по даті подачі,
  * виконано/скасовано по даті закриття), тому цифри між станами фільтра
  * порівнянні.
@@ -853,10 +907,10 @@ export function getSlaPeriod(
     sliceActive(filters.type) ||
     sliceActive(filters.tag);
 
-  const source: Array<CategoryMonthly & { tag_ua?: string }> = sliceActive(
+  const source: Array<CategoryMonthly & { tag_set?: string }> = sliceActive(
     filters.tag
   )
-    ? getTagged().filter((r) => sliceHits(filters.tag, r.tag_ua))
+    ? getTagged().filter((r) => tagHits(filters.tag, tagsOf(r)))
     : isSliced
       ? getCategories()
       : [];
@@ -904,7 +958,7 @@ export function getSlaPeriod(
   // ньому обраний тег уже враховано.
   const tagged = inRange(getTagged());
   const base = sliceActive(filters.tag)
-    ? tagged.filter((r) => sliceHits(filters.tag, r.tag_ua))
+    ? tagged.filter((r) => tagHits(filters.tag, tagsOf(r)))
     : inRange(getCategories());
 
   return {
@@ -924,13 +978,12 @@ export function getSlaPeriod(
         base.filter((r) => sliceHits(filters.category, r.category_ua)),
         (r) => r.type_ua
       ),
-      tags: sliceOptions(
+      tags: tagOptions(
         tagged.filter(
           (r) =>
             sliceHits(filters.category, r.category_ua) &&
             sliceHits(filters.type, r.type_ua)
-        ),
-        (r) => r.tag_ua
+        )
       ),
     },
     byComplex: (monthKey: string) =>

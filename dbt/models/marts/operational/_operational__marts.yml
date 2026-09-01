@@ -288,11 +288,13 @@ models:
 
   - name: mart_monthly_tags
     description: >
-      Grain — complex_id × report_month × category_ua × type_ua × tag_ua.
-      Дзеркало mart_monthly_categories з додатковим виміром — тегом CRM.
-      Окрема модель, бо тег БАГАТОЗНАЧНИЙ: заявка з двома мітками дає два
-      рядки, і сума без фільтра по тегу порахувала б її двічі. Сторінка без
-      фільтра читає mart_monthly_categories, з фільтром — цю модель.
+      Grain — complex_id × report_month × category_ua × type_ua × tag_set.
+      Дзеркало mart_monthly_categories з додатковим виміром — НАБОРОМ тегів
+      CRM на заявці («Забудовник|заплановано 30+»), а не окремим тегом.
+      Тег багатозначний, і рядок-на-тег завищував будь-який зріз та ламав
+      виключення (ANA-10): заявка з двома мітками лишалась у цифрі «крім X»
+      через свою другу мітку. З набором кожна заявка тут РІВНО ОДИН раз,
+      тож сума по зрізу порівнянна із загальною цифрою.
     columns:
       - name: complex_id
         tests:
@@ -300,9 +302,12 @@ models:
       - name: report_month
         tests:
           - not_null
-      - name: tag_ua
+      - name: tag_set
+        description: >
+          Теги заявки, склеєні через «|» у порядку сортування. Заявка без
+          міток — «Без тега». Розбирає назад дашборд.
         tests:
           - not_null
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [complex_id, report_month, category_ua, type_ua, tag_ua]
+          combination_of_columns: [complex_id, report_month, category_ua, type_ua, tag_set]

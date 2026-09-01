@@ -61,6 +61,15 @@ models:
         tests:
           - not_null
           - unique
+      - name: tag_ua
+        description: >
+          Назва тега. Не може містити «|»: mart_monthly_tags склеює набір
+          тегів заявки в один рядок саме цим символом, а дашборд розбирає
+          його назад. Тег із «|» в назві розвалив би набір на дашборді
+          мовчки — тому тест стоїть тут, на джерелі, а не там.
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "not like '%|%'"
 
   - name: stg_dim9000__task_tags
     description: >

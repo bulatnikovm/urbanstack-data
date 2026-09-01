@@ -278,10 +278,11 @@ const QUERIES = {
   `,
 
   /**
-   * Те саме, але з тегом CRM у грануляції. Окремий файл, а не колонка в
-   * попередньому: тег багатозначний, і заявка з двома мітками дає два
-   * рядки — сума без фільтра по тегу порахувала б її двічі. Сторінка без
-   * фільтра читає agg_categories_monthly, з фільтром — цей файл.
+   * Те саме, але з НАБОРОМ тегів CRM у грануляції («Забудовник|заплановано
+   * 30+» — одне значення виміру, не два рядки). Окремий файл, а не колонка
+   * в попередньому: наборів 52, і без фільтра по тегу вони сторінці не
+   * потрібні. Розбір набору на окремі теги (лічильники в дропдауні, «усі
+   * обрані», «жодного з обраних») робить застосунок — див. tagsOf().
    *
    * ⚠️ Джерело тегів — датасет `dim9000_fast` (US), дзеркалений у
    * `dim9000_fast_eu` кроком `bq cp` у workflow ПЕРЕД `dbt build`. Якщо
@@ -295,7 +296,7 @@ const QUERIES = {
       d.complex_name,
       t.category_ua,
       t.type_ua,
-      t.tag_ua,
+      t.tag_set,
       t.created_count,
       t.valid_created_count,
       t.completed_count,
@@ -303,7 +304,7 @@ const QUERIES = {
       t.completed_same_month_count
     from \`${PROJECT}.${DATASET}.mart_monthly_tags\` t
     join \`${PROJECT}.${DATASET}.dim_complex\` d on d.complex_id = t.complex_id
-    order by t.report_month, d.complex_name, t.tag_ua
+    order by t.report_month, d.complex_name, t.tag_set
   `,
 
   /**
@@ -531,7 +532,7 @@ const COMPACT = {
     "complex_name",
     "category_ua",
     "type_ua",
-    "tag_ua",
+    "tag_set",
   ],
   // Коментарі: сам ТЕКСТ у словник не йде (він унікальний), а от усе
   // навколо нього — хвиля, ЖК, адреса, набір тем — повторюється на кожному
