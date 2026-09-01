@@ -25,11 +25,20 @@ const FUNNEL_SERIES: Series[] = [
 export default async function ActivationPage({ searchParams }: PageProps<"/activation">) {
   await requireAccess("/activation");
   const sp = await searchParams;
-  const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at } = getPeriod(sp);
+  const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at, atOrZero } = getPeriod(sp);
 
   const act = getActivation();
-  const actCur = at(act, curKey)!;
-  const actPrev = at(act, prevKey)!;
+  // `atOrZero`, а не `at(...)!`: першого числа місяця рядка за поточний
+  // місяць у цьому марті ще немає (нових користувачів за перші години доби
+  // не було), і знак оклику перетворював це на 500 — див. lib/data.ts.
+  const actCur = atOrZero(act, curKey)!;
+  const actPrev = atOrZero(act, prevKey)!;
+
+  // Конверсія на порожній базі — не нуль, а відсутність виміру. Показувати
+  // «0,0%» там, де ще нікого не було, означало б малювати провал, якого
+  // немає (той самий принцип, що й MIN_RATE_BASE на /health).
+  const actRate = (r: typeof actCur) =>
+    r.count_new_users > 0 ? pct(r.activation_rate) : "—";
 
   // Службовий рядок report_month_key = "ALL" — підсумок за весь час,
   // не місяць. У часовий ряд не потрапляє, але як орієнтир корисний.
@@ -71,12 +80,18 @@ export default async function ActivationPage({ searchParams }: PageProps<"/activ
           />
           <Kpi
             label="Конверсія в активацію"
-            value={pct(actCur.activation_rate)}
-            sub={`було ${pct(actPrev.activation_rate)}`}
-            trend={{
-              text: pp(actCur.activation_rate - actPrev.activation_rate),
-              good: actCur.activation_rate >= actPrev.activation_rate,
-            }}
+            value={actRate(actCur)}
+            sub={`було ${actRate(actPrev)}`}
+            /* Стрілки немає, коли самої частки немає: «—» і поруч
+               «−26,9 п.п.» — це два твердження, які суперечать одне одному. */
+            trend={
+              actCur.count_new_users > 0
+                ? {
+                    text: pp(actCur.activation_rate - actPrev.activation_rate),
+                    good: actCur.activation_rate >= actPrev.activation_rate,
+                  }
+                : undefined
+            }
           />
           <Kpi
             label="Дійшли до цінності за добу"
@@ -100,8 +115,8 @@ export default async function ActivationPage({ searchParams }: PageProps<"/activ
               З <Hl>{n(actCur.count_new_users)}</Hl> нових користувачів{" "}
               {monthLabel(curKey)} цільову дію в перший же місяць зробили{" "}
               <Hl>{n(actCur.count_activated)}</Hl> —{" "}
-              <Hl>{pct(actCur.activation_rate)}</Hl> проти{" "}
-              {pct(actPrev.activation_rate)} місяцем раніше. Ще{" "}
+              <Hl>{actRate(actCur)}</Hl> проти{" "}
+              {actRate(actPrev)} місяцем раніше. Ще{" "}
               <Hl>{n(actCur.count_passively_activated)}</Hl> зайшли в додаток,
               але цільової дії так і не зробили.
             </>

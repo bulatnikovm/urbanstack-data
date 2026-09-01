@@ -268,6 +268,41 @@ export function getPeriod(
       ),
     at: <T extends { report_month_key: string }>(rows: T[], k: string) =>
       rows.find((x) => x.report_month_key === k),
+    /**
+     * Те саме, що `at`, але для МІСЯЦЯ, якого в цьому ряду ще немає, віддає
+     * нульовий рядок замість `undefined`.
+     *
+     * Навіщо: `curKey` — один на сторінку й береться з бази користувачів, а
+     * марти мають РІЗНЕ покриття. 01.09.2026 у `mart_user_base_totals_monthly`
+     * вересень уже був, а в `mart_activation_monthly` і
+     * `mart_utility_receipts_monthly` — ще ні (нових користувачів і квитанцій
+     * за перші години доби просто не було). Сторінки писали `at(rows, curKey)!`,
+     * знак оклику брехав компілятору, і /activation та /engagement віддавали
+     * 500. Пастка спрацьовує ПЕРШОГО ЧИСЛА кожного місяця й тільки тоді —
+     * тому й дожила до вересня.
+     *
+     * Нуль тут — чесне значення для ЛІЧИЛЬНИКІВ: рядка немає саме тому, що
+     * нічого не сталось.
+     *
+     * ⚠️ Для ЧАСТОК і СЕРЕДНІХ нуль чесним не є: «конверсія 0%» на базі з
+     * нуля людей — це не вимір, а його відсутність. Тому сторінка, яка
+     * показує частку, зобовʼязана сама перевірити базу й намалювати «—»
+     * (той самий принцип, що й `MIN_RATE_BASE` на /health).
+     */
+    atOrZero: <T extends { report_month_key: string }>(
+      rows: T[],
+      k: string
+    ): T | undefined => {
+      const hit = rows.find((x) => x.report_month_key === k);
+      if (hit) return hit;
+      const shape = rows.at(-1);
+      if (!shape) return undefined;
+      const zero: Record<string, unknown> = { ...shape, report_month_key: k };
+      for (const key of Object.keys(zero)) {
+        if (typeof zero[key] === "number") zero[key] = 0;
+      }
+      return zero as T;
+    },
   };
 }
 

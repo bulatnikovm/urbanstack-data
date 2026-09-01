@@ -35,20 +35,27 @@ import { requireAccess } from "@/lib/guard";
 export default async function EngagementPage({ searchParams }: PageProps<"/engagement">) {
   await requireAccess("/engagement");
   const sp = await searchParams;
-  const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at } = getPeriod(sp);
+  const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at, atOrZero } = getPeriod(sp);
 
   const eng = getEngagement();
-  const engCur = at(eng, curKey)!;
-  const engPrev = at(eng, prevKey)!;
+  // `atOrZero` замість `at(...)!`: першого числа місяця рядка за поточний
+  // місяць у марті може ще не бути, і знак оклику давав 500 — див. lib/data.ts.
+  const engCur = atOrZero(eng, curKey)!;
+  const engPrev = atOrZero(eng, prevKey)!;
 
   // ⚠️ Не Amplitude — банківські транзакції (dbt_finance.stg_finance__transactions,
   // крос-доменний ref). Оплата йде через сторонній платіжний шлюз, застосунок
   // цього не бачить. Формула звірена з дашбордом (Микита, 2026-08-06):
   // transaction_type='utilities', accepted/rejected (new — незавершені спроби).
   const receipts = getUtilityReceipts();
-  const recCur = at(receipts, curKey)!;
-  const recPrev = at(receipts, prevKey)!;
+  const recCur = atOrZero(receipts, curKey)!;
+  const recPrev = atOrZero(receipts, prevKey)!;
   const recCurTotal = recCur.receipts_accepted + recCur.receipts_rejected;
+  // Частка відхилень і середній чек на нулі спроб — не виміри, а їх
+  // відсутність: малюємо «—», а не «0,0%» і «0 ₴».
+  const recRate = recCurTotal > 0 ? pct(recCur.receipts_rejected_rate) : "—";
+  const recAvg =
+    recCur.receipts_accepted > 0 ? uah(recCur.receipts_accepted_avg_amount) : "—";
 
   const modules = getModuleUsage()
     .filter((r) => r.report_month_key === curKey)
@@ -222,7 +229,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
               Оплачено <Hl>{n(recCur.receipts_accepted)}</Hl> квитанцій на{" "}
               <Hl>{uah(recCur.receipts_accepted_amount)}</Hl>,{" "}
               <Hl>{n(recCur.receipts_rejected)}</Hl> відхилено банком —{" "}
-              <Hl>{pct(recCur.receipts_rejected_rate)}</Hl> від усіх спроб (
+              <Hl>{recRate}</Hl> від усіх спроб (
               {pp(recCur.receipts_rejected_rate - recPrev.receipts_rejected_rate)}{" "}
               за місяць).
             </>
@@ -232,7 +239,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
             <Kpi
               label="Сума прийнятих"
               value={uah(recCur.receipts_accepted_amount)}
-              sub={`середній чек ${uah(recCur.receipts_accepted_avg_amount)}`}
+              sub={`середній чек ${recAvg}`}
               trend={{
                 text: delta(
                   recCur.receipts_accepted_amount /
@@ -258,7 +265,7 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
             <Kpi
               label="Відхилено банком"
               value={n(recCur.receipts_rejected)}
-              sub={pct(recCur.receipts_rejected_rate) + " від спроб"}
+              sub={recRate + " від спроб"}
               trend={{
                 text: pp(
                   recCur.receipts_rejected_rate -

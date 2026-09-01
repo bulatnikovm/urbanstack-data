@@ -27,12 +27,16 @@ const STAR_TOTAL = "0. Всього активних";
 export default async function StarPage({ searchParams }: PageProps<"/star">) {
   await requireAccess("/star");
   const sp = await searchParams;
-  const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at } = getPeriod(sp);
+  const { curKey, prevKey, isPartial, daysElapsed, daysInMonth, bounds, range, inWindow, at, atOrZero } = getPeriod(sp);
 
   const star = getStar();
   const total = star.filter((r) => r.star_category === STAR_TOTAL);
-  const cur = at(total, curKey)!;
-  const prev = at(total, prevKey)!;
+  // `atOrZero`, а не `at(...)!`: марти мають різне покриття, і першого
+  // числа місяця рядка за поточний місяць тут може ще не бути. Знак оклику
+  // в такому разі давав 500 — саме так лягли /activation і /engagement
+  // 01.09.2026 (див. lib/data.ts).
+  const cur = atOrZero(total, curKey)!;
+  const prev = atOrZero(total, prevKey)!;
 
   const cats = star
     .filter((r) => r.report_month_key === curKey && r.star_category !== STAR_TOTAL)
