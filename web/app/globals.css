@@ -258,79 +258,66 @@
 }
 
 /* ── Кнопка «Excel» у стані «готую файл» ─────────────────────────────────
-   Біжуче сяйво замість спінера — прийом з Linear, який Микита попросив
-   перенести (2026-09-01).
+   Крізь іконку згори вниз тече крапковий візерунок — ніби вміст
+   пересипається. Прийом з Linear, який Микита впізнав по анімації
+   завантаження вкладення (2026-09-01): іконка «пікселізується» й іде вниз.
 
-   Індикатор НЕВИЗНАЧЕНИЙ, і це не лінощі: файл збирається в браузері одним
-   викликом `write-excel-file`, поділити його на відсотки нічим. Смуга зі
-   шкалою малювала б прогрес, якого ми не знаємо; сяйво чесно каже «працюю»,
-   нічого не обіцяючи про «скільки лишилось».
+   ── Чому тече маска, а не летять крапки ─────────────────────────────────
+   Розглядали й другий спосіб — викласти стрілку окремими крапками й
+   ронити їх вниз по одній. На великій іконці він виразніший, але наша
+   висота — 14 пікселів, і крапка там виходить у півтора пікселя: на
+   екрані без ретіни це вже не крапка, а сіра пляма. Маска лишає САМУ
+   іконку, намальовану як завжди, і тільки прорізає в ній отвори — форма
+   читається весь час, з якою б щільністю візерунок не йшов.
 
-   Кольори — брендові (Cool Gray Blue у світлій темі, біле світло в темній),
-   не індиго з оригіналу: хром дашборду монохромний навмисно (див. правило
-   про Mint Green у навігації вище), і кольорова пляма тут була б чужою. */
-:root {
-  --shimmer: color-mix(in oklab, var(--brand-slate) 55%, transparent);
-  --shimmer-hot: color-mix(in oklab, var(--brand-slate) 85%, transparent);
-  --shimmer-glow: color-mix(in oklab, var(--brand-slate) 45%, transparent);
-}
+   Індикатор НЕВИЗНАЧЕНИЙ навмисно: файл збирається одним викликом
+   write-excel-file, ділити його на відсотки нічим. Смуга зі шкалою
+   малювала б прогрес, якого ми не знаємо.
 
-.dark {
-  --shimmer: color-mix(in oklab, #ffffff 12%, transparent);
-  --shimmer-hot: color-mix(in oklab, #ffffff 22%, transparent);
-  --shimmer-glow: color-mix(in oklab, var(--brand-slate) 30%, transparent);
-}
+   ⚠️ Крапки не виходять за межі кнопки. Спокуса «висипати» їх на
+   сторінку є, але кнопка стоїть у шапці таблиці, і все, що вилізе
+   назовні, поїде по сусідніх заголовках. */
 
-@keyframes shimmer-sweep {
-  from {
-    background-position: 150% 0;
-  }
+@keyframes icon-dot-rain {
   to {
-    background-position: -150% 0;
+    -webkit-mask-position: 0 3.2px;
+    mask-position: 0 3.2px;
   }
 }
 
-.shimmer-busy {
+.dot-rain {
   position: relative;
-  overflow: hidden;
-  /* М'яке світло навколо кнопки — та сама половина ефекту, що й сама смуга:
-     без нього сяйво лишається всередині прямокутника й читається як
-     «щось блимнуло», а не як «кнопка світиться». */
-  box-shadow: 0 0 10px 0 var(--shimmer-glow);
+  display: inline-flex;
 }
 
-/* Вміст кнопки — НАД смугою. Без цього ::after (він малюється останнім)
-   лягає поверх іконки й підпису, і «Готую…» блякне рівно тоді, коли на
-   нього дивляться. */
-.shimmer-busy > * {
-  position: relative;
-  z-index: 1;
-}
-
-.shimmer-busy::after {
-  content: "";
+/* Пригашена копія під сподом: без неї в моменти, коли отвори маски
+   збігаються з тонкими лініями іконки, від неї не лишається нічого і
+   кнопка на мить виглядає порожньою. */
+.dot-rain-ghost {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-  /* Смуга вдвічі ширша за кнопку (background-size 200%), тому за цикл вона
-     проходить її наскрізь і не «стрибає» на межі повтору. */
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--shimmer) 42%,
-    var(--shimmer-hot) 50%,
-    var(--shimmer) 58%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer-sweep 1.3s linear infinite;
+  opacity: 0.22;
 }
 
-/* Кому анімація заважає — лишається стан, але без руху: кнопка просто
-   підсвічена, поки файл збирається. */
+.dot-rain-flow {
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 34%, transparent 38%);
+  mask-image: radial-gradient(circle at 50% 50%, #000 34%, transparent 38%);
+  -webkit-mask-size: 3.2px 3.2px;
+  mask-size: 3.2px 3.2px;
+  animation: icon-dot-rain 0.55s linear infinite;
+}
+
+/* Кому рух заважає — іконка просто пригашена, поки файл збирається.
+   Нерухома маска тут не годиться: застиглі отвори читаються не як стан,
+   а як зіпсована іконка. */
 @media (prefers-reduced-motion: reduce) {
-  .shimmer-busy::after {
+  .dot-rain-ghost {
+    display: none;
+  }
+  .dot-rain-flow {
+    -webkit-mask-image: none;
+    mask-image: none;
     animation: none;
-    background: var(--shimmer);
+    opacity: 0.55;
   }
 }
