@@ -9,7 +9,9 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { createClient, type RealtimeChannel } from "@supabase/supabase-js";
-import { MousePointer2, Users } from "lucide-react";
+import Link from "next/link";
+import { ChevronUp, MousePointer2, Users } from "lucide-react";
+import { motion, useMotionValue, useSpring } from "motion/react";
 
 import {
   CURSOR_HZ,
@@ -128,6 +130,8 @@ export function LivePresence({
    * 2026-09-01). Тепер це два різні стани й дві різні крапки.
    */
   const [status, setStatus] = useState<string>("CONNECTING");
+  /** Розгорнутий список присутніх. */
+  const [open, setOpen] = useState(false);
   const [peers, setPeers] = useState<LivePeer[]>([]);
   /** Курсор + локальна мітка часу отримання — з неї рахується «не
    *  активний» (чому не з presence — див. lib/live.ts). */
@@ -315,6 +319,33 @@ export function LivePresence({
         layout, довелося б протягувати контекст через усі сторінки заради
         однієї приколюхи. Кут — самодостатній і нікому не заважає.
       */}
+      {live && open && others.length > 0 && (
+        <ul className="fixed right-4 bottom-16 z-50 w-64 overflow-hidden rounded-xl border bg-card/95 py-1 shadow-lg backdrop-blur">
+          {others.map((p) => (
+            <li key={p.email}>
+              <Link
+                href={p.path as never}
+                className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-muted"
+              >
+                <Avatar
+                  peer={p}
+                  here={p.path === pathname}
+                  idle={now - (cursors[p.email]?.at ?? 0) > CURSOR_IDLE_MS}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">
+                    {liveLabel(p)}
+                  </span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {pageLabel(p.path)}
+                  </span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <div className="fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-full border bg-card/95 px-2.5 py-1.5 shadow-lg backdrop-blur">
         {/*
           Крапка стану каналу. Зелена — підключено, тобто «нікого» справді
@@ -368,6 +399,22 @@ export function LivePresence({
               ? `${liveLabel(others[0])} · ${pageLabel(others[0].path)}`
               : `${others.length} онлайн`}
           </span>
+        )}
+        {/*
+          Розгорнутий список — бо головне питання «хто зараз у дашборді і де»,
+          а не «чия це стрілка». Аватарки на нього відповідають лише через
+          наведення, тобто по одній людині за раз.
+        */}
+        {live && others.length > 0 && (
+          <button
+            onClick={() => setOpen((v) => !v)}
+            title={open ? "Згорнути список" : "Хто зараз у дашборді"}
+            className="flex size-6 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-accent"
+          >
+            <ChevronUp
+              className={cn("size-3 transition-transform", open && "rotate-180")}
+            />
+          </button>
         )}
         <button
           onClick={toggle}
@@ -431,9 +478,17 @@ function Avatar({
 /**
  * Шар із чужими курсорами.
  *
- * Позиція перераховується в геометрію ГЛЯДАЧА на кожному кадрі, а не
- * запам'ятовується в пікселях: інакше при прокрутці сторінки чужа стрілка
- * лишалась би висіти на місці екрана, хоча вказувала вона на контент.
+ * ── Чому пружина, а не власна інтерполяція ────────────────────────────────
+ * Перша версія рахувала проміжну точку сама, у циклі `requestAnimationFrame`
+ * (`cur + (target - cur) * 0.2`). Працювало, але виглядало «гумово»: рух
+ * однаково млявий і на короткому смиканні, і на кидку через пів екрана.
+ * `useSpring` із motion (він уже в залежностях) дає фізику замість лінійного
+ * наближення — курсор доганяє швидко й зупиняється без хвоста, як у
+ * прикладі Animate UI, який скинув Микита.
+ *
+ * Позиція лишається в системі координат КОНТЕНТУ й перераховується в
+ * геометрію глядача на кожному кадрі: інакше при прокрутці чужа стрілка
+ * висіла б на місці екрана, хоча вказувала вона на блок сторінки.
  */
 function CursorLayer({
   cursors,
@@ -445,69 +500,85 @@ function CursorLayer({
   /** Спільний «зараз» із батька — щоб рендер лишався чистим. */
   now: number;
 }) {
-  const [frame, setFrame] = useState<Record<string, { x: number; y: number }>>(
-    {}
-  );
-  const pos = useRef<Record<string, { x: number; y: number }>>({});
+  const byEmail = new Map(peers.map((p) => [p.email, p]));
 
+  return (
+    <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
+      {Object.entries(cursors).map(([email, point]) => {
+        const peer = byEmail.get(email);
+        if (!peer || now - point.at > CURSOR_IDLE_MS) return null;
+        return (
+          <Cursor key={email} point={point} peer={peer} />
+        );
+      })}
+    </div>
+  );
+}
+
+const SPRING = { stiffness: 520, damping: 42, mass: 0.6 } as const;
+
+function Cursor({
+  point,
+  peer,
+}: {
+  point: CursorPoint;
+  peer: LivePeer;
+}) {
+  const color = liveColor(peer.email);
+  const rawX = useMotionValue(0);
+  const rawY = useMotionValue(0);
+  const x = useSpring(rawX, SPRING);
+  const y = useSpring(rawY, SPRING);
+
+  // Перерахунок у координати ГЛЯДАЧА щокадрово: сторінка може прокручуватись
+  // під нерухомим чужим курсором, і тоді екранна точка змінюється без жодного
+  // нового повідомлення.
   useEffect(() => {
     let raf = 0;
     const tick = () => {
       const main = document.querySelector("main");
       if (main) {
         const rect = main.getBoundingClientRect();
-        const next: Record<string, { x: number; y: number }> = {};
-        for (const [email, p] of Object.entries(cursors)) {
-          const target = {
-            x: rect.left + p.x * rect.width,
-            y: rect.top + p.y,
-          };
-          // Проміжна точка між поточною і цільовою: повідомлення приходять
-          // 10 разів на секунду, і без згладжування стрілка стрибала б
-          // ривками. 0.2 — компроміс: менше тягнеться, більше смикається.
-          const cur = pos.current[email] ?? target;
-          next[email] = {
-            x: cur.x + (target.x - cur.x) * 0.2,
-            y: cur.y + (target.y - cur.y) * 0.2,
-          };
-        }
-        pos.current = next;
-        setFrame(next);
+        rawX.set(rect.left + point.x * rect.width);
+        rawY.set(rect.top + point.y);
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [cursors]);
-
-  const byEmail = new Map(peers.map((p) => [p.email, p]));
+  }, [point, rawX, rawY]);
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
-      {Object.entries(frame).map(([email, p]) => {
-        const peer = byEmail.get(email);
-        const seen = cursors[email];
-        if (!peer || !seen || now - seen.at > CURSOR_IDLE_MS) return null;
-        const color = liveColor(email);
-        return (
-          <div
-            key={email}
-            className="absolute top-0 left-0 will-change-transform"
-            style={{ transform: `translate3d(${p.x}px, ${p.y}px, 0)` }}
-          >
-            <MousePointer2
-              className="size-4 drop-shadow"
-              style={{ color, fill: color }}
-            />
-            <span
-              className="ml-3 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-white"
-              style={{ background: color }}
-            >
-              {liveLabel(peer)}
-            </span>
-          </div>
-        );
-      })}
-    </div>
+    <motion.div className="absolute top-0 left-0" style={{ x, y }}>
+      {/*
+        Стрілка з БІЛОЮ обводкою: без неї курсор кольору людини губиться на
+        темних графіках і темній темі. Та сама причина, чому системний
+        курсор скрізь має контур.
+      */}
+      <svg
+        width="20"
+        height="22"
+        viewBox="0 0 20 22"
+        fill="none"
+        className="drop-shadow-sm"
+      >
+        <path
+          d="M3.5 2.2 L15.5 12.4 L9.6 13.1 L12.2 18.6 L9.4 19.9 L6.8 14.3 L3.5 17.6 Z"
+          fill={color}
+          stroke="white"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <motion.span
+        initial={{ opacity: 0, scale: 0.8, y: -4 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+        className="ml-4 -mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] leading-tight font-medium whitespace-nowrap text-white shadow-sm"
+        style={{ background: color }}
+      >
+        {liveLabel(peer)}
+      </motion.span>
+    </motion.div>
   );
 }
