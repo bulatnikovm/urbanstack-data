@@ -1,5 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import { signIn } from "@/auth";
+import { entraEnabled } from "@/auth.config";
 import { Dim9000Logo } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 
@@ -41,18 +42,57 @@ export default async function LoginPage({
         </div>
       )}
 
-      <form
-        action={async () => {
-          "use server";
-          await signIn("google", { redirectTo: callbackUrl });
-        }}
-      >
-        <Button type="submit" size="lg" className="gap-2">
-          <GoogleIcon className="size-4" />
-          Увійти через Google
-        </Button>
-      </form>
+      {/* Дві кнопки — це стан МІГРАЦІЇ, а не фінал (ANA-17). Корпоративний
+          вхід зʼявляється лише коли налаштований Entra; Google лишається
+          доти, доки всі не отримають рядок з робочою поштою в `/admin` і не
+          перелогіняться. Прибрати Google одним кроком разом із додаванням
+          Microsoft означало б закрити всіх семеро одночасно. */}
+      <div className="flex flex-col gap-2.5">
+        {entraEnabled() && (
+          <form
+            action={async () => {
+              "use server";
+              await signIn("microsoft-entra-id", { redirectTo: callbackUrl });
+            }}
+          >
+            <Button type="submit" size="lg" className="w-full gap-2">
+              <MicrosoftIcon className="size-4" />
+              Увійти через робочу пошту
+            </Button>
+          </form>
+        )}
+
+        <form
+          action={async () => {
+            "use server";
+            await signIn("google", { redirectTo: callbackUrl });
+          }}
+        >
+          <Button
+            type="submit"
+            size="lg"
+            variant={entraEnabled() ? "outline" : "default"}
+            className="w-full gap-2"
+          >
+            <GoogleIcon className="size-4" />
+            Увійти через Google
+          </Button>
+        </form>
+      </div>
     </div>
+  );
+}
+
+/** Чотириколірний квадрат Microsoft — знак упізнаваний саме кольорами,
+ *  тому тут, на відміну від Google-іконки, не `currentColor`. */
+function MicrosoftIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" {...props}>
+      <path fill="#f25022" d="M1 1h10.2v10.2H1z" />
+      <path fill="#7fba00" d="M12.8 1H23v10.2H12.8z" />
+      <path fill="#00a4ef" d="M1 12.8h10.2V23H1z" />
+      <path fill="#ffb900" d="M12.8 12.8H23V23H12.8z" />
+    </svg>
   );
 }
 

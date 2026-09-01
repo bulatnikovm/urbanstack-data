@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 
 import { accessFor } from "@/lib/access";
 import { isRole, parseScopes } from "@/lib/roles";
@@ -14,8 +15,75 @@ import { isRole, parseScopes } from "@/lib/roles";
  */
 export type { Access, Role, Scope } from "@/lib/roles";
 
+/**
+ * ── Корпоративний вхід (Microsoft Entra ID) ────────────────────────────────
+ *
+ * Навіщо взагалі: у списку доступів були самі особисті gmail, тобто доступ
+ * жив окремо від кадрових процесів — людина йде, її пошта лишається робочою,
+ * і закривати треба руками в `/admin`. З M365 достатньо вимкнути обліковий
+ * запис, і вхід відвалюється сам.
+ *
+ * ⚠️ `AUTH_MICROSOFT_ENTRA_ID_ISSUER` МУСИТЬ містити tenant ID. Провайдер за
+ * замовчуванням підставляє `/common/` — а це «будь-який обліковий запис
+ * Microsoft у світі», включно з особистими. Список доступів (`accessFor`)
+ * все одно не пустив би чужого, але сама сторінка входу Microsoft має
+ * відмовляти ще до нас.
+ *
+ * ⚠️ Без завершального `/v2.0` (і БЕЗ слеша в кінці) вхід падає ще на
+ * discovery: Auth.js порівнює `issuer` з well-known-документа з нашим рядком
+ * СИМВОЛ У СИМВОЛ, а Microsoft віддає його без слеша.
+ *
+ * Підключення умовне: немає всіх трьох змінних — немає ні провайдера, ні
+ * кнопки на вході. Це головна страховка міграції: Google лишається живим,
+ * поки всі семеро не перелогіняться корпоративною поштою (див. ANA-17). Якщо
+ * зламати обидва провайдери одночасно, закриються всі, включно з єдиним
+ * адміном, і повертати доступ доведеться SQL-ом у Supabase.
+ */
+const entraEnv = () => ({
+  clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
+  clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
+  issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+});
+
+/** Чи показувати кнопку «Увійти через робочу пошту» на `/login`. */
+export function entraEnabled() {
+  const { clientId, clientSecret, issuer } = entraEnv();
+  return !!(clientId && clientSecret && issuer);
+}
+
+function entraProvider() {
+  const { clientId, clientSecret, issuer } = entraEnv();
+  if (!(clientId && clientSecret && issuer)) return [];
+
+  const base = MicrosoftEntraID({ clientId, clientSecret, issuer });
+  // Провайдер типізує `profile` як необовʼязковий, але сам його завжди
+  // визначає (там же тягнеться аватарка з Graph — її втрачати не хочемо).
+  const baseProfile = base.profile!;
+
+  return [
+    {
+      ...base,
+      /**
+       * Пошта в ID-токені Entra — це optional claim `email`, який вмикається
+       * руками в Token configuration застосунку. Якщо його не ввімкнули,
+       * `user.email` порожній, `signIn` повертає false, і людина, яка в
+       * списку доступів Є, отримує «немає доступу» без жодної підказки, чому.
+       *
+       * Тому запасний варіант — `preferred_username` (для робочих акаунтів це
+       * UPN, тобто та сама name@dim9000.com). Ризику «пустити чужого» тут
+       * немає: що б сюди не приїхало, воно все одно звіряється зі списком у
+       * Supabase, і невідповідність = відмова.
+       */
+      profile: (async (profile, tokens) => {
+        const user = await baseProfile(profile, tokens);
+        return { ...user, email: user.email ?? profile.preferred_username };
+      }) satisfies typeof baseProfile,
+    },
+  ];
+}
+
 export const authConfig = {
-  providers: [Google],
+  providers: [Google, ...entraProvider()],
   pages: {
     signIn: "/login",
     error: "/login",
