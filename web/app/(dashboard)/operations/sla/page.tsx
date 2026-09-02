@@ -339,6 +339,54 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
     .filter((c) => c.total > 0)
     .sort((a, b) => b.total - a.total);
 
+
+  /**
+   * Рядки «Загальний підсумок» для ВИГРУЗОК зведених по ЖК — по одному на
+   * місяць.
+   *
+   * На екрані такий підсумок уже є (ANA-9), а у вигрузці його не було: людина
+   * відкривала Excel і сумувала руками те, що на екрані вже пораховано
+   * (ANA-8, перевірено на файлах dim9000-sla-mom / -complex від 02.09 —
+   * 183 рядки й жодного підсумку).
+   *
+   * Форма вигрузки «довга» (рядок = місяць × ЖК), тому підсумок тут — це не
+   * колонка, як на екрані, а СИНТЕТИЧНИЙ ЖК на кожен місяць. Ідуть першими,
+   * від найсвіжішого місяця, і проходять через ті самі колонки-аксесори, що
+   * й звичайні рядки: відсоток у них неминуче рахується від абсолютів (сума
+   * виконаних / сума створених), а не як середнє з відсотків по ЖК.
+   *
+   * ⚠️ «В процесі» тут ПІДСУМОВУЄТЬСЯ, і саме по ЖК це коректно: черги
+   * різних ЖК не перетинаються, тож їхня сума і є черга компанії. По
+   * МІСЯЦЯХ той самий стовпчик складати не можна — вийшла б сума залишків.
+   */
+  const withComplexTotals = (rows: SlaMonthly[]): SlaMonthly[] => {
+    const byMonth = new Map<string, SlaMonthly>();
+    for (const r of rows) {
+      const acc =
+        byMonth.get(r.report_month_key) ??
+        ({
+          report_month_key: r.report_month_key,
+          complex_id: TOTAL_ID,
+          complex_name: "Загальний підсумок",
+          created_count: 0,
+          completed_count: 0,
+          canceled_count: 0,
+          completed_same_month_count: 0,
+          backlog_end_of_month: 0,
+        } satisfies SlaMonthly);
+      acc.created_count += r.created_count;
+      acc.completed_count += r.completed_count;
+      acc.canceled_count += r.canceled_count;
+      acc.completed_same_month_count += r.completed_same_month_count;
+      acc.backlog_end_of_month += r.backlog_end_of_month;
+      byMonth.set(r.report_month_key, acc);
+    }
+    const totals = [...byMonth.values()].sort((a, b) =>
+      b.report_month_key.localeCompare(a.report_month_key)
+    );
+    return [...totals, ...rows];
+  };
+
   // ── Наші додатки ──────────────────────────────────────────────────────
   const curSameMonth = rate(cur.completed_same_month_count, cur.created_count);
   const prevSameMonth = rate(prev.completed_same_month_count, prev.created_count);
@@ -742,7 +790,7 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
               <ExportXlsx
                 fileName={`dim9000-sla-complex-${curKey}`}
                 sheetName="Зведена"
-                sheet={buildSheet(complexMonths(), [
+                sheet={buildSheet(withComplexTotals(complexMonths()), [
                   { header: "Місяць", value: (r) => r.report_month_key, width: 10 },
                   { header: "ЖК", value: (r) => r.complex_name, width: 26 },
                   { header: "Всього заявок", value: (r) => r.created_count },
@@ -792,7 +840,7 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
               <ExportXlsx
                 fileName={`dim9000-sla-mom-${curKey}`}
                 sheetName="Зведена"
-                sheet={buildSheet(complexMonths(), [
+                sheet={buildSheet(withComplexTotals(complexMonths()), [
                   { header: "Місяць", value: (r) => r.report_month_key, width: 10 },
                   { header: "ЖК", value: (r) => r.complex_name, width: 26 },
                   { header: "Всього заявок", value: (r) => r.created_count },
