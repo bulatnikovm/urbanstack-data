@@ -13,6 +13,10 @@ import { BklitDonut } from "@/components/bklit-donut";
 import { BklitLine } from "@/components/bklit-line";
 import { SliceFilters } from "@/components/slice-filters";
 import { ExportXlsx } from "@/components/export-xlsx";
+import {
+  CellBreakdown,
+  type Breakdown,
+} from "@/components/cell-breakdown";
 import { buildSheet } from "@/lib/xlsx";
 import {
   Table,
@@ -89,6 +93,7 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
     slices,
     byComplex,
     complexMonths,
+    categorySlice,
   } = getSlaPeriod(sp);
 
   // ── Зведена по місяцях (метрики в рядках, місяці в колонках) ──────────
@@ -192,6 +197,75 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
         .sort((a, b) => b.total - a.total)
     );
   }
+
+  // ── Розклад клітинки по категоріях (ANA-20) ───────────────────────────
+  //
+  // Максим: «при наведенні курсору на ЖК — розширена інформація по заявках,
+  // місяць в місяць, зріз по категоріях, по абс. значеннях і відсотках».
+  //
+  // Рахуємо з `categorySlice()` — того самого набору рядків, з якого
+  // побудована вся сторінка, тільки без згортання категорії. Тому сума по
+  // категоріях у картці ЗАВЖДИ дорівнює числу в клітинці, під якою вона
+  // висить, і фільтри діють на неї так само.
+  const prevMonthKey = (key: string) => {
+    const [y, m] = key.split("-").map(Number);
+    // Через UTC-дату, а не «m − 1»: у січні це дає грудень попереднього року
+    // без окремої гілки, і нуль місяця тут неможливий за побудовою.
+    const d = new Date(Date.UTC(y, m - 2, 1));
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  };
+
+  /** `${complex_id}|${month}` → категорія → створено. */
+  const catCounts = new Map<string, Map<string, number>>();
+  {
+    // Разом із попередніми місяцями: зведена показує ХВІСТ періоду (13
+    // місяців), а порівняння тягнеться на місяць глибше — той місяць у
+    // періоді є, просто в таблиці його не видно.
+    const wanted = new Set(pivotMonthKeys.flatMap((m) => [m, prevMonthKey(m)]));
+    for (const r of categorySlice()) {
+      if (!wanted.has(r.report_month_key)) continue;
+      if (r.created_count === 0) continue;
+      const key = `${r.complex_id}|${r.report_month_key}`;
+      const acc = catCounts.get(key) ?? new Map<string, number>();
+      acc.set(r.category_ua, (acc.get(r.category_ua) ?? 0) + r.created_count);
+      catCounts.set(key, acc);
+    }
+  }
+
+  const breakdownOf = (
+    row: ComplexPivotRow,
+    monthKey: string
+  ): Breakdown | null => {
+    const cur = catCounts.get(`${row.complex_id}|${monthKey}`);
+    const prevKeyRaw = prevMonthKey(monthKey);
+    const prev = catCounts.get(`${row.complex_id}|${prevKeyRaw}`);
+    if (!cur && !prev) return null;
+
+    const sumOf = (m?: Map<string, number>) =>
+      m ? [...m.values()].reduce((a, b) => a + b, 0) : 0;
+
+    // Попередній місяць вважається відомим лише тоді, коли він у ПЕРІОДІ:
+    // за його межами `categorySlice` рядків не віддає, і нуль там означав би
+    // «даних немає», а не «заявок не було». Тому в найстарішого місяця
+    // вибраного періоду колонки «Δ м/м» немає — і це чесно.
+    const hasPrev = prevKeyRaw >= range.from && prevKeyRaw <= range.to;
+
+    const labels = new Set([...(cur?.keys() ?? []), ...(prev?.keys() ?? [])]);
+    return {
+      complexName: row.complex_name,
+      monthKey,
+      prevMonthKey: hasPrev ? prevKeyRaw : null,
+      total: sumOf(cur),
+      prevTotal: sumOf(prev),
+      rows: [...labels]
+        .map((label) => ({
+          label,
+          cur: cur?.get(label) ?? 0,
+          prev: prev?.get(label) ?? 0,
+        }))
+        .sort((a, b) => b.cur - a.cur || b.prev - a.prev),
+    };
+  };
 
   // ── Роки ──────────────────────────────────────────────────────────────
   // Рахуються з того самого `raw`, що й усе інше на сторінці, а не з
@@ -627,7 +701,7 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
         >
           <Panel
             title="Операційна ефективність за місяць"
-            note={`${complexRows.length} ЖК × ${pivotMonthKeys.length} місяців. Прокручується вбік.`}
+            note={`${complexRows.length} ЖК × ${pivotMonthKeys.length} місяців. Прокручується вбік. Наведи на назву ЖК або на «Всього» — покаже розклад по категоріях.`}
             action={
               <ExportXlsx
                 fileName={`dim9000-sla-complex-${curKey}`}
@@ -650,6 +724,7 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
             <ComplexPivot
               months={pivotMonthKeys}
               rows={complexRows}
+              breakdown={breakdownOf}
               columns={[
                 { header: "Всього", value: (r) => n(r.created_count) },
                 { header: "Виконано", value: (r) => n(r.completed_count) },
@@ -676,7 +751,7 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
         >
           <Panel
             title="Місяць в місяць по ЖК"
-            note="«Виконано» і «Відхилено» тут — з числа поданих у ТОМУ Ж місяці, тому відсотки не перевищують 100%."
+            note="«Виконано» і «Відхилено» тут — з числа поданих у ТОМУ Ж місяці, тому відсотки не перевищують 100%. Наведи на назву ЖК або на «Всього» — покаже розклад по категоріях."
             action={
               <ExportXlsx
                 fileName={`dim9000-sla-mom-${curKey}`}
@@ -708,6 +783,7 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
             <ComplexPivot
               months={pivotMonthKeys}
               rows={complexRows}
+              breakdown={breakdownOf}
               columns={[
                 { header: "Всього", value: (r) => n(r.created_count) },
                 {
@@ -976,6 +1052,7 @@ function ComplexPivot({
   months,
   rows,
   columns,
+  breakdown,
 }: {
   months: string[];
   rows: ComplexPivotRow[];
@@ -984,7 +1061,19 @@ function ComplexPivot({
     value: (r: SlaMonthly) => string;
     muted?: boolean;
   }>;
+  /**
+   * Розклад клітинки по категоріях під курсором (ANA-20). Необовʼязковий:
+   * зведена лишається читабельною і без нього.
+   */
+  breakdown?: (row: ComplexPivotRow, monthKey: string) => Breakdown | null;
 }) {
+  // Найсвіжіший місяць таблиці. `months` іде від нового до старого — той
+  // самий порядок, у якому їх малює Looker і в якому їх читають.
+  const latest =
+    breakdown && months.length
+      ? (row: ComplexPivotRow) => breakdown(row, months[0])
+      : null;
+
   return (
     <div className="overflow-x-auto">
         <table className="w-full caption-bottom text-sm">
@@ -1024,13 +1113,29 @@ function ComplexPivot({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row) => {
+              // Назва ЖК показує розклад НАЙСВІЖІШОГО місяця таблиці — саме
+              // про нього питають, коли ведуть курсором по рядку. Решта
+              // місяців доступні через свою колонку «Всього».
+              const rowLatest = latest?.(row) ?? null;
+              return (
               <tr key={row.complex_id} className="border-b hover:bg-muted/40">
                 <td className="sticky left-0 z-10 bg-card px-2 py-1.5 font-medium whitespace-nowrap">
-                  {row.complex_name}
+                  {rowLatest ? (
+                    <CellBreakdown data={rowLatest}>
+                      {row.complex_name}
+                    </CellBreakdown>
+                  ) : (
+                    row.complex_name
+                  )}
                 </td>
                 {months.map((m) => {
                   const cell = row.byMonth.get(m);
+                  // Розклад висить на ПЕРШІЙ колонці місяця («Всього») — саме
+                  // це число він і ділить на категорії. Вішати ту саму
+                  // картку на «Виконано» було б неправдою: там інший набір
+                  // заявок (рахунок по даті закриття).
+                  const detail = cell ? breakdown?.(row, m) : null;
                   return columns.map((c, i) => (
                     <td
                       key={`${m}-${c.header}`}
@@ -1040,12 +1145,19 @@ function ComplexPivot({
                         c.muted ? "text-muted-foreground" : "",
                       ].join(" ")}
                     >
-                      {cell ? c.value(cell) : "—"}
+                      {!cell ? (
+                        "—"
+                      ) : i === 0 && detail ? (
+                        <CellBreakdown data={detail}>{c.value(cell)}</CellBreakdown>
+                      ) : (
+                        c.value(cell)
+                      )}
                     </td>
                   ));
                 })}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
     </div>

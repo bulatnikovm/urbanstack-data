@@ -961,11 +961,40 @@ export function getSlaPeriod(
     ? tagged.filter((r) => tagHits(filters.tag, tagsOf(r)))
     : inRange(getCategories());
 
+  /**
+   * Той самий набір рядків, з якого рахується сторінка, але БЕЗ згортання
+   * категорії — джерело розкладу під курсором у зведених по ЖК (ANA-20).
+   *
+   * Функція, а не поле: без наведення курсору цей розбір нікому не потрібен,
+   * а `agg_categories_monthly` — 15 тис. рядків, які інакше розбирались би
+   * на КОЖНОМУ запиті сторінки, включно з тими, де фільтрів немає.
+   *
+   * Фільтри застосовані ті самі й у тому ж порядку, що й вище, тому сума по
+   * категоріях у картці збігається з числом у клітинці, під якою вона
+   * висить. Розійтись вони можуть тільки якщо хтось продублює цю логіку
+   * замість того, щоб покликати цю функцію.
+   */
+  const categorySlice = () => {
+    const src: Array<CategoryMonthly & { tag_set?: string }> = sliceActive(
+      filters.tag
+    )
+      ? getTagged().filter((r) => tagHits(filters.tag, tagsOf(r)))
+      : getCategories();
+    return inRange(
+      src.filter(
+        (r) =>
+          sliceHits(filters.category, r.category_ua) &&
+          sliceHits(filters.type, r.type_ua)
+      )
+    );
+  };
+
   return {
     ...period,
     raw,
     filters,
     isSliced,
+    categorySlice,
     cur: byMonth.get(period.curKey) ?? emptyMonth(period.curKey),
     prev: byMonth.get(period.prevKey) ?? emptyMonth(period.prevKey),
     base: inRange(company),
