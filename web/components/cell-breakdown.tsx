@@ -61,6 +61,28 @@ const diff = (row: BreakdownRow, hasPrev: boolean) =>
  */
 const signed = (v: number) => (v === 0 ? "0" : `${v > 0 ? "+" : "−"}${n(Math.abs(v))}`);
 
+/**
+ * Спільний таймер відкриття для всіх карток однієї таблиці.
+ *
+ * Провайдер ОДИН на таблицю, а не по одному на клітинку. Це не лише економія
+ * (у зведеній 10 ЖК × 13 місяців анкерів під дві сотні): провайдер існує саме
+ * для того, щоб група підказок ділила один таймер — тоді перехід між
+ * сусідніми клітинками показує наступну картку одразу, а не змушує чекати
+ * повну затримку заново. З провайдером на кожній клітинці такої поведінки
+ * немає за побудовою.
+ */
+export function CellBreakdownProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip.Provider delay={180} closeDelay={80}>
+      {children}
+    </Tooltip.Provider>
+  );
+}
+
 export function CellBreakdown({
   data,
   children,
@@ -75,7 +97,6 @@ export function CellBreakdown({
   const totalDiff = hasPrev ? data.total - data.prevTotal : null;
 
   return (
-    <Tooltip.Provider delay={180} closeDelay={80}>
       <Tooltip.Root>
         <Tooltip.Trigger
           render={
@@ -168,6 +189,5 @@ export function CellBreakdown({
           </Tooltip.Positioner>
         </Tooltip.Portal>
       </Tooltip.Root>
-    </Tooltip.Provider>
   );
 }

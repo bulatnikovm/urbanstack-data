@@ -15,6 +15,7 @@ import { SliceFilters } from "@/components/slice-filters";
 import { ExportXlsx } from "@/components/export-xlsx";
 import {
   CellBreakdown,
+  CellBreakdownProvider,
   type Breakdown,
 } from "@/components/cell-breakdown";
 import { buildSheet } from "@/lib/xlsx";
@@ -66,6 +67,14 @@ const STATUS_GROUP: Record<string, string> = {
   rejected: "Відхилено",
 };
 const statusGroup = (s: string) => STATUS_GROUP[s] ?? "В процесі";
+
+/**
+ * Ідентифікатор синтетичного рядка «Загальний підсумок».
+ *
+ * Зірочка, а не порожній рядок чи `null`: з нею ключ у мапах лишається
+ * рядком, а сам ідентифікатор неможливо сплутати з UUID справжнього ЖК.
+ */
+const TOTAL_ID = "*";
 
 type ComplexPivotRow = {
   complex_id: string;
@@ -225,10 +234,15 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
     for (const r of categorySlice()) {
       if (!wanted.has(r.report_month_key)) continue;
       if (r.created_count === 0) continue;
-      const key = `${r.complex_id}|${r.report_month_key}`;
-      const acc = catCounts.get(key) ?? new Map<string, number>();
-      acc.set(r.category_ua, (acc.get(r.category_ua) ?? 0) + r.created_count);
-      catCounts.set(key, acc);
+      // Поруч із ключем ЖК одразу накопичуємо компанійський — його читає
+      // рядок «Загальний підсумок». Окремий прохід по тих самих рядках дав
+      // би другу нагоду порахувати інакше.
+      for (const cid of [r.complex_id, TOTAL_ID]) {
+        const key = `${cid}|${r.report_month_key}`;
+        const acc = catCounts.get(key) ?? new Map<string, number>();
+        acc.set(r.category_ua, (acc.get(r.category_ua) ?? 0) + r.created_count);
+        catCounts.set(key, acc);
+      }
     }
   }
 
@@ -348,6 +362,28 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
 
   const complexesCur = byComplex(curKey).sort(
     (a, b) => b.created_count - a.created_count
+  );
+
+  /**
+   * Підсумок цієї ж таблиці (ANA-9). Складаємо лічильники, а «Міс. в міс.»
+   * рахуємо вже з них — сума виконаних поділена на суму створених, а не
+   * середнє з відсотків по ЖК: інакше ЖК із чотирнадцятьма заявками важив
+   * би стільки ж, скільки ЖК із шістьмастами.
+   */
+  const curTotals = complexesCur.reduce(
+    (acc, c) => ({
+      created_count: acc.created_count + c.created_count,
+      completed_count: acc.completed_count + c.completed_count,
+      completed_same_month_count:
+        acc.completed_same_month_count + c.completed_same_month_count,
+      backlog_end_of_month: acc.backlog_end_of_month + c.backlog_end_of_month,
+    }),
+    {
+      created_count: 0,
+      completed_count: 0,
+      completed_same_month_count: 0,
+      backlog_end_of_month: 0,
+    }
   );
 
   /**
@@ -1018,6 +1054,28 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
                       </TableCell>
                     </TableRow>
                   ))}
+                  {complexesCur.length > 0 && (
+                    <TableRow className="border-t-2 font-semibold hover:bg-transparent">
+                      <TableCell>Загальний підсумок</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {n(curTotals.created_count)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {n(curTotals.completed_count)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {pct(
+                          rate(
+                            curTotals.completed_same_month_count,
+                            curTotals.created_count
+                          )
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {n(curTotals.backlog_end_of_month)}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </Panel>
@@ -1074,7 +1132,52 @@ function ComplexPivot({
       ? (row: ComplexPivotRow) => breakdown(row, months[0])
       : null;
 
+  /**
+   * Рядок «Загальний підсумок» (ANA-9, прохання Максима: «додати сумуючий
+   * рядок до таблиць в SLA як було в v1.0; якщо сумуємо відсотки, то
+   * виводимо абсолютне значення суми»).
+   *
+   * Підсумок — це СИНТЕТИЧНА клітинка з просумованими лічильниками, яку
+   * потім проганяють через ті самі `columns`, що й звичайні рядки. Тому
+   * відсоток у ньому неминуче рахується від абсолютів (сума виконаних /
+   * сума створених), а не як середнє з відсотків по ЖК: порахувати інакше
+   * тут фізично нема де. Той самий прийом, що й у колонці «Разом» зведеної
+   * по місяцях.
+   *
+   * ⚠️ «В процесі» підсумовується — і це коректно саме ПО ЖК: черги різних
+   * ЖК не перетинаються, тож їхня сума і є черга компанії. По МІСЯЦЯХ той
+   * самий стовпчик складати не можна (вийшла б сума залишків), тому в
+   * зведеній по місяцях для нього окреме правило.
+   */
+  const totalByMonth = new Map<string, SlaMonthly>();
+  for (const m of months) {
+    const cells = rows
+      .map((r) => r.byMonth.get(m))
+      .filter((c): c is SlaMonthly => !!c);
+    if (!cells.length) continue;
+    const pick = (f: (c: SlaMonthly) => number) =>
+      cells.reduce((acc, c) => acc + f(c), 0);
+    totalByMonth.set(m, {
+      report_month_key: m,
+      complex_id: TOTAL_ID,
+      complex_name: "Загальний підсумок",
+      created_count: pick((c) => c.created_count),
+      completed_count: pick((c) => c.completed_count),
+      canceled_count: pick((c) => c.canceled_count),
+      completed_same_month_count: pick((c) => c.completed_same_month_count),
+      backlog_end_of_month: pick((c) => c.backlog_end_of_month),
+    });
+  }
+  const totalPivotRow: ComplexPivotRow = {
+    complex_id: TOTAL_ID,
+    complex_name: "Загальний підсумок",
+    byMonth: totalByMonth,
+    total: 0,
+  };
+  const totalLatest = latest?.(totalPivotRow) ?? null;
+
   return (
+    <CellBreakdownProvider>
     <div className="overflow-x-auto">
         <table className="w-full caption-bottom text-sm">
           <thead className="[&_th]:h-9 [&_th]:px-2 [&_th]:text-xs [&_th]:font-medium [&_th]:text-muted-foreground">
@@ -1158,8 +1261,45 @@ function ComplexPivot({
               </tr>
               );
             })}
+
+            {rows.length > 0 && (
+              <tr className="border-t-2 font-semibold">
+                <td className="sticky left-0 z-10 bg-card px-2 py-1.5 whitespace-nowrap">
+                  {totalLatest ? (
+                    <CellBreakdown data={totalLatest}>
+                      Загальний підсумок
+                    </CellBreakdown>
+                  ) : (
+                    "Загальний підсумок"
+                  )}
+                </td>
+                {months.map((m) => {
+                  const cell = totalByMonth.get(m);
+                  const detail = cell ? breakdown?.(totalPivotRow, m) : null;
+                  return columns.map((c, i) => (
+                    <td
+                      key={`total-${m}-${c.header}`}
+                      className={[
+                        "px-2 py-1.5 text-right tabular-nums",
+                        i === 0 ? "border-l" : "",
+                        c.muted ? "text-muted-foreground" : "",
+                      ].join(" ")}
+                    >
+                      {!cell ? (
+                        "—"
+                      ) : i === 0 && detail ? (
+                        <CellBreakdown data={detail}>{c.value(cell)}</CellBreakdown>
+                      ) : (
+                        c.value(cell)
+                      )}
+                    </td>
+                  ));
+                })}
+              </tr>
+            )}
           </tbody>
         </table>
     </div>
+    </CellBreakdownProvider>
   );
 }
