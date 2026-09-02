@@ -190,7 +190,7 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
         >
           <Panel
             title="Структура цільових дій по місяцях"
-            note={`Стовпчик — 100%. Останні ${SHARE_MONTHS} місяців вибраного періоду. Підпис стоїть на частках від 3,5%: на менших цифри накладаються одна на одну. Наведи на місяць — покаже всі сім категорій із кількістю людей і точною часткою.`}
+            note={`Стовпчик — 100%. Останні ${SHARE_MONTHS} місяців вибраного періоду; заштрихований — місяць, який ще триває. Підпис стоїть на частках від 3,5%: на менших цифри накладаються одна на одну. Наведи на місяць — покаже всі сім категорій із кількістю людей і точною часткою.`}
             action={
               <ExportXlsx
                 fileName={`dim9000-star-structure-${curKey}`}
@@ -225,7 +225,11 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
               />
             }
           >
-            <StackedShare months={shareMonths} series={shareSeries} />
+            <StackedShare
+              months={shareMonths}
+              series={shareSeries}
+              partialMonth={isPartial ? curKey : null}
+            />
           </Panel>
         </Section>
 

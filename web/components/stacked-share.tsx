@@ -21,19 +21,16 @@ import { cn } from "@/lib/utils";
  * розміру.
  *
  * ── Кольори ──────────────────────────────────────────────────────────────
- * Сім категоріальних кольорів, підібраних валідатором палітри: у ОБОХ темах
- * проходять смугу яскравості, поріг насиченості, розділення сусідніх пар
- * при дальтонізмі (ΔE 19,2 світла / 13,1 темна) і контраст до підкладки.
+ * Сім відтінків ОДНОГО кольору, від темного до світлого — токени `--ramp-*`
+ * у globals.css, там же історія трьох спроб і ціна цього вибору.
  *
- * ⚠️ Колір закріплений за КАТЕГОРІЄЮ через її позицію в наборі, а не за
- * її розміром. Пересортуєш серії за величиною — і кольори поїдуть місяць у
+ * ⚠️ Колір закріплений за КАТЕГОРІЄЮ через її позицію в наборі, а не за її
+ * розміром. Пересортуєш серії за величиною — кольори поїдуть місяць у
  * місяць, а графік перестане читатись.
  *
- * ⚠️ Сім — це стеля. Сусідні пари проходять, але серед УСІХ пар знайдеться
- * така, що при дейтеранопії зливається (синій ↔ фіолетовий): семи справді
- * розрізнюваних відтінків не існує. Тому identity тримається не лише на
- * кольорі — є легенда, підписи прямо на сегментах, підказка з усіма
- * категоріями і вигрузка в Excel.
+ * ⚠️ На шкалі одного тону сусідні кроки розрізняються слабше, ніж різні
+ * кольори. Тому identity тримається не на кольорі: легенда, підписи прямо
+ * на сегментах, підказка з усіма категоріями і вигрузка в Excel.
  */
 
 export type ShareSeries = {
@@ -48,20 +45,27 @@ const SLOTS = 7;
 /** З якої частки сегмент отримує підпис прямо на собі. */
 const LABEL_FROM = 0.035;
 
-const fill = (i: number) => `var(--cat-${Math.min(i + 1, SLOTS)})`;
-const ink = (i: number) => `var(--cat-fg-${Math.min(i + 1, SLOTS)})`;
+const fill = (i: number) => `var(--ramp-${Math.min(i + 1, SLOTS)})`;
+const ink = (i: number) => `var(--ramp-fg-${Math.min(i + 1, SLOTS)})`;
 
 const GRID = [100, 80, 60, 40, 20, 0];
 
 export function StackedShare({
   months,
   series,
+  partialMonth,
   className,
 }: {
   /** Ключі місяців за зростанням — вісь X. */
   months: string[];
   /** Серії у ФІКСОВАНОМУ порядку категорій — він і задає колір. */
   series: ShareSeries[];
+  /**
+   * Місяць, який ще триває. Його стовпчик штрихується: частки в перші дні
+   * місяця стрибають (у вересня 2026 на другий день СКД займала 77%), і
+   * без позначки такий стовпчик читається як повноцінний результат.
+   */
+  partialMonth?: string | null;
   className?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
@@ -128,10 +132,26 @@ export function StackedShare({
             {months.map((month, mi) => (
               <div
                 key={month}
-                className="relative flex flex-1 flex-col-reverse"
+                // Скруглення на СТОВПЧИКУ, а не на сегментах: `overflow-hidden`
+                // зрізає кути всієї стопки, тож заокруглюються лише її верх і
+                // низ. Скруглити кожен сегмент окремо неможливо — вийшов би
+                // той самий артефакт, через який BklitBar узагалі відмовився
+                // від стека: капсула з круглим низом над сусідом.
+                className="relative flex flex-1 flex-col-reverse overflow-hidden rounded-md"
                 onMouseEnter={() => setHover(mi)}
                 onMouseLeave={() => setHover(null)}
               >
+                {month === partialMonth && (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 z-10"
+                    style={{
+                      background:
+                        "repeating-linear-gradient(45deg, transparent 0 5px, var(--card) 5px 6.5px)",
+                      opacity: 0.75,
+                    }}
+                  />
+                )}
                 {series.map((s, si) => {
                   const share = shareAt(si, mi);
                   if (share <= 0) return null;
@@ -173,6 +193,7 @@ export function StackedShare({
             <Card
               months={months}
               series={series}
+              partialMonth={partialMonth}
               mi={hover}
               total={totals[hover]}
               shareAt={shareAt}
@@ -194,6 +215,9 @@ export function StackedShare({
             )}
           >
             {monthAxis(m)}
+            {m === partialMonth && (
+              <span title="місяць ще триває"> ·</span>
+            )}
           </span>
         ))}
       </div>
@@ -211,6 +235,7 @@ export function StackedShare({
 function Card({
   months,
   series,
+  partialMonth,
   mi,
   total,
   shareAt,
@@ -219,6 +244,7 @@ function Card({
 }: {
   months: string[];
   series: ShareSeries[];
+  partialMonth?: string | null;
   mi: number;
   total: number;
   shareAt: (si: number, mi: number) => number;
@@ -235,7 +261,14 @@ function Card({
       }
     >
       <div className="mb-1 flex items-baseline justify-between gap-2 px-1">
-        <span className="text-xs font-medium">{monthLabel(months[mi])}</span>
+        <span className="text-xs font-medium">
+          {monthLabel(months[mi])}
+          {months[mi] === partialMonth && (
+            <span className="ml-1 font-normal text-muted-foreground">
+              (триває)
+            </span>
+          )}
+        </span>
         <span className="text-[10px] text-muted-foreground tabular-nums">
           {n(total)} дій
         </span>
