@@ -10,6 +10,7 @@ import {
 } from "@/components/dashboard";
 import { BklitLine } from "@/components/bklit-line";
 import { RankedBars } from "@/components/ranked-bars";
+import { StackedShare } from "@/components/stacked-share";
 import { ExportXlsx } from "@/components/export-xlsx";
 import { buildSheet } from "@/lib/xlsx";
 import {
@@ -41,6 +42,35 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
   const cats = star
     .filter((r) => r.report_month_key === curKey && r.star_category !== STAR_TOTAL)
     .sort((a, b) => b.star_rate - a.star_rate);
+
+  // ── Структура цільових дій по місяцях (ANA-16) ────────────────────────
+  //
+  // Прохання Максима: перенести в продуктовий дашборд стовпчики на 100% —
+  // із чого складається місяць у розрізі STAR-категорій.
+  //
+  // Порядок категорій — ЇХНІЙ ВЛАСНИЙ («1. Заявки», «2. Оплата…»), а не за
+  // величиною. Він і задає крок шкали сірого, тому сортувати тут за
+  // часткою не можна: кольори поїхали б місяць у місяць.
+  const shareMonths = [
+    ...new Set(inWindow(star).map((r) => r.report_month_key)),
+  ].sort();
+  const shareSeries = [
+    ...new Set(
+      star
+        .filter((r) => r.star_category !== STAR_TOTAL)
+        .map((r) => r.star_category)
+    ),
+  ]
+    .sort()
+    .map((category) => ({
+      label: stripOrder(category),
+      values: shareMonths.map(
+        (m) =>
+          star.find(
+            (r) => r.report_month_key === m && r.star_category === category
+          )?.unique_users ?? 0
+      ),
+    }));
 
   return (
     <>
@@ -126,6 +156,60 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
                 { key: "of_potential", label: "Від потенційних", slot: 2 },
               ]}
             />
+          </Panel>
+        </Section>
+
+        <Section
+          title="Структура цільових дій"
+          lead={
+            <>
+              Із чого складається місяць: частка кожної категорії серед усіх
+              цільових дій. Це <Hl>не</Hl> частка бази — стовпчик завжди
+              100%, і питання тут інше: не «скільки людей дійшло до дії», а
+              «на що саме вони її витрачають». Одна людина може потрапити в
+              кілька категорій, тому сума категорій більша за «Всього
+              активних».
+            </>
+          }
+        >
+          <Panel
+            title="Структура цільових дій по місяцях"
+            note="Стовпчик — 100%. Підпис стоїть на частках від 7%: на менших цифри накладаються одна на одну. Наведи на сегмент — покаже точну частку й кількість людей."
+            action={
+              <ExportXlsx
+                fileName={`dim9000-star-structure-${curKey}`}
+                sheetName="Структура"
+                sheet={buildSheet(
+                  shareMonths.flatMap((m) => {
+                    const rows = star.filter(
+                      (r) =>
+                        r.report_month_key === m &&
+                        r.star_category !== STAR_TOTAL
+                    );
+                    const tot = rows.reduce((a, r) => a + r.unique_users, 0);
+                    return rows.map((r) => ({
+                      month: m,
+                      category: stripOrder(r.star_category),
+                      users: r.unique_users,
+                      share: tot > 0 ? r.unique_users / tot : 0,
+                    }));
+                  }),
+                  [
+                    { header: "Місяць", value: (r) => r.month, width: 10 },
+                    { header: "Категорія", value: (r) => r.category, width: 24 },
+                    { header: "Користувачів", value: (r) => r.users },
+                    {
+                      header: "Частка місяця",
+                      value: (r) => r.share,
+                      format: "0.0%",
+                      width: 14,
+                    },
+                  ]
+                )}
+              />
+            }
+          >
+            <StackedShare months={shareMonths} series={shareSeries} />
           </Panel>
         </Section>
 
