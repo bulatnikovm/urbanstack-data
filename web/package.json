@@ -11,6 +11,7 @@
     "build-metrics": "node scripts/build-metrics.mjs && node scripts/check-metric-coverage.mjs",
     "check-metrics": "node scripts/check-metric-coverage.mjs",
     "refresh": "npm run export-data && npm run build-metrics && next build",
+    "verify": "npm run build-metrics && next build",
     "export-data-product": "node scripts/export-data.mjs",
     "export-data-operational": "node scripts/export-data-operational.mjs"
   },
