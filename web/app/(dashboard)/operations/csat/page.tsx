@@ -7,12 +7,13 @@ import {
   getCsatWaves,
   type CsatWave,
 } from "@/lib/data-operational";
-import { monthLabel, n, n1, pct, pp } from "@/lib/format";
+import { monthLabel, n, n1, n1f, pct, pp } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
 import { BklitLine } from "@/components/bklit-line";
 import { RankedBars } from "@/components/ranked-bars";
 import { CsatFilters } from "@/components/csat-filters";
+import { CsatCategorySwitch } from "@/components/csat-category-switch";
 import { ExportXlsx } from "@/components/export-xlsx";
 import { buildSheet } from "@/lib/xlsx";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,20 @@ const rate = (part: number, total: number) => (total > 0 ? part / total : 0);
 
 /** Три категорії опитувань у постійному порядку — і на графіку, і в таблицях. */
 const CATEGORIES = ["Прибудинкова", "Будинкова", "Охорона"] as const;
+
+/**
+ * Різниця двох середніх оцінок зі знаком.
+ *
+ * Окремо від `${a >= b ? "+" : "−"}${n1(...)}`, бо той дає «−0» на різниці
+ * в чотири соті: знак лишається, а число округляється в нуль. «−0» на
+ * екрані читається як падіння, якого немає.
+ */
+const gradeDelta = (cur: number | null, prev: number | null) => {
+  if (cur === null || prev === null) return "—";
+  const d = cur - prev;
+  if (Math.abs(d) < 0.05) return "0,0";
+  return `${d > 0 ? "+" : "−"}${n1f(Math.abs(d))}`;
+};
 
 /** Скільки коментарів показувати в стрічці. Повний набір іде в Excel. */
 const FEED_LIMIT = 60;
@@ -52,9 +67,38 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
   const activeGrade = one(sp.grade);
 
   const complexes = getCsatComplexes();
-  const waves = getCsatWaves();
   const problems = getCsatProblems();
-  const allComments = getCsatComments();
+
+  /**
+   * Напрямок опитування (ANA-19). Обравши його, людина бачить УСІ хвилі
+   * цього напрямку, а не останню.
+   *
+   * Зріз робиться тут, на вході, а не в кожному блоці окремо: далі вся
+   * сторінка вже рахується з `waves`, тож динаміка, матриця ЖК × хвиля,
+   * розподіл оцінок і антирейтинг звужуються самі. Це і є причина, чому
+   * зріз саме на джерелі — інакше довелось би не забути дописати фільтр у
+   * восьми місцях, і одне з них рано чи пізно лишилось би без нього.
+   */
+  const allWaves = getCsatWaves();
+  const activeCategory =
+    CATEGORIES.find((c) => c === one(sp.cat)) ?? null;
+  const waves = activeCategory
+    ? allWaves.filter((w) => w.survey_category_ua === activeCategory)
+    : allWaves;
+
+  const allComments = getCsatComments().filter(
+    (c) => !activeCategory || c.survey_category_ua === activeCategory
+  );
+
+  const categoryOptions = CATEGORIES.map((c) => ({
+    value: c,
+    label: c,
+    waves: new Set(
+      allWaves
+        .filter((w) => w.survey_category_ua === c)
+        .map((w) => w.wave_label)
+    ).size,
+  })).filter((o) => o.waves > 0);
 
   const waveOrder = csatWaveOrder(waves);
   const latestByCategory = new Map<string, string>();
@@ -231,6 +275,64 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
     .filter((h) => h.votes >= MIN_VOTES)
     .sort((a, b) => a.avg - b.avg);
 
+  // ── Участь і рейтинг у зрізі напрямку ─────────────────────────────────
+  //
+  // `mart_survey_complex_integral` порахований для ОСТАННІХ хвиль трьох
+  // напрямків — під зріз по одному напрямку він не годиться. Тому голоси
+  // беремо з хвиль зрізу, а знаменник (квартири ЖК) — з нього ж, бо в
+  // хвилях `n_apartments` лежить на рівні будинку і сумувати його по
+  // кількох хвилях означало б порахувати ті самі квартири двічі.
+  //
+  // Без зрізу цифра збігається з готовим `reach_of_apartments` — перевірено
+  // на всіх ЖК; тому шлях один, а не «мартом коли можна, руками коли ні».
+  const votesByComplex = new Map<string, number>();
+  for (const w of latest) {
+    votesByComplex.set(
+      w.complex_id,
+      (votesByComplex.get(w.complex_id) ?? 0) + w.votes
+    );
+  }
+  const participation = complexes
+    .map((c) => ({
+      label: c.complex_name,
+      votes: votesByComplex.get(c.complex_id) ?? 0,
+      apartments: c.n_apartments ?? 0,
+      value: rate(votesByComplex.get(c.complex_id) ?? 0, c.n_apartments ?? 0),
+    }))
+    .filter((x) => x.votes > 0)
+    .sort((a, b) => b.value - a.value);
+
+  /**
+   * Рейтинг ЖК у зрізі одного напрямку: остання його хвиля проти
+   * попередньої. Інтегральна оцінка тут неможлива за визначенням — вона
+   * СУМА трьох напрямків, і для одного дорівнювала б просто його оцінці,
+   * тільки під чужою назвою.
+   */
+  const categoryRating = activeCategory
+    ? complexes
+        .map((c) => {
+          const avgIn = (label: string | undefined) =>
+            label
+              ? csatAvg(
+                  waves.filter(
+                    (w) => w.complex_id === c.complex_id && w.wave_label === label
+                  )
+                )
+              : null;
+          const lastLabel = waveOrder.at(-1);
+          const prevLabel = waveOrder.at(-2);
+          return {
+            complex_id: c.complex_id,
+            name: c.complex_name,
+            cur: avgIn(lastLabel),
+            prev: avgIn(prevLabel),
+            votes: votesByComplex.get(c.complex_id) ?? 0,
+            apartments: c.n_apartments ?? 0,
+          };
+        })
+        .sort((a, b) => (b.cur ?? -1) - (a.cur ?? -1))
+    : [];
+
   // ── Про що пишуть ─────────────────────────────────────────────────────
   // ⚠️ Категорію НЕ можна отримати сумуванням її тем: коментар «брудно в холі
   // й газон не косять» дає +1 «Прибиранню» і +1 «Території», але в категорії
@@ -315,13 +417,32 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
       />
 
       <PageBody>
+        <CsatCategorySwitch
+          options={categoryOptions}
+          active={activeCategory}
+        />
+
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Kpi
-            label="Інтегральна оцінка"
-            value={n1(integralCompany)}
-            sub="сума трьох напрямків, максимум 15"
-            trend={{ text: "по компанії", good: null }}
-          />
+          {activeCategory ? (
+            <Kpi
+              label="Хвиль опитувань"
+              value={n(waveOrder.length)}
+              sub={activeCategory.toLowerCase()}
+              trend={{
+                text: `${trend[0]?.month ? monthLabel(trend[0].month) : "—"} — ${
+                  trend.at(-1)?.month ? monthLabel(trend.at(-1)!.month) : "—"
+                }`,
+                good: null,
+              }}
+            />
+          ) : (
+            <Kpi
+              label="Інтегральна оцінка"
+              value={n1(integralCompany)}
+              sub="сума трьох напрямків, максимум 15"
+              trend={{ text: "по компанії", good: null }}
+            />
+          )}
           <Kpi
             label="Середня оцінка"
             value={n1(avgLatest ?? 0)}
@@ -358,8 +479,17 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
         </div>
 
         <Section
-          title="Рейтинг ЖК"
+          title={activeCategory ? `Рейтинг ЖК · ${activeCategory}` : "Рейтинг ЖК"}
           lead={
+            activeCategory ? (
+              <>
+                Один напрямок — <Hl>{activeCategory.toLowerCase()}</Hl>: остання
+                його хвиля проти попередньої, по ЖК. Інтегральної оцінки тут
+                немає за визначенням — вона <Hl>сума трьох</Hl> напрямків, і для
+                одного дорівнювала б просто його оцінці під чужою назвою. Усі
+                хвилі напрямку поспіль — нижче, у матриці ЖК × хвиля.
+              </>
+            ) : (
             <>
               Інтегральна оцінка — <Hl>сума</Hl> середніх за трьома напрямками,
               а не середня з них. Сенс саме в сумі: ЖК має бути добрим за всіма
@@ -369,8 +499,86 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
               підрядник, якого міняють, а територія і будинок — власна робота
               компанії. Прочерк означає «немає хвилі», а не нуль.
             </>
+            )
           }
         >
+          {activeCategory ? (
+          <Panel
+            title={`Рейтинг ЖК · ${activeCategory}`}
+            // Підпис складається з напрямку, тому довідку вказуємо явно —
+            // інакше перевірка покриття шукала б запис із назвою-шаблоном.
+            metric="Рейтинг ЖК"
+            note="Остання хвиля напрямку проти попередньої. Прочерк — у ЖК за цю хвилю ніхто не проголосував; стару хвилю не підставляємо."
+            action={
+              <ExportXlsx
+                fileName={`dim9000-csat-${activeCategory.toLowerCase()}`}
+                sheetName="Рейтинг"
+                sheet={buildSheet(categoryRating, [
+                  { header: "ЖК", value: (r) => r.name, width: 24 },
+                  {
+                    header: "Остання хвиля",
+                    value: (r) => r.cur,
+                    format: "0.00",
+                    width: 15,
+                  },
+                  {
+                    header: "Попередня",
+                    value: (r) => r.prev,
+                    format: "0.00",
+                    width: 12,
+                  },
+                  { header: "Голосів", value: (r) => r.votes },
+                  { header: "Квартир", value: (r) => r.apartments },
+                  {
+                    header: "Від квартир",
+                    value: (r) => rate(r.votes, r.apartments),
+                    format: "0.0%",
+                    width: 13,
+                  },
+                ])}
+              />
+            }
+          >
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8">#</TableHead>
+                  <TableHead>ЖК</TableHead>
+                  <TableHead className="text-right">Остання хвиля</TableHead>
+                  <TableHead className="text-right">Попередня</TableHead>
+                  <TableHead className="text-right">Δ</TableHead>
+                  <TableHead className="text-right">Голосів</TableHead>
+                  <TableHead className="text-right">Від квартир</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {categoryRating.map((r, i) => (
+                  <TableRow key={r.complex_id}>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {r.cur === null ? "—" : i + 1}
+                    </TableCell>
+                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {n1f(r.cur)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {n1f(r.prev)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {gradeDelta(r.cur, r.prev)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {n(r.votes)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {r.apartments > 0 ? pct(rate(r.votes, r.apartments), 0) : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Panel>
+          ) : (
           <Panel
             title="Рейтинг ЖК"
             metric={["Рейтинг ЖК", "Інтегральний УК", "Інтегральна оцінка"]}
@@ -488,6 +696,7 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
               </TableBody>
             </Table>
           </Panel>
+          )}
         </Section>
 
         <Section
@@ -714,7 +923,11 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
           <div className="grid gap-3 lg:grid-cols-2">
             <Panel
               title="Розподіл оцінок"
-              note="Останні хвилі всіх трьох категорій разом."
+              note={
+                activeCategory
+                  ? `Остання хвиля напрямку «${activeCategory}».`
+                  : "Останні хвилі всіх трьох категорій разом."
+              }
             >
               <RankedBars data={distribution} kind="int" highlightTop={0} />
             </Panel>
@@ -724,13 +937,10 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
               note="Голоси до кількості квартир ЖК. Саме цей знаменник показує, чи достатня вибірка: він не залежить від того, скільки людей поставили застосунок."
             >
               <RankedBars
-                data={complexes
-                  .filter((c) => c.reach_of_apartments !== null)
-                  .map((c) => ({
-                    label: c.complex_name,
-                    value: c.reach_of_apartments ?? 0,
-                  }))
-                  .sort((a, b) => b.value - a.value)}
+                data={participation.map((p) => ({
+                  label: p.label,
+                  value: p.value,
+                }))}
                 kind="pct"
                 highlightTop={3}
               />
@@ -858,11 +1068,20 @@ export default async function CsatPage({ searchParams }: PageProps<"/operations/
           <div className="grid gap-3 lg:grid-cols-2">
             <Panel
               title="Про що пишуть"
-              note={
+              note={[
                 activeComplex
                   ? "Фільтр по ЖК зі стрічки коментарів застосований і тут."
-                  : "Шість верхніх категорій — та сама розбивка, що в ручному звіті."
-              }
+                  : "Шість верхніх категорій — та сама розбивка, що в ручному звіті.",
+                // Єдиний блок сторінки, який перемикач напрямку НЕ звужує:
+                // mart_survey_problems не має напрямку в грануляції, і
+                // рахувати теми тут же по-своєму означало б завести другу
+                // методику розбору коментарів поруч із канонічною.
+                activeCategory
+                  ? "⚠️ Перемикач напрямку на цей блок не діє — теми рахуються по всіх опитуваннях."
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" ")}
             >
               <RankedBars data={problemCats} kind="int" highlightTop={3} />
             </Panel>

@@ -7,6 +7,21 @@ export const n = (v: number | null | undefined) =>
 export const n1 = (v: number | null | undefined) =>
   v === null || v === undefined ? "—" : nf1.format(v);
 
+const nf1f = new Intl.NumberFormat("uk-UA", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+/**
+ * Число з ОДНИМ знаком після коми ЗАВЖДИ — "4,0", а не "4".
+ *
+ * Те саме, що `n2`, тільки на один знак. Потрібне там, де числа стоять
+ * колонкою: у стовпчику «3,9 · 3,8 · 4 · 3,5» рівна четвірка читається як
+ * інша точність, а не як те саме число.
+ */
+export const n1f = (v: number | null | undefined) =>
+  v === null || v === undefined ? "—" : nf1f.format(v);
+
 const nf2 = new Intl.NumberFormat("uk-UA", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
