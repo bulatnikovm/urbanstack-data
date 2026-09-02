@@ -350,41 +350,61 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
    * 183 рядки й жодного підсумку).
    *
    * Форма вигрузки «довга» (рядок = місяць × ЖК), тому підсумок тут — це не
-   * колонка, як на екрані, а СИНТЕТИЧНИЙ ЖК на кожен місяць. Ідуть першими,
-   * від найсвіжішого місяця, і проходять через ті самі колонки-аксесори, що
-   * й звичайні рядки: відсоток у них неминуче рахується від абсолютів (сума
-   * виконаних / сума створених), а не як середнє з відсотків по ЖК.
+   * колонка, як на екрані, а СИНТЕТИЧНИЙ ЖК. І стоїть він ПІД блоком свого
+   * місяця, а не купою на початку файлу.
+   *
+   * Перша версія складала всі підсумки вгорі — Микита одразу сказав, що це
+   * «незручно й дивно виглядає», і мав рацію: підсумок відірваний від того,
+   * що підсумовує, а на екрані він стоїть ОСТАННІМ рядком, після всіх ЖК.
+   * Тепер файл читається так само, як таблиця: блок місяця — і одразу під
+   * ним його підсумок.
+   *
+   * Порядок місяців не чіпаємо — він такий, яким приходить з марту (від
+   * старих до нових), і люди до нього звикли.
+   *
+   * Підсумки проходять через ті самі колонки-аксесори, що й звичайні рядки,
+   * тож відсоток у них неминуче рахується від абсолютів (сума виконаних /
+   * сума створених), а не як середнє з відсотків по ЖК.
    *
    * ⚠️ «В процесі» тут ПІДСУМОВУЄТЬСЯ, і саме по ЖК це коректно: черги
    * різних ЖК не перетинаються, тож їхня сума і є черга компанії. По
    * МІСЯЦЯХ той самий стовпчик складати не можна — вийшла б сума залишків.
    */
   const withComplexTotals = (rows: SlaMonthly[]): SlaMonthly[] => {
-    const byMonth = new Map<string, SlaMonthly>();
+    const order: string[] = [];
+    const byMonth = new Map<string, { rows: SlaMonthly[]; total: SlaMonthly }>();
+
     for (const r of rows) {
-      const acc =
-        byMonth.get(r.report_month_key) ??
-        ({
-          report_month_key: r.report_month_key,
-          complex_id: TOTAL_ID,
-          complex_name: "Загальний підсумок",
-          created_count: 0,
-          completed_count: 0,
-          canceled_count: 0,
-          completed_same_month_count: 0,
-          backlog_end_of_month: 0,
-        } satisfies SlaMonthly);
-      acc.created_count += r.created_count;
-      acc.completed_count += r.completed_count;
-      acc.canceled_count += r.canceled_count;
-      acc.completed_same_month_count += r.completed_same_month_count;
-      acc.backlog_end_of_month += r.backlog_end_of_month;
-      byMonth.set(r.report_month_key, acc);
+      let block = byMonth.get(r.report_month_key);
+      if (!block) {
+        order.push(r.report_month_key);
+        block = {
+          rows: [],
+          total: {
+            report_month_key: r.report_month_key,
+            complex_id: TOTAL_ID,
+            complex_name: "Загальний підсумок",
+            created_count: 0,
+            completed_count: 0,
+            canceled_count: 0,
+            completed_same_month_count: 0,
+            backlog_end_of_month: 0,
+          },
+        };
+        byMonth.set(r.report_month_key, block);
+      }
+      block.rows.push(r);
+      block.total.created_count += r.created_count;
+      block.total.completed_count += r.completed_count;
+      block.total.canceled_count += r.canceled_count;
+      block.total.completed_same_month_count += r.completed_same_month_count;
+      block.total.backlog_end_of_month += r.backlog_end_of_month;
     }
-    const totals = [...byMonth.values()].sort((a, b) =>
-      b.report_month_key.localeCompare(a.report_month_key)
-    );
-    return [...totals, ...rows];
+
+    return order.flatMap((m) => {
+      const block = byMonth.get(m)!;
+      return [...block.rows, block.total];
+    });
   };
 
   // ── Наші додатки ──────────────────────────────────────────────────────
@@ -585,12 +605,16 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
                 sheetName="Місяць в місяць"
                 sheet={buildSheet(
                   [
-                    // Рядок підсумку — ПЕРШИМ, тими самими формулами, що й
-                    // на екрані (прохання Миколи: відсотки від абсолюту
-                    // мають бути й у вигрузці). Відсоткові колонки нижче
-                    // рахуються з полів рядка, тому в підсумку вони самі
-                    // виходять «від абсолюту»: сума виконаних на суму
-                    // створених, а не середнє з місячних відсотків.
+                    ...[...base].reverse(),
+                    // Рядок підсумку — В КІНЦІ, після місяців, які він
+                    // підсумовує. Спершу він стояв першим, і Микита слушно
+                    // зауважив, що підсумки вгорі файлу «незручно й дивно
+                    // виглядають»: на екрані підсумок теж іде після даних.
+                    //
+                    // Відсоткові колонки нижче рахуються з полів рядка, тому
+                    // в підсумку вони самі виходять «від абсолюту»: сума
+                    // виконаних на суму створених, а не середнє з місячних
+                    // відсотків.
                     //
                     // Порожній період (жодного місяця в зрізі) підсумку не
                     // отримує: рядок «Разом: 0 з 0» — це не інформація.
@@ -609,7 +633,6 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
                           },
                         ]
                       : []),
-                    ...[...base].reverse(),
                   ],
                   [
                   { header: "Місяць", value: (r) => r.report_month_key, width: 10 },
@@ -935,15 +958,17 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
                   sheetName="ЖК × рік"
                   sheet={buildSheet(
                     [
+                      ...complexYearRows.flatMap((c) =>
+                        c.rows.map((y) => ({ complex: c.complex_name, ...y }))
+                      ),
                       /*
-                        Рядок «Загальний підсумок» — той самий, що стоїть
-                        унизу таблиці на екрані (ANA-8). Раніше він жив
-                        ТІЛЬКИ на екрані: людина відкривала вигрузку, а
-                        підсумку там не було, і рахувати доводилось руками —
-                        рівно те, від чого вигрузка мала позбавити.
-                        Ідемо першим рядком, як і в зведеній по місяцях.
-                        Відсоток тут рахується від абсолюту: сума виконаних
-                        на суму створених, а не середнє з річних відсотків.
+                        Рядок «Загальний підсумок» — В КІНЦІ, там само, де
+                        він стоїть у таблиці на екрані (ANA-8). Раніше він
+                        жив тільки на екрані, потім поїхав у файл першим
+                        рядком — і це виявилось незручним: підсумок
+                        відірваний від того, що підсумовує.
+                        Відсоток рахується від абсолюту: сума виконаних на
+                        суму створених, а не середнє з річних відсотків.
                       */
                       ...(years.length
                         ? [
@@ -964,9 +989,6 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
                             },
                           ]
                         : []),
-                      ...complexYearRows.flatMap((c) =>
-                        c.rows.map((y) => ({ complex: c.complex_name, ...y }))
-                      ),
                     ],
                     [
                       { header: "ЖК", value: (r) => r.complex, width: 26 },
