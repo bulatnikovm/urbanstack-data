@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-09-02T06:50:23.498Z",
+  "snapshot_at": "2026-09-02T14:59:39.932Z",
   "project": "analytics-454817",
   "dataset": "dbt_operational",
   "tables": {
@@ -8,7 +8,7 @@
       "compact": false
     },
     "agg_complex_overview_monthly": {
-      "rows": 966,
+      "rows": 510,
       "compact": false
     },
     "agg_churn_stage_monthly": {
@@ -28,7 +28,7 @@
       "compact": false
     },
     "agg_sla_monthly": {
-      "rows": 966,
+      "rows": 510,
       "compact": false
     },
     "agg_status_totals": {
@@ -52,7 +52,7 @@
       "compact": false
     },
     "agg_load_monthly": {
-      "rows": 966,
+      "rows": 510,
       "compact": false
     },
     "agg_csat_complex": {
