@@ -886,9 +886,40 @@ export default async function SlaPage({ searchParams }: PageProps<"/operations/s
                   fileName={`dim9000-sla-years-${curKey}`}
                   sheetName="ЖК × рік"
                   sheet={buildSheet(
-                    complexYearRows.flatMap((c) =>
-                      c.rows.map((y) => ({ complex: c.complex_name, ...y }))
-                    ),
+                    [
+                      /*
+                        Рядок «Загальний підсумок» — той самий, що стоїть
+                        унизу таблиці на екрані (ANA-8). Раніше він жив
+                        ТІЛЬКИ на екрані: людина відкривала вигрузку, а
+                        підсумку там не було, і рахувати доводилось руками —
+                        рівно те, від чого вигрузка мала позбавити.
+                        Ідемо першим рядком, як і в зведеній по місяцях.
+                        Відсоток тут рахується від абсолюту: сума виконаних
+                        на суму створених, а не середнє з річних відсотків.
+                      */
+                      ...(years.length
+                        ? [
+                            {
+                              complex: "Загальний підсумок",
+                              // Порожній рік: `buildSheet` перетворює це на
+                              // порожню клітинку, а не на нуль чи «0».
+                              year: "",
+                              created: years.reduce((a, y) => a + y.created, 0),
+                              completed: years.reduce(
+                                (a, y) => a + y.completed,
+                                0
+                              ),
+                              canceled: years.reduce(
+                                (a, y) => a + y.canceled,
+                                0
+                              ),
+                            },
+                          ]
+                        : []),
+                      ...complexYearRows.flatMap((c) =>
+                        c.rows.map((y) => ({ complex: c.complex_name, ...y }))
+                      ),
+                    ],
                     [
                       { header: "ЖК", value: (r) => r.complex, width: 26 },
                       { header: "Рік створення", value: (r) => r.year },

@@ -21,7 +21,7 @@ $Location = 'europe-west1'
 $Job      = 'refresh-dashboard'
 $Repo     = 'bulatnikovm/urbanstack-data'
 $Workflow = 'refresh-dashboard.yml'
-$Schedule = '0 8 * * *'
+$Schedule = '0 7 * * *'
 $TimeZone = 'Europe/Kyiv'
 
 Write-Host ""

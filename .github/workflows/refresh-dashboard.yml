@@ -2,7 +2,7 @@ name: Оновити дашборди
 
 # ⚠️ ГОЛОВНИЙ ТРИГЕР ЦЬОГО ВОРКФЛОУ — НЕ `schedule` НИЖЧЕ.
 #
-# Щоранку о 08:00 за Києвом задачу запускає Cloud Scheduler у проєкті
+# Щоранку о 07:00 за Києвом задачу запускає Cloud Scheduler у проєкті
 # analytics-454817 (`ops/setup-refresh-scheduler.sh`) — звичайним POST на
 # GitHub API, тобто через `workflow_dispatch`. О 09:00 дані вже на екрані.
 #
