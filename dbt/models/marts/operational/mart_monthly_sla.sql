@@ -32,6 +32,9 @@ backbone as (
     from {{ ref('dim_complex') }} c
     cross join {{ ref('dim_calendar_month') }} cal
     where not c.is_test_complex
+      -- ЖК не існує в місяцях до свого початку (dim_complex.first_month):
+      -- інакше новий ЖК тягнеться десятками місяців нулів від 2021 року.
+      and cal.report_month >= c.first_month
 ),
 
 created as (

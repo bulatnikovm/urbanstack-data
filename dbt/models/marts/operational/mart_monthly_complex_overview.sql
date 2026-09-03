@@ -27,6 +27,10 @@ complex_months as (
     select c.complex_id, cal.report_month
     from complexes c
     cross join calendar cal
+    -- ЖК не існує в місяцях до свого початку (див. dim_complex.first_month):
+    -- інакше новий ЖК зʼявляється в дашборді десятками місяців нулів, ніби
+    -- він був і нічого не робив.
+    where cal.report_month >= c.first_month
 ),
 
 houses as (
@@ -42,7 +46,25 @@ active_houses_by_month as (
     from houses h
     cross join calendar cal
     where h.created_at < timestamp(date_add(cal.report_month, interval 1 month))
-      and (h.deactivated_at is null or h.deactivated_at >= timestamp(cal.report_month))
+      -- ⚠️ Порівнюємо МІСЯЦЬ деактивації зі звітним, а не timestamp із
+      -- північчю першого числа.
+      --
+      -- Було `h.deactivated_at >= timestamp(cal.report_month)`, і це давало
+      -- зсув рівно на місяць: будинок, деактивований 2026-08-01 11:59,
+      -- лишався «активним» увесь серпень (бо 11:59 >= 00:00) і зникав аж у
+      -- вересні. При цьому мешканців з нього `int_user_exclusions` прибирав
+      -- уже в серпні — там правило місячне. Наслідок на екрані: у серпні
+      -- квартири ще є, а жителів уже нема; у вересні квартири впали, а
+      -- жителі не змінились. Саме це й помітив Микита (2026-09-02) на ЖК
+      -- «Варшавський Плюс».
+      --
+      -- Канонічне правило одне (рішення Микити 2026-08-04, зафіксоване в
+      -- int_user_exclusions): місяць деактивації виключається ЦІЛКОМ,
+      -- незалежно від дня.
+      and (
+        h.deactivated_at is null
+        or date_trunc(date(h.deactivated_at), month) > cal.report_month
+      )
 ),
 
 house_months_agg as (
