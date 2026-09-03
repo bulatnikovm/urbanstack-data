@@ -520,3 +520,87 @@ export function getMetrics(labels: string | string[]): Metric[] {
 
 /** Прибирає порядковий префікс "3. " з назв категорій/модулів */
 export const stripOrder = (s: string) => s.replace(/^\d+\.\s*/, "");
+
+// ── Наратив по аномаліях (шар B, dashboard_plan.md §7.2) ──────────────────
+
+export type NarrativeSource =
+  | "llm"
+  | "template"
+  | "template_rejected"
+  | "no_anomalies";
+
+export type NarrativeSection = { text: string; source: NarrativeSource };
+
+export type NarrativeDoc = {
+  generated_at: string;
+  snapshot_at: string;
+  report_month_key: string;
+  report_month_label: string;
+  model: string | null;
+  sections: Record<string, NarrativeSection>;
+};
+
+let narrativeDoc: NarrativeDoc | null | undefined;
+
+/**
+ * Наратив для секції. Файл генерується окремим кроком складання
+ * (scripts/build-narrative.mjs), тому його може не бути — тоді просто нічого
+ * не показуємо. Дашборд не має падати через відсутній текст.
+ */
+export function getNarrative(
+  section: string
+): (NarrativeSection & { monthLabel: string; monthKey: string }) | null {
+  if (narrativeDoc === undefined) {
+    try {
+      narrativeDoc = JSON.parse(
+        readFileSync(join(DATA_DIR, "narrative.json"), "utf8")
+      ) as NarrativeDoc;
+    } catch {
+      narrativeDoc = null;
+    }
+  }
+  const s = narrativeDoc?.sections?.[section];
+  if (!s || !narrativeDoc) return null;
+  return {
+    ...s,
+    monthLabel: narrativeDoc.report_month_label,
+    monthKey: narrativeDoc.report_month_key,
+  };
+}
+
+/** Аномалії секції за місяць наративу — для позначок біля тексту. */
+export function getInsights(section: string, monthKey: string) {
+  let rows: Insight[];
+  try {
+    rows = load<Insight>("insights");
+  } catch {
+    return [];
+  }
+  return rows.filter(
+    (r) => r.dashboard_section === section && r.report_month_key === monthKey
+  );
+}
+
+export type Insight = {
+  report_month_key: string;
+  dashboard_section: string;
+  series_key: string;
+  label_ua: string;
+  metric_id: string;
+  dimension_key: string;
+  dimension_value: string;
+  month_status: string;
+  source_kind: string;
+  value_type: string;
+  value: number;
+  prev_value: number | null;
+  mom_abs: number | null;
+  mom_pct: number | null;
+  robust_z: number | null;
+  direction: string | null;
+  direction_good: string;
+  impact: string | null;
+  severity: string | null;
+  is_suspected_data_gap: boolean;
+  verdict: string;
+};

@@ -1,6 +1,7 @@
 import { getAppHealth, getPeriod } from "@/lib/data";
 import { delta, n, pct, pp, weekTooltip } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
+import { Narrative } from "@/components/narrative";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
 import { HealthFilters } from "@/components/health-filters";
 import { BklitLine } from "@/components/bklit-line";
@@ -144,6 +145,8 @@ export default async function HealthPage({
       />
 
       <PageBody>
+        <Narrative section="health" />
+
         <HealthFilters os={os} version={version} versions={versions} />
 
         {hasRunningWeek && last && (

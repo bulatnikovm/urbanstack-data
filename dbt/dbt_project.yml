@@ -38,6 +38,13 @@ models:
         +schema: dbt_operational
       product:
         +schema: dbt_product
+    # Serving-шар: довгий формат метрик + детектор аномалій. Живе окремо від
+    # mart'ів, бо це не «ще один зріз для графіка», а службовий шар над УСІМА
+    # метриками домену (dashboard_plan.md §7.1).
+    serving:
+      +materialized: table
+      product:
+        +schema: dbt_product
 
 seeds:
   urbanstack_dbt:
@@ -59,4 +66,6 @@ seeds:
     product_event_catalog:
       +schema: dbt_product
     product_module_catalog:
+      +schema: dbt_product
+    product_metric_series:
       +schema: dbt_product
