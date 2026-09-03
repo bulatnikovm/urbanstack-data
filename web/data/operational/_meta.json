@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-09-02T14:59:39.932Z",
+  "snapshot_at": "2026-09-03T04:07:07.386Z",
   "project": "analytics-454817",
   "dataset": "dbt_operational",
   "tables": {
@@ -8,7 +8,7 @@
       "compact": false
     },
     "agg_complex_overview_monthly": {
-      "rows": 510,
+      "rows": 511,
       "compact": false
     },
     "agg_churn_stage_monthly": {
@@ -28,7 +28,7 @@
       "compact": false
     },
     "agg_sla_monthly": {
-      "rows": 510,
+      "rows": 511,
       "compact": false
     },
     "agg_status_totals": {
@@ -36,11 +36,11 @@
       "compact": false
     },
     "agg_categories_monthly": {
-      "rows": 15269,
+      "rows": 15302,
       "compact": true
     },
     "agg_tags_monthly": {
-      "rows": 17825,
+      "rows": 17868,
       "compact": true
     },
     "agg_nps_complex": {
@@ -48,11 +48,11 @@
       "compact": false
     },
     "agg_nps_comments": {
-      "rows": 73,
+      "rows": 75,
       "compact": false
     },
     "agg_load_monthly": {
-      "rows": 510,
+      "rows": 511,
       "compact": false
     },
     "agg_csat_complex": {
@@ -64,7 +64,7 @@
       "compact": true
     },
     "agg_csat_comments": {
-      "rows": 1574,
+      "rows": 1579,
       "compact": true
     },
     "agg_csat_problems": {
@@ -72,7 +72,7 @@
       "compact": false
     },
     "agg_orders_house_monthly": {
-      "rows": 14851,
+      "rows": 14922,
       "compact": true
     }
   }
