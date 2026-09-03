@@ -34,25 +34,35 @@ export type Role = "admin" | "viewer";
  *                  відділу. Тому окрема область, а не частина `operations`.
  * · `operations` — щоденна операційка: огляд ЖК, SLA, звернення,
  *                  антирейтинг, CSAT, NPS.
+ * · `drafts`     — сторінки, які ще доробляються. Задеплоєні, але показувати
+ *                  їх команді рано: цифри й підписи ще міняються, а метрика,
+ *                  яку побачили один раз і запамʼятали неправильно, потім
+ *                  живе своїм життям. Область тимчасова ДЛЯ КОЖНОЇ СТОРІНКИ,
+ *                  а не для себе: коли сторінка готова, її рядок у
+ *                  `ROUTE_SCOPES` видаляється, і вона стає звичайною
+ *                  продуктовою чи операційною.
  */
-export type Scope = "product" | "insights" | "operations";
+export type Scope = "product" | "insights" | "operations" | "drafts";
 
 export const ALL_SCOPES: readonly Scope[] = [
   "product",
   "insights",
   "operations",
+  "drafts",
 ];
 
 export const SCOPE_LABELS: Record<Scope, string> = {
   product: "Продуктовий дашборд",
   insights: "Ризик відтоку і сегменти",
   operations: "Операційний дашборд",
+  drafts: "Чернетки",
 };
 
 export const SCOPE_HINTS: Record<Scope, string> = {
   product: "Аудиторія, активація, залученість, STAR, стан додатку",
   insights: "Профілювання мешканців за текстами звернень — внутрішній інструмент",
   operations: "Огляд ЖК, SLA, аналітика звернень, антирейтинг, CSAT, NPS",
+  drafts: "Сторінки в роботі — цифри й підписи ще міняються",
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -72,7 +82,10 @@ export const isRole = (v: unknown): v is Role =>
   v === "admin" || v === "viewer";
 
 export const isScope = (v: unknown): v is Scope =>
-  v === "product" || v === "insights" || v === "operations";
+  v === "product" ||
+  v === "insights" ||
+  v === "operations" ||
+  v === "drafts";
 
 /** Розбір довільного значення з бази/токена в набір областей. */
 export function parseScopes(v: unknown): Scope[] {
@@ -93,6 +106,10 @@ export function parseScopes(v: unknown): Scope[] {
  * призначили іншу. Помилитись можна лише в бік суворості.
  */
 const ROUTE_SCOPES: ReadonlyArray<{ prefix: string; scope: Scope }> = [
+  // Сторінки в роботі. Рядок тут — тимчасовий: коли сторінка готова, його
+  // прибирають, і вона повертається до своєї домашньої області (для
+  // /adoption це `product` через останній рядок цього ж списку).
+  { prefix: "/adoption", scope: "drafts" },
   { prefix: "/operations/churn", scope: "insights" },
   { prefix: "/operations/segments", scope: "insights" },
   { prefix: "/operations", scope: "operations" },
@@ -129,6 +146,10 @@ export function homeFor(access: Access | undefined): string {
   // ризик відтоку й сегменти. Ведемо на першу з двох сторінок, інакше
   // проксі відправив би її на закритий корінь і закільцював редіректи.
   if (access?.scopes.includes("insights")) return "/operations/churn";
+  // Тільки чернетки — набір, можливий хіба що тимчасово, поки комусь
+  // показують одну сторінку в роботі. Ведемо на неї, інакше проксі
+  // відправив би людину на закритий корінь і закільцював редіректи.
+  if (access?.scopes.includes("drafts")) return "/adoption";
   // Скоупів немає взагалі — база це забороняє (CHECK), але як тип це
   // можливо. Ведемо на /admin: адмін виправить, решта отримає 404 і напише.
   return "/admin";
