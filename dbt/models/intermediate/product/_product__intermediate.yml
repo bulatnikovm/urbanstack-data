@@ -66,3 +66,17 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [user_phone_sk, event_month]
+
+  - name: int_user_adoption
+    description: >
+      Підключення мешканця, рівно один рядок на людину. ⚠️ У users.verified
+      немає відмітки часу, тому дата реєстрації наближається першою подією в
+      Amplitude — і тільки для акаунтів від 2024-01 (`is_measurable`).
+    columns:
+      - name: user_id
+        tests: [not_null, unique]
+      - name: time_to_open_bucket
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['d0', 'd1_7', 'd8_30', 'd31_90', 'd90plus', 'never']

@@ -34,7 +34,72 @@ const MANIFEST = {
   mart_module_retention: "module_order",
   mart_version_adoption: "report_month, os_type, app_version",
   mart_app_health_weekly: "event_week, os_type, app_version",
+  mart_adoption_funnel_monthly: "report_month, complex_name, house_address",
+  mart_adoption_house_monthly:
+    "provision_month, complex_name, house_address, property_kind",
 };
+
+/**
+ * Вивантаження в словниковому форматі — той самий прийом, що в
+ * export-data-operational.mjs.
+ *
+ * Обидві adoption-вітрини мають грануляцію по БУДИНКАХ, тому в кожному рядку
+ * повторюються адреса, назва ЖК і два UUID. Наївним JSON вони важили 3,0 МБ на
+ * 6,3 тис. рядків — при тому, що весь продуктовий каталог до них важив 1,5 МБ.
+ * Ці файли перезаписуються ЩОДНЯ автооновленням, тож платить за розмір історія
+ * git. Після кодування — близько 0,6 МБ.
+ *
+ * У браузер це не їде в жодному вигляді: `lib/data.ts` читається на сервері.
+ */
+const COMPACT = {
+  mart_adoption_funnel_monthly: [
+    "report_month",
+    "report_month_key",
+    "house_id",
+    "house_address",
+    "complex_id",
+    "complex_name",
+    "house_opened_date",
+  ],
+  mart_adoption_house_monthly: [
+    "provision_month",
+    "provision_month_key",
+    "house_id",
+    "house_address",
+    "complex_id",
+    "complex_name",
+    "property_kind",
+    "property_kind_ua",
+    "house_opened_date",
+  ],
+};
+
+/** Масив обʼєктів → {cols, dict, rows}. */
+function encodeCompact(rows, dictCols) {
+  if (rows.length === 0) return { cols: [], dict: {}, rows: [] };
+  const cols = Object.keys(rows[0]);
+  const dictSet = new Set(dictCols);
+  const dict = {};
+  const index = {};
+  for (const c of dictCols) {
+    dict[c] = [];
+    index[c] = new Map();
+  }
+  const encoded = rows.map((row) =>
+    cols.map((c) => {
+      if (!dictSet.has(c)) return row[c];
+      const v = row[c];
+      let i = index[c].get(v);
+      if (i === undefined) {
+        i = dict[c].length;
+        dict[c].push(v);
+        index[c].set(v, i);
+      }
+      return i;
+    })
+  );
+  return { cols, dict, rows: encoded };
+}
 
 /**
  * Агрегати, яких немає готовим mart'ом.
@@ -96,10 +161,17 @@ async function main() {
     );
 
     const file = join(OUT_DIR, `${table}.json`);
-    await writeFile(file, JSON.stringify(clean, null, 0) + "\n", "utf8");
+    const payload = COMPACT[table] ? encodeCompact(clean, COMPACT[table]) : clean;
+    await writeFile(file, JSON.stringify(payload, null, 0) + "\n", "utf8");
 
-    meta.tables[table] = { rows: clean.length };
-    console.log(`  ${table.padEnd(34)} ${String(clean.length).padStart(6)} рядків`);
+    meta.tables[table] = {
+      rows: clean.length,
+      compact: Boolean(COMPACT[table]),
+    };
+    const tag = COMPACT[table] ? " (словниковий формат)" : "";
+    console.log(
+      `  ${table.padEnd(34)} ${String(clean.length).padStart(6)} рядків${tag}`
+    );
   }
 
   for (const [name, sql] of Object.entries(QUERIES)) {

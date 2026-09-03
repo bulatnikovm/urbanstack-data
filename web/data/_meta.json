@@ -1,46 +1,67 @@
 {
-  "snapshot_at": "2026-09-02T06:50:15.478Z",
+  "snapshot_at": "2026-09-03T08:38:22.143Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
     "mart_user_base_totals_monthly": {
-      "rows": 33
+      "rows": 33,
+      "compact": false
     },
     "mart_user_base_monthly": {
-      "rows": 326
+      "rows": 326,
+      "compact": false
     },
     "mart_user_segments_monthly": {
-      "rows": 326
+      "rows": 326,
+      "compact": false
     },
     "mart_user_segments": {
-      "rows": 14
+      "rows": 14,
+      "compact": false
     },
     "mart_activation_monthly": {
-      "rows": 38
+      "rows": 38,
+      "compact": false
     },
     "mart_time_to_value": {
-      "rows": 31
+      "rows": 31,
+      "compact": false
     },
     "mart_engagement_monthly": {
-      "rows": 43
+      "rows": 43,
+      "compact": false
     },
     "mart_utility_receipts_monthly": {
-      "rows": 14
+      "rows": 14,
+      "compact": false
     },
     "mart_star_monthly": {
-      "rows": 138
+      "rows": 138,
+      "compact": false
     },
     "mart_module_usage_monthly": {
-      "rows": 317
+      "rows": 317,
+      "compact": false
     },
     "mart_module_retention": {
-      "rows": 13
+      "rows": 13,
+      "compact": false
     },
     "mart_version_adoption": {
-      "rows": 841
+      "rows": 845,
+      "compact": false
     },
     "mart_app_health_weekly": {
-      "rows": 2509
+      "rows": 2510,
+      "compact": false
+    },
+    "mart_adoption_funnel_monthly": {
+      "rows": 3998,
+      "compact": true
+    },
+    "mart_adoption_house_monthly": {
+      "rows": 2328,
+      "compact": true
     },
     "agg_os_monthly": {
       "rows": 73

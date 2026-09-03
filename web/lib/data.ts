@@ -15,6 +15,37 @@ function load<T>(name: string): T[] {
   return JSON.parse(readFileSync(join(DATA_DIR, `${name}.json`), "utf8"));
 }
 
+type Compact = {
+  cols: string[];
+  dict: Record<string, string[]>;
+  rows: (number | null)[][];
+};
+
+/**
+ * Читання вивантажень у словниковому форматі (див. COMPACT у
+ * scripts/export-data.mjs) — той самий формат і той самий код, що в
+ * lib/data-operational.ts. Сторінки різниці не бачать: стиснення живе
+ * тільки на межі файлу.
+ *
+ * Тут воно з'явилось разом з adoption-вітринами: у них грануляція по
+ * будинках, і адреса з назвою ЖК повторювались у кожному з 6,3 тис. рядків —
+ * 3,0 МБ наївним JSON проти 0,3 МБ словниковим. Платить за це історія git
+ * (файли перезаписуються щодня), а не браузер.
+ */
+function loadCompact<T>(name: string): T[] {
+  const doc = JSON.parse(
+    readFileSync(join(DATA_DIR, `${name}.json`), "utf8")
+  ) as Compact;
+  return doc.rows.map((row) => {
+    const out: Record<string, unknown> = {};
+    doc.cols.forEach((col, i) => {
+      const d = doc.dict[col];
+      out[col] = d ? d[row[i] as number] : row[i];
+    });
+    return out as T;
+  });
+}
+
 // ── Типи mart'ів (дзеркалять схему dbt_product) ─────────────────────────
 
 export type UserBaseTotals = {
@@ -166,6 +197,59 @@ export type Meta = {
   tables: Record<string, { rows: number }>;
 };
 
+// ── Підключення мешканців ───────────────────────────────────────────────
+
+/** Сквозна воронка на рівні будинку. Грануляція: report_month × house_id. */
+export type AdoptionFunnelMonthly = {
+  report_month: string;
+  report_month_key: string;
+  house_id: string;
+  house_address: string;
+  complex_id: string;
+  complex_name: string;
+  house_opened_date: string | null;
+  n_potential: number;
+  n_registered: number;
+  n_visitors: number;
+  n_core_active: number;
+  n_never_registered: number;
+};
+
+/**
+ * Випереджальний показник: будинок × місяць провізіонінгу × тип приміщення.
+ *
+ * ⚠️ ТІЛЬКИ ЛІЧИЛЬНИКИ. Частку рахувати ВИКЛЮЧНО як n_reg_Nd / n_mature_Nd
+ * із суми за обраний період — у самій вітрині відсотка немає навмисно, бо на
+ * грануляції «будинок × місяць» більшість клітинок має менш ніж 20 людей.
+ */
+export type AdoptionHouseMonthly = {
+  provision_month: string;
+  provision_month_key: string;
+  house_id: string;
+  house_address: string;
+  complex_id: string;
+  complex_name: string;
+  property_kind: "apartment" | "commercial";
+  property_kind_ua: string;
+  house_opened_date: string | null;
+  n_provisioned: number;
+  n_mature_7d: number;
+  n_reg_7d: number;
+  n_mature_30d: number;
+  n_reg_30d: number;
+  n_mature_90d: number;
+  n_reg_90d: number;
+  n_ever_opened: number;
+  n_never_opened: number;
+  n_registered: number;
+  n_d0: number;
+  n_d1_7: number;
+  n_d8_30: number;
+  n_d31_90: number;
+  n_d90plus: number;
+  n_never: number;
+};
+
 // ── Доступ ──────────────────────────────────────────────────────────────
 
 export const getMeta = (): Meta =>
@@ -191,6 +275,73 @@ export const getModuleRetention = () =>
   load<ModuleRetention>("mart_module_retention");
 export const getAppHealth = () =>
   load<AppHealthWeekly>("mart_app_health_weekly");
+export const getAdoptionFunnel = () =>
+  loadCompact<AdoptionFunnelMonthly>("mart_adoption_funnel_monthly");
+export const getAdoptionByHouse = () =>
+  loadCompact<AdoptionHouseMonthly>("mart_adoption_house_monthly");
+
+/**
+ * Згортка лічильників підключення. Приймає НАБІР рядків і рахує частки з
+ * суми — тому одна клітинка місяця й підсумок за період проходять через ту
+ * саму формулу, і порахувати їх по-різному фізично неможливо (той самий
+ * принцип, що в підсумковій колонці SLA).
+ *
+ * Частка — `null`, а не нуль, коли знаменник порожній: «0% зареєструвалось»
+ * на нульовій базі це не вимір, а його відсутність. Сторінка малює «—».
+ */
+export type AdoptionRollup = {
+  provisioned: number;
+  mature7: number;
+  reg7: number;
+  rate7: number | null;
+  mature30: number;
+  reg30: number;
+  rate30: number | null;
+  mature90: number;
+  reg90: number;
+  rate90: number | null;
+  everOpened: number;
+  neverOpened: number;
+  rateNever: number | null;
+  buckets: { d0: number; d1_7: number; d8_30: number; d31_90: number; d90plus: number; never: number };
+};
+
+export function adoptionRollup(rows: AdoptionHouseMonthly[]): AdoptionRollup {
+  const s = (f: (r: AdoptionHouseMonthly) => number) =>
+    rows.reduce((a, r) => a + f(r), 0);
+  const provisioned = s((r) => r.n_provisioned);
+  const mature7 = s((r) => r.n_mature_7d);
+  const mature30 = s((r) => r.n_mature_30d);
+  const mature90 = s((r) => r.n_mature_90d);
+  const reg7 = s((r) => r.n_reg_7d);
+  const reg30 = s((r) => r.n_reg_30d);
+  const reg90 = s((r) => r.n_reg_90d);
+  const neverOpened = s((r) => r.n_never_opened);
+  const div = (a: number, b: number) => (b > 0 ? a / b : null);
+  return {
+    provisioned,
+    mature7,
+    reg7,
+    rate7: div(reg7, mature7),
+    mature30,
+    reg30,
+    rate30: div(reg30, mature30),
+    mature90,
+    reg90,
+    rate90: div(reg90, mature90),
+    everOpened: s((r) => r.n_ever_opened),
+    neverOpened,
+    rateNever: div(neverOpened, provisioned),
+    buckets: {
+      d0: s((r) => r.n_d0),
+      d1_7: s((r) => r.n_d1_7),
+      d8_30: s((r) => r.n_d8_30),
+      d31_90: s((r) => r.n_d31_90),
+      d90plus: s((r) => r.n_d90plus),
+      never: s((r) => r.n_never),
+    },
+  };
+}
 
 // ── Поточний місяць неповний ────────────────────────────────────────────
 

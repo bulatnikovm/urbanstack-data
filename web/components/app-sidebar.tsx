@@ -6,6 +6,7 @@ import {
   Activity,
   Building2,
   ClipboardList,
+  DoorOpen,
   Flame,
   Gauge,
   Heart,
@@ -74,6 +75,11 @@ const PRODUCT_NAV = [
     group: "Продукт",
     items: [
       { href: "/", label: "Аудиторія", icon: Building2, page: "Стор. 1" },
+      // Сторінки не було в Looker: воронку «особовий рахунок → реєстрація →
+      // візит → цільова дія» ніхто не рахував сквозною. Стоїть перед
+      // «Активацією» навмисно — це крок ДО неї: активація питає, що робить
+      // новачок, а ця сторінка — чи він узагалі до нас дійшов.
+      { href: "/adoption", label: "Підключення", icon: DoorOpen, page: "" },
       { href: "/activation", label: "Активація", icon: Rocket, page: "Стор. 2" },
       { href: "/engagement", label: "Залученість", icon: Activity, page: "Стор. 3" },
       { href: "/star", label: "STAR", icon: Star, page: "Стор. 4" },

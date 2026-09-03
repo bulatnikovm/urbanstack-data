@@ -152,7 +152,13 @@ home_complex as (
     select
         report_month,
         user_id,
-        complex_id                                                  as home_complex_id
+        complex_id                                                  as home_complex_id,
+        -- Будинок і тип приміщення тим самим правилом пріоритету. Потрібні
+        -- int_user_adoption: там треба віднести до будинку КОЖНОГО, включно з
+        -- тими, чий будинок уже деактивовано (інакше історія підключення
+        -- будинку зникала б у момент його виходу з УК).
+        house_id                                                    as home_house_id,
+        has_apartment                                               as home_is_apartment
     from link_months
     qualify row_number() over (
         partition by report_month, user_id
@@ -173,6 +179,8 @@ select
     p.primary_complex_id,
     p.primary_house_id,
     hc.home_complex_id,
+    hc.home_house_id,
+    hc.home_is_apartment,
     u.n_active_houses,
     u.n_houses_total,
     u.n_spaces_total,

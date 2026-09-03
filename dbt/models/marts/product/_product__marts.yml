@@ -130,3 +130,64 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [report_month, star_category]
+
+  - name: mart_adoption_funnel_monthly
+    description: >
+      Сквозна воронка прийняття на рівні БУДИНКУ: особовий рахунок →
+      реєстрація → візит → цільова дія. Згортка до ЖК звіряється з
+      mart_user_base_monthly тестом assert_house_funnel_matches_complex.
+    columns:
+      - name: house_id
+        tests: [not_null]
+      - name: n_potential
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+      - name: n_never_registered
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_month, house_id]
+
+  - name: mart_adoption_house_monthly
+    description: >
+      Випереджальний показник підключення: будинок × місяць провізіонінгу ×
+      тип приміщення. ⚠️ ТІЛЬКИ ЛІЧИЛЬНИКИ — частку рахує дашборд із суми за
+      обраний період, бо на грануляції «будинок × місяць» лише 63 клітинки з
+      2 378 мають бодай 20 людей. Частку рахувати ВИКЛЮЧНО як
+      n_reg_Nd / n_mature_Nd.
+    columns:
+      - name: house_id
+        tests: [not_null]
+      - name: property_kind
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['apartment', 'commercial']
+      - name: n_provisioned
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [provision_month, house_id, property_kind]
+      # Корзини розподілу мають у сумі давати всіх провізіонованих — інакше
+      # графік розподілу мовчки втратить частину людей.
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "n_d0 + n_d1_7 + n_d8_30 + n_d31_90 + n_d90plus + n_never = n_provisioned"
+      # Чисельник ніколи не більший за знаменник: якщо це впаде, значить
+      # зрілість перестала обмежувати обидві сторони однаково.
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "n_reg_7d <= n_mature_7d and n_reg_30d <= n_mature_30d and n_reg_90d <= n_mature_90d"
