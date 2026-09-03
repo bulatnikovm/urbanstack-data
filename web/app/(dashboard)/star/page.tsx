@@ -1,6 +1,7 @@
 import { getPeriod, getStar, stripOrder } from "@/lib/data";
 import { delta, monthLabel, n, pct, pp } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
+import { Narrative } from "@/components/narrative";
 import {
   Hl,
   Kpi,
@@ -100,6 +101,8 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
       />
 
       <PageBody>
+        <Narrative section="star" />
+
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Kpi
             label="STAR від підтверджених"

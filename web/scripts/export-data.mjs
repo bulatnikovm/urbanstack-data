@@ -123,6 +123,43 @@ const QUERIES = {
     group by 1, 2
     order by 1, 2
   `,
+
+  /**
+   * Аномалії для наративу й анотацій на графіках.
+   *
+   * Беремо ТІЛЬКИ рядки-аномалії й тільки за останні 13 місяців: уся історія
+   * тут не потрібна, а файл має лишатись маленьким. `dashboard_section`
+   * приїжджає з seed'а `product_metric_series` — саме за ним наратив
+   * розкладається по сторінках.
+   */
+  insights: `
+    select
+      report_month_key,
+      dashboard_section,
+      series_key,
+      label_ua,
+      metric_id,
+      dimension_key,
+      dimension_value,
+      month_status,
+      source_kind,
+      value_type,
+      value,
+      prev_value,
+      mom_abs,
+      mom_pct,
+      robust_z,
+      direction,
+      direction_good,
+      impact,
+      severity,
+      is_suspected_data_gap,
+      verdict
+    from \`${PROJECT}.${DATASET}.srv_metric_anomalies\`
+    where is_anomaly
+      and report_month >= date_sub(date_trunc(current_date(), month), interval 13 month)
+    order by report_month_key desc, abs(robust_z) desc nulls last, series_key
+  `,
 };
 
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data");

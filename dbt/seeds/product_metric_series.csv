@@ -1,0 +1,30 @@
+series_key,label_ua,metric_id,model_name,value_column,dimension_key,value_type,source_kind,direction_good,min_abs_change,mom_pct_threshold,dashboard_section
+total.count_potential,Потенційні користувачі,PROD-001,mart_user_base_totals_monthly,count_potential,total,count,crm,up,150,0.03,audience
+total.count_confirmed,Підтверджені,PROD-002,mart_user_base_totals_monthly,count_confirmed,total,count,crm,up,100,0.03,audience
+total.rate_confirmed,% підтверджених,PROD-004,mart_user_base_totals_monthly,rate_confirmed,total,rate,crm,up,0.01,0.04,audience
+total.visitors,Відвідувачі додатку,PROD-005,mart_user_base_totals_monthly,visitors,total,count,event,up,200,0.10,audience
+total.active_core_mau,MAU з цільовою дією,PROD-006,mart_user_base_totals_monthly,active_core_mau,total,count,event,up,100,0.12,audience
+total.count_new_users,Нові користувачі,PROD-025,mart_activation_monthly,count_new_users,total,count,crm,up,40,0.25,activation
+total.count_activated,Активовані,PROD-026,mart_activation_monthly,count_activated,total,count,event,up,15,0.30,activation
+total.activation_rate,Конверсія в активацію,PROD-008,mart_activation_monthly,activation_rate,total,rate,mixed,up,0.03,0.25,activation
+total.avg_daily_core_users,Середній денний актив,PROD-015,mart_engagement_monthly,avg_daily_core_users,total,count,event,up,25,0.15,engagement
+total.n_sessions,Сесій за місяць,PROD-024,mart_engagement_monthly,n_sessions,total,count,event,up,2000,0.15,engagement
+total.median_session_min,Медіанна сесія,PROD-010,mart_engagement_monthly,median_session_min,total,duration,event,neutral,0.3,0.20,engagement
+total.median_user_time_min,Час у додатку за місяць,PROD-023,mart_engagement_monthly,median_user_time_min,total,duration,event,up,1.0,0.20,engagement
+total.voting_conversion_rate,Конверсія голосування,PROD-016,mart_engagement_monthly,voting_conversion_rate,total,rate,event,up,0.05,0.25,engagement
+total.app_requests_created_users,Натиснули «Створити заявку»,PROD-017,mart_engagement_monthly,app_requests_created_users,total,count,event,up,60,0.15,engagement
+total.n_users_with_value_action,Користувачі з цінною дією,PROD-014,mart_time_to_value,n_users_with_value_action,total,count,event,up,30,0.25,activation
+total.rate_1d,Дійшли до цінності за добу,PROD-027,mart_time_to_value,rate_1d,total,rate,event,up,0.05,0.25,activation
+total.receipts_accepted,Прийнято квитанцій,PROD-037,mart_utility_receipts_monthly,receipts_accepted,total,count,event,up,50,0.20,engagement
+total.receipts_rejected_rate,Відхилено банком,PROD-038,mart_utility_receipts_monthly,receipts_rejected_rate,total,rate,event,down,0.02,0.25,engagement
+total.receipts_accepted_amount,Сума прийнятих,PROD-036,mart_utility_receipts_monthly,receipts_accepted_amount,total,amount,event,up,50000,0.20,engagement
+total.receipts_avg_amount,Середній чек,PROD-039,mart_utility_receipts_monthly,receipts_accepted_avg_amount,total,amount,event,neutral,100,0.20,engagement
+star.unique_users,Користувачів із цільовою дією,PROD-030,mart_star_monthly,unique_users,star_category,count,event,up,50,0.20,star
+star.rate_of_confirmed,STAR від підтверджених,PROD-028,mart_star_monthly,star_rate_of_confirmed,star_category,rate,mixed,up,0.01,0.20,star
+complex.count_potential,Потенційні користувачі,PROD-041,mart_user_base_monthly,count_potential,complex,count,crm,up,60,0.05,audience
+complex.count_confirmed,Підтверджені,PROD-041,mart_user_base_monthly,count_confirmed,complex,count,crm,up,40,0.05,audience
+complex.active_core_mau,MAU з цільовою дією,PROD-041,mart_user_base_monthly,active_core_mau,complex,count,event,up,30,0.20,audience
+complex.segment_sleeping,Сонні,PROD-007,mart_user_segments_monthly,segment_sleeping,complex,count,mixed,down,30,0.20,audience
+complex.segment_dead,Неактивні,PROD-007,mart_user_segments_monthly,segment_dead,complex,count,mixed,down,40,0.15,audience
+module.module_users,Користувачі модуля,PROD-011,mart_module_usage_monthly,module_users,module,count,event,up,40,0.20,engagement
+module.penetration_rate,Покриття модуля,PROD-011,mart_module_usage_monthly,penetration_rate,module,rate,mixed,up,0.02,0.20,engagement

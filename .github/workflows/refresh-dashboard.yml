@@ -184,6 +184,21 @@ jobs:
           # коміту — причина в шапці того кроку.
           node scripts/build-metrics.mjs
 
+      # Наратив по аномаліях (dashboard_plan.md §7.2). Окремим кроком, бо
+      # потребує insights.json з попереднього, і бо в нього єдиного є
+      # зовнішня залежність — OpenAI.
+      #
+      # ⚠️ continue-on-error навмисно, з тієї ж підстави, що й на синхронізації
+      # тегів: дашборд зі вчорашнім наративом корисніший за дашборд, який не
+      # оновився взагалі. Без ключа скрипт і сам не падає — віддає
+      # детерміновані шаблони з рядків детектора.
+      - name: Зібрати наратив по аномаліях
+        working-directory: web
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node scripts/build-narrative.mjs
+
       - name: Закомітити свіжі дані — Vercel підхопить пуш сам
         run: |
           git config user.name "urbanstack-bot"

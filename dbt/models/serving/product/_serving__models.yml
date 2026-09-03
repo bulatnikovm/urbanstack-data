@@ -1,0 +1,140 @@
+version: 2
+
+sources:
+
+  - name: serving_baseline
+    description: >
+      Базова лінія метрик, відновлена з git-історії `web/data/*.json`
+      (щоденні зрізи з 2026-08-05). Створюється скриптом
+      `dbt/scripts/build_revision_baseline.py`, не dbt-моделлю — це
+      одноразовий історичний артефакт, а не частина щоденного конвеєра.
+      Потрібна, щоб `srv_metric_revisions` мав з чим порівнювати вже сьогодні,
+      а не через кілька тижнів спостережень.
+    database: analytics-454817
+    schema: dbt_product
+    tables:
+      - name: product_metric_baseline
+
+models:
+
+  - name: srv_metric_timeseries
+    description: >
+      Усі продуктові метрики в довгому форматі
+      (series_key × dimension_value × report_month). Єдина сутність, над якою
+      працює детектор аномалій, анотації на графіках і майбутній агент.
+      Додати метрику = рядок у seed `product_metric_series` + колонка в
+      відповідному unpivot.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [series_key, dimension_value, report_month]
+    columns:
+      - name: series_key
+        description: Ключ ряду, напр. `total.count_potential`, `star.unique_users`.
+        tests:
+          - not_null
+      - name: label_ua
+        description: >
+          Людський підпис РЯДУ — те, як показник називають у наративі й на
+          анотаціях. Окремо від metric_id навмисно: одна картка реєстру
+          покриває кілька рядів (PROD-041 — потенційні, підтверджені й MAU по
+          ЖК; PROD-011 — користувачі модуля й покриття), тож підпис із
+          реєстру назвав би різні показники однаково.
+        tests:
+          - not_null
+      - name: metric_id
+        description: >
+          ID з реєстру метрик (docs/metrics.yml). NULL означає, що колонку
+          додали в SQL, але забули рядок у seed'і — тест нижче валить збірку
+          саме тому, що інакше ряд зник би мовчки.
+        tests:
+          - not_null
+      - name: value
+        tests:
+          - not_null
+      - name: source_kind
+        description: >
+          crm / event / mixed. Ключова властивість для детектора: CRM-ряди
+          мутують заднім числом в обидва боки, подієві — тільки ростуть
+          (дозагрузка), змішані систематично сповзають через знаменник.
+          Деталі — docs/data_drift_findings.md.
+        tests:
+          - accepted_values:
+              values: ['crm', 'event', 'mixed']
+
+  - name: srv_metric_anomalies
+    description: >
+      Вердикт по кожному (ряд × місяць): аномалія чи ні і чому. Гасить відоме
+      (неповний поточний місяць, недозрілий останній, мікродрейф), ловить
+      реальне (зсув рівня, синхронний обвал джерела).
+    columns:
+      - name: is_anomaly
+        tests:
+          - not_null
+      - name: severity
+        tests:
+          - accepted_values:
+              values: ['warning', 'critical', 'data_gap']
+              config:
+                where: "is_anomaly"
+      - name: month_status
+        tests:
+          - accepted_values:
+              values: ['current', 'provisional', 'settled']
+      - name: impact
+        tests:
+          - accepted_values:
+              values: ['good', 'bad', 'neutral']
+              config:
+                where: "is_anomaly and direction is not null"
+
+  - name: srv_metric_revisions
+    description: >
+      Наскільки значення вже ЗАКРИТОГО місяця змінилось відтоді, як ми
+      побачили його вперше. Накопичувальна: `first_value` пишеться раз і не
+      оновлюється. Ловить масову мутацію історії — те, чого MoM/z-детектор
+      побачити не може в принципі, бо при ній усі місяці їдуть разом і форма
+      ряду зберігається.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [series_key, dimension_value, report_month]
+
+  - name: srv_source_health
+    description: >
+      Щоденний журнал розмірів джерел. Потрібен, бо `space_user`
+      перезаписується Stitch'ем цілком щоночі, без PK і без сліду видалень —
+      скільки рядків було вчора, BigQuery не пам'ятає. Пам'ятаємо ми.
+    columns:
+      - name: source_name
+        tests:
+          - not_null
+      - name: row_count
+        tests:
+          - not_null
+
+seeds:
+
+  - name: product_metric_series
+    description: >
+      Мапінг metric_id → модель/колонка + пороги детектора. Єдине місце, яке
+      треба поповнювати при додаванні метрики в serving-шар.
+    columns:
+      - name: label_ua
+        tests:
+          - not_null
+      - name: series_key
+        tests:
+          - not_null
+          - unique
+          # Зворотний бік захисту від розходження: рядок у seed'і, під який
+          # немає даних у моделі, теж валить збірку.
+          - relationships:
+              to: ref('srv_metric_timeseries')
+              field: series_key
+      - name: source_kind
+        tests:
+          - accepted_values:
+              values: ['crm', 'event', 'mixed']
+      - name: direction_good
+        tests:
+          - accepted_values:
+              values: ['up', 'down', 'neutral']

@@ -10,6 +10,7 @@ import {
 } from "@/lib/data";
 import { delta, monthLabel, n, n1, pct, pp, uah } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
+import { Narrative } from "@/components/narrative";
 import {
   Hl,
   Kpi,
@@ -124,6 +125,8 @@ export default async function EngagementPage({ searchParams }: PageProps<"/engag
       />
 
       <PageBody>
+        <Narrative section="engagement" />
+
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Kpi
             label="Середній денний актив"
