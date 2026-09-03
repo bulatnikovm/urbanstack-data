@@ -1,6 +1,7 @@
 import { TriangleAlert, Sparkles } from "lucide-react";
 
 import { getInsights, getNarrative, stripOrder } from "@/lib/data";
+import { plural } from "@/lib/format";
 import { inLab } from "@/lib/lab";
 
 /**
@@ -85,8 +86,15 @@ export async function Narrative({ section }: { section: string }) {
                 <span aria-hidden>·</span>
                 <span>
                   {insights.length}{" "}
-                  {insights.length === 1 ? "відхилення" : "відхилень"}
-                  {critical > 0 ? ` (${critical} критичних)` : ""}
+                  {plural(
+                    insights.length,
+                    "відхилення",
+                    "відхилення",
+                    "відхилень"
+                  )}
+                  {critical > 0
+                    ? ` (${critical} ${plural(critical, "критичне", "критичні", "критичних")})`
+                    : ""}
                 </span>
               </>
             )}
@@ -107,7 +115,20 @@ export async function Narrative({ section }: { section: string }) {
                   }
                   title={i.verdict}
                 >
-                  {stripOrder(i.dimension_value)}
+                  {/*
+                    Показник named ПЕРШИМ, розріз другим. Без назви показника
+                    дві плашки одного ЖК читаються однаково («Варшавський
+                    Плюс −27,5%» двічі), хоча це різні речі — потенційні й
+                    підтверджені. Той самий недогляд, що був у тексті: підпис
+                    ряду вже приїхав у `label_ua`, просто сюди не дійшов.
+                  */}
+                  {i.label_ua}
+                  {i.dimension_key !== "total" && (
+                    <span className="opacity-70">
+                      {" · "}
+                      {stripOrder(i.dimension_value)}
+                    </span>
+                  )}
                   {i.mom_pct !== null && (
                     <span className="opacity-70">
                       {" "}
