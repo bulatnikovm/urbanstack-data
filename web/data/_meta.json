@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-09-03T08:38:22.143Z",
+  "snapshot_at": "2026-09-03T09:48:36.575Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
@@ -65,6 +65,9 @@
     },
     "agg_os_monthly": {
       "rows": 73
+    },
+    "insights": {
+      "rows": 206
     }
   }
 }

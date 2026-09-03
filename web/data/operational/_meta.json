@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-09-03T04:07:07.386Z",
+  "snapshot_at": "2026-09-03T09:48:48.214Z",
   "project": "analytics-454817",
   "dataset": "dbt_operational",
   "tables": {
@@ -40,7 +40,7 @@
       "compact": true
     },
     "agg_tags_monthly": {
-      "rows": 17868,
+      "rows": 17869,
       "compact": true
     },
     "agg_nps_complex": {
