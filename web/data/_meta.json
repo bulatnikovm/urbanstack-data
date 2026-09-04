@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-09-03T09:48:36.575Z",
+  "snapshot_at": "2026-09-04T04:11:29.436Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
@@ -60,14 +60,14 @@
       "compact": true
     },
     "mart_adoption_house_monthly": {
-      "rows": 2328,
+      "rows": 2338,
       "compact": true
     },
     "agg_os_monthly": {
       "rows": 73
     },
     "insights": {
-      "rows": 206
+      "rows": 207
     }
   }
 }
