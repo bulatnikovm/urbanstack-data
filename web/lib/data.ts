@@ -269,6 +269,22 @@ export type AdoptionFunnelMonthly = {
 };
 
 /**
+ * Крива підключення: вісь — дні від заведення рахунку, не календар.
+ *
+ * ⚠️ `cohort_eligible` рухається разом із віссю: на зсуві 30 у знаменник
+ * входять лише ті, кому рахунок завели щонайменше 30 днів тому. Тому частки
+ * на різних зсувах рахуються від РІЗНИХ знаменників — це не помилка, а
+ * єдиний спосіб не питати про майбутнє.
+ */
+export type AdoptionCurve = {
+  complex_id: string;
+  complex_name: string;
+  day_offset: number;
+  cohort_eligible: number;
+  opened_by: number;
+};
+
+/**
  * Випереджальний показник: будинок × місяць провізіонінгу × тип приміщення.
  *
  * ⚠️ ТІЛЬКИ ЛІЧИЛЬНИКИ. Частку рахувати ВИКЛЮЧНО як n_reg_Nd / n_mature_Nd
@@ -338,6 +354,8 @@ export const getAdoptionFunnel = () =>
   loadCompact<AdoptionFunnelMonthly>("mart_adoption_funnel_monthly");
 export const getAdoptionByHouse = () =>
   loadCompact<AdoptionHouseMonthly>("mart_adoption_house_monthly");
+export const getAdoptionCurve = () =>
+  load<AdoptionCurve>("mart_adoption_curve");
 
 /**
  * Згортка лічильників підключення. Приймає НАБІР рядків і рахує частки з

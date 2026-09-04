@@ -276,3 +276,30 @@ models:
               min_value: 0
               max_value: 1
               inclusive: true
+
+  - name: mart_adoption_curve
+    description: >
+      Крива підключення: вісь — дні від заведення рахунку, а не календарні
+      місяці. Дозволяє читати новий ЖК з першого дня й класти його поруч із
+      історичною кривою портфеля в тому самому віці.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [complex_id, day_offset]
+    columns:
+      - name: day_offset
+        description: Днів від заведення особового рахунку, 0-90.
+        tests:
+          - not_null
+      - name: cohort_eligible
+        description: >
+          Скільки людей ЦЬОГО ЖК прожили щонайменше day_offset днів від
+          заведення рахунку. Знаменник рухається разом із віссю — інакше
+          вчора заведена людина тягнула б униз частку «за 30 днів».
+        tests:
+          - not_null
+      - name: opened_by
+        description: >
+          Скільки з них відкрили застосунок не пізніше day_offset дня.
+          ⚠️ Лічильник: складати по ЖК можна, частку — ні.
+        tests:
+          - not_null

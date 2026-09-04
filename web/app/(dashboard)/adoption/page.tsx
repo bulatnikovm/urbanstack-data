@@ -1,6 +1,7 @@
 import {
   adoptionRollup,
   getAdoptionByHouse,
+  getAdoptionCurve,
   getAdoptionFunnel,
   getPeriod,
   type AdoptionHouseMonthly,
@@ -11,6 +12,14 @@ import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
 import { BklitFunnel } from "@/components/bklit-funnel";
 import { RankedBars } from "@/components/ranked-bars";
 import { BklitLine } from "@/components/bklit-line";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { requireAccess } from "@/lib/guard";
 
 /**
@@ -68,6 +77,46 @@ export default async function AdoptionPage({ searchParams }: PageProps<"/adoptio
     getPeriod(sp);
 
   const funnel = getAdoptionFunnel();
+
+  /**
+   * Крива підключення: вісь — дні від заведення рахунку.
+   *
+   * ⚠️ Портфель рахується з ЛІЧИЛЬНИКІВ, а не як середнє часток: кожна людина
+   * належить рівно одному ЖК, тому `cohort_eligible` і `opened_by` додаються,
+   * а середнє з часток дало б «Правому берегу» з 68 людьми ту саму вагу, що
+   * «Варшавському 3» з двома з половиною тисячами.
+   */
+  const curve = getAdoptionCurve();
+  const atOffset = (rows: typeof curve, d: number) =>
+    rows.filter((r) => r.day_offset === d);
+  const shareAt = (rows: typeof curve, d: number) => {
+    const at = atOffset(rows, d);
+    const base = at.reduce((a, r) => a + r.cohort_eligible, 0);
+    const hit = at.reduce((a, r) => a + r.opened_by, 0);
+    return base > 0 ? hit / base : null;
+  };
+
+  const portfolio = {
+    size: atOffset(curve, 0).reduce((a, r) => a + r.cohort_eligible, 0),
+    d0: shareAt(curve, 0),
+    d7: shareAt(curve, 7),
+    d30: shareAt(curve, 30),
+    d90: shareAt(curve, 90),
+  };
+
+  const curveRows = [...new Set(curve.map((r) => r.complex_name))]
+    .map((name) => {
+      const rows = curve.filter((r) => r.complex_name === name);
+      return {
+        name,
+        size: atOffset(rows, 0).reduce((a, r) => a + r.cohort_eligible, 0),
+        d0: shareAt(rows, 0),
+        d7: shareAt(rows, 7),
+        d30: shareAt(rows, 30),
+        d90: shareAt(rows, 90),
+      };
+    })
+    .sort((a, b) => b.size - a.size);
   const byHouse = getAdoptionByHouse();
 
   // ── Стан бази на обраний місяць ───────────────────────────────────────
@@ -220,6 +269,81 @@ export default async function AdoptionPage({ searchParams }: PageProps<"/adoptio
             metric="Реєстрація за 7 днів"
           />
         </div>
+
+        <Section
+          title="Крива підключення"
+          lead={
+            <>
+              Вісь — <Hl>дні від заведення особового рахунку</Hl>, а не
+              календар. Тому ЖК, який підключається зараз, видно з першого дня,
+              а не через місяць. Портфель доходить до{" "}
+              <Hl>{pct(portfolio.d7)}</Hl> за тиждень і{" "}
+              <Hl>{pct(portfolio.d30)}</Hl> за місяць — і саме на першому тижні
+              комплекси розходяться найсильніше.
+            </>
+          }
+        >
+          <Panel
+            title="Крива підключення по ЖК"
+            metric="Крива підключення"
+            note="На кожному зсуві в знаменник входять ЛИШЕ ті, кому рахунок завели щонайменше стільки днів тому — інакше вчора заведена людина тягнула б униз частку «за 30 днів». Тому колонки рахуються від різних знаменників, і порівнювати треба по вертикалі (ЖК між собою), а не по горизонталі."
+          >
+            <div className="max-h-[26rem] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-card">
+                  <TableRow>
+                    <TableHead>ЖК</TableHead>
+                    <TableHead className="text-right">У когорті</TableHead>
+                    <TableHead className="text-right">Того ж дня</TableHead>
+                    <TableHead className="text-right">За тиждень</TableHead>
+                    <TableHead className="text-right">За місяць</TableHead>
+                    <TableHead className="text-right">За 90 днів</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow className="font-medium">
+                    <TableCell>Портфель</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {n(portfolio.size)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {pct(portfolio.d0)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {pct(portfolio.d7)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {pct(portfolio.d30)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {pct(portfolio.d90)}
+                    </TableCell>
+                  </TableRow>
+                  {curveRows.map((r) => (
+                    <TableRow key={r.name}>
+                      <TableCell>{r.name}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {n(r.size)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {pct(r.d0)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {pct(r.d7)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {pct(r.d30)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {pct(r.d90)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Panel>
+        </Section>
 
         <Section
           title="Воронка прийняття"
