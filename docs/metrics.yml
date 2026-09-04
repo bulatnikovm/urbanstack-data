@@ -701,3 +701,108 @@ metrics:
       заведення рахунку всі ЖК працюють приблизно однаково, а розходяться
       вони на ПЕРШОМУ ТИЖНІ. Тобто важіль не в передачі ключів, а в
       догоняючому контакті через кілька днів.
+
+  - id: PROD-050
+    label: Людей із помилкою
+    definition: >
+      Скільки різних людей за місяць побачили помилку конкретного виду.
+    formula: COUNT(DISTINCT user_phone_sk) по event_month × error_kind
+    grain: report_month × error_kind
+    source: dbt_product.mart_app_errors_monthly
+    owner: Микита
+    status: active
+    note: >
+      ⚠️ Складати по видах помилок НЕ можна: людина, що побачила дві різні
+      помилки, лежить у двох рядках. Для зведення є
+      mart_app_error_summary_monthly, де distinct порахований на потрібній
+      грануляції.
+
+  - id: PROD-051
+    label: Частка з помилкою
+    definition: >
+      Та сама кількість, поділена на всіх активних за місяць.
+    formula: affected_users / active_users
+    grain: report_month × error_kind
+    source: dbt_product.mart_app_errors_monthly
+    owner: Микита
+    status: active
+    note: >
+      Знаменник — УСІ активні місяця (будь-яка подія), а не ті, хто бачив
+      помилку. Інакше показник дорівнював би 100% при повному провалі й не
+      рухався б. І не `news_scrn__view`, як у тижневій вітрині: людина, у якої
+      застосунок падає на старті, стрічку не побачить і зникне зі знаменника
+      саме тоді, коли має в ньому бути.
+
+  - id: PROD-052
+    label: Помилки застосунку
+    definition: >
+      Скільки різних людей за місяць уперлись у поломку на нашому боці —
+      екран помилки, немає зʼєднання, оплата не пройшла, послуга недоступна.
+    formula: affected_users класу `app` у mart_app_error_summary_monthly
+    grain: report_month
+    source: dbt_product.mart_app_error_summary_monthly
+    owner: Микита
+    status: active
+    note: >
+      Класи навмисно не змішані в один «рівень помилок»: `auth` (невірний PIN,
+      код) — це здебільшого сам користувач і нулем не буває ніколи, `access`
+      (немає прав, номера немає в базі) — питання до операційки. Змішаний
+      показник ріс би від того, що люди частіше помиляються PIN-ом, і не
+      рухався б, коли падає оплата.
+
+  - id: PROD-053
+    label: Оплата не пройшла
+    definition: >
+      Люди, у яких зʼявився поп-ап невдалої оплати квитанції.
+    formula: affected_users для error_kind = payment_fail
+    grain: report_month
+    source: dbt_product.mart_app_errors_monthly
+    owner: Микита
+    status: active
+    note: Єдина помилка в списку, яка одразу коштує грошей.
+
+  - id: PROD-054
+    label: Доступ заборонено
+    definition: >
+      Люди, які побачили екран відмови в доступі.
+    formula: affected_users для error_kind = access_denied
+    grain: report_month
+    source: dbt_product.mart_app_errors_monthly
+    owner: Микита
+    status: active
+    note: >
+      Серпень 2026 — 138 людей проти 8 у липні. Розбір показав, що 123 з них
+      із ЖК «Варшавський Плюс», чиї будинки деактивували 1 серпня, і ще 12 —
+      із «Севена». Тобто це не баг застосунку, а дірка в сценарії відключення
+      будинку: людям не пояснюють, що сталось, і вони довбляться в закриті
+      двері (по 5 разів кожна).
+
+  - id: PROD-055
+    label: Екран «Щось пішло не так»
+    definition: >
+      Люди, які побачили загальний екран помилки застосунку.
+    formula: affected_users для error_kind = app_failure
+    grain: report_month
+    source: dbt_product.mart_app_errors_monthly
+    owner: Микита
+    status: active
+    note: >
+      Найпряміша ознака збою: людина не змогла зробити нічого. Дивитись треба
+      разом із «подій на людину» — 5 людей по 10 разів це зламаний сценарій у
+      вузької групи, а не дрібниця.
+
+  - id: PROD-056
+    label: Помилки на реліз
+    definition: >
+      Частка зачеплених серед активних КОНКРЕТНОЇ версії за тиждень.
+    formula: affected_users / version_active_users
+    grain: event_week × os_type × app_version × error_kind
+    source: dbt_product.mart_app_errors_weekly
+    owner: Микита
+    status: active
+    note: >
+      Знаменник свій на кожну версію — інакше показник міряє розкотку, а не
+      якість: щойно випущений реліз має мало користувачів, і будь-яка його
+      поломка виглядає мізерною часткою від усієї аудиторії.
+      ⚠️ Версії з малою аудиторією не показуємо: при 26 активних один
+      зачеплений дає 3,8%, і топ назавжди складався б із таких.

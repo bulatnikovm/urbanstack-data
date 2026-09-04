@@ -67,5 +67,7 @@ seeds:
       +schema: dbt_product
     product_module_catalog:
       +schema: dbt_product
+    product_error_catalog:
+      +schema: dbt_product
     product_metric_series:
       +schema: dbt_product

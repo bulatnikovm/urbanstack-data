@@ -184,6 +184,59 @@ export type AppHealthWeekly = {
   biometric_fallback_rate: number | null;
 };
 
+/**
+ * Помилки застосунку.
+ *
+ * `error_class` розділяє три різні речі, які не можна складати в одне
+ * «скільки в нас помилок»:
+ *   app    — зламався застосунок або бекенд (екран помилки, оплата, послуга);
+ *   auth   — тертя на вході (невірний PIN, код), здебільшого сам користувач;
+ *   access — прав немає або номера немає в базі: питання до операційки й
+ *            підключення, а не до розробки.
+ */
+export type AppErrorMonthly = {
+  report_month: string;
+  report_month_key: string;
+  error_kind: string;
+  error_class: "app" | "auth" | "access";
+  label_ua: string;
+  hint_ua: string | null;
+  affected_users: number;
+  error_events: number;
+  active_users: number;
+  affected_rate: number | null;
+  events_per_affected: number | null;
+};
+
+/**
+ * Зведення по класах. ⚠️ Рядок `any` — НЕ сума трьох інших: людина з двома
+ * видами помилок є в кожному своєму класі, а в `any` рівно один раз.
+ */
+export type AppErrorSummary = {
+  report_month: string;
+  report_month_key: string;
+  error_class: "app" | "auth" | "access" | "any";
+  affected_users: number;
+  error_events: number;
+  active_users: number;
+  affected_rate: number | null;
+  events_per_affected: number | null;
+};
+
+export type AppErrorWeekly = {
+  event_week: string;
+  os_type: string;
+  app_version: string;
+  error_kind: string;
+  error_class: "app" | "auth" | "access";
+  label_ua: string;
+  affected_users: number;
+  error_events: number;
+  version_active_users: number;
+  affected_rate: number | null;
+  events_per_affected: number | null;
+};
+
 export type UserSegments = {
   activity_segment: string;
   version_status: string;
@@ -275,6 +328,12 @@ export const getModuleRetention = () =>
   load<ModuleRetention>("mart_module_retention");
 export const getAppHealth = () =>
   load<AppHealthWeekly>("mart_app_health_weekly");
+export const getAppErrorsMonthly = () =>
+  load<AppErrorMonthly>("mart_app_errors_monthly");
+export const getAppErrorsWeekly = () =>
+  load<AppErrorWeekly>("mart_app_errors_weekly");
+export const getAppErrorSummary = () =>
+  load<AppErrorSummary>("mart_app_error_summary_monthly");
 export const getAdoptionFunnel = () =>
   loadCompact<AdoptionFunnelMonthly>("mart_adoption_funnel_monthly");
 export const getAdoptionByHouse = () =>

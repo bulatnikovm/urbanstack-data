@@ -1,10 +1,24 @@
-import { getAppHealth, getPeriod } from "@/lib/data";
-import { delta, n, pct, pp, weekTooltip } from "@/lib/format";
+import {
+  getAppErrorSummary,
+  getAppErrorsMonthly,
+  getAppErrorsWeekly,
+  getAppHealth,
+  getPeriod,
+} from "@/lib/data";
+import { delta, monthLabel, n, n1, pct, pp, weekTooltip } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { Narrative } from "@/components/narrative";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
 import { HealthFilters } from "@/components/health-filters";
 import { BklitLine } from "@/components/bklit-line";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { requireAccess } from "@/lib/guard";
 
 /** "1.12.3" → [1,12,3], для сортування версій по-людськи, не рядком */
@@ -45,6 +59,24 @@ type WeekAgg = {
  * частку по них не малюємо.
  */
 const MIN_RATE_BASE = 100;
+
+/**
+ * Мінімальна аудиторія версії, щоб рахувати її частку помилок.
+ *
+ * Без порога «найгірший реліз» назавжди дістається версіям, якими користуються
+ * десятки людей: при 26 активних ОДИН зачеплений — це 3,8%, і такі рядки
+ * витісняють із топу справжні поломки на релізах із тисячами користувачів.
+ * Перевірено на даних: верхівка рейтингу без порога складалась виключно з
+ * версій на 26-50 активних, кожна з одним зачепленим.
+ */
+const MIN_VERSION_BASE = 100;
+
+/** Попередній місяць до ключа "2026-08" → "2026-07". */
+function prevMonthKey(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 2, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 /**
  * Понеділок поточного тижня — ключ `event_week` у марті (тижні там
@@ -133,11 +165,63 @@ export default async function HealthPage({
 
   const isMixedVersions = version === "all" && versions.length > 1;
 
+  // ── Помилки ───────────────────────────────────────────────────────────
+  //
+  // ⚠️ Фільтри ОС і версії тут діють ТІЛЬКИ на блок релізів. Місячні вітрини
+  // помилок не мають цих вимірів у грануляції, і робити вигляд, що мають,
+  // означало б показувати нефільтровані числа під активним фільтром — рівно
+  // та пастка, що з пончиком статусів на операційному SLA.
+  const prevKey = prevMonthKey(curKey);
+  const summary = getAppErrorSummary();
+  const appCur = summary.find(
+    (r) => r.report_month_key === curKey && r.error_class === "app"
+  );
+  const appPrev = summary.find(
+    (r) => r.report_month_key === prevKey && r.error_class === "app"
+  );
+
+  const kinds = getAppErrorsMonthly();
+  const kindsCur = kinds
+    .filter((r) => r.report_month_key === curKey)
+    .sort((a, b) => b.affected_users - a.affected_users);
+  const kindsPrev = new Map(
+    kinds
+      .filter((r) => r.report_month_key === prevKey)
+      .map((r) => [r.error_kind, r])
+  );
+  const kind = (k: string) => kindsCur.find((r) => r.error_kind === k);
+
+  // Тренд частки класу `app` по місяцях вибраного періоду.
+  const appTrend = summary
+    .filter(
+      (r) =>
+        r.error_class === "app" &&
+        r.report_month_key >= range.from &&
+        r.report_month_key <= range.to &&
+        r.affected_rate != null
+    )
+    .sort((a, b) => a.report_month_key.localeCompare(b.report_month_key));
+
+  // Релізи: тільки поломки на нашому боці, тільки версії з достатньою
+  // аудиторією, у межах вибраного періоду й фільтрів.
+  const releases = getAppErrorsWeekly()
+    .filter((r) => {
+      const weekMonth = r.event_week.slice(0, 7);
+      if (weekMonth < range.from || weekMonth > range.to) return false;
+      if (r.error_class !== "app") return false;
+      if (r.version_active_users < MIN_VERSION_BASE) return false;
+      if (os !== "all" && r.os_type.toLowerCase() !== os) return false;
+      if (version !== "all" && r.app_version !== version) return false;
+      return true;
+    })
+    .sort((a, b) => (b.affected_rate ?? 0) - (a.affected_rate ?? 0))
+    .slice(0, 10);
+
   return (
     <>
       <PageHeader
         title="Стан додатку"
-        subtitle="Логаути, біометрія, технічний відтік"
+        subtitle="Помилки, релізи, авторизація"
         monthKey={curKey}
         partial={isPartial ? { daysElapsed, daysInMonth } : undefined}
         range={range}
@@ -156,6 +240,171 @@ export default async function HealthPage({
             остання точка неповна.
           </p>
         )}
+
+        <Section
+          title="Помилки"
+          lead={
+            appCur ? (
+              <>
+                У {monthLabel(curKey)} у поломку на нашому боці вперлись{" "}
+                <Hl>{n(appCur.affected_users)}</Hl> людей —{" "}
+                <Hl>{pct(appCur.affected_rate)}</Hl> активних, по{" "}
+                <Hl>{n1(appCur.events_per_affected)}</Hl> разів на людину.
+              </>
+            ) : (
+              <>За {monthLabel(curKey)} даних про помилки ще немає.</>
+            )
+          }
+        >
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Kpi
+              label="Помилки застосунку"
+              value={n(appCur?.affected_users ?? 0)}
+              sub={`${pct(appCur?.affected_rate)} активних`}
+              trend={
+                appPrev && appCur
+                  ? {
+                      text: delta(
+                        appCur.affected_users / appPrev.affected_users - 1
+                      ),
+                      good: appCur.affected_users <= appPrev.affected_users,
+                    }
+                  : undefined
+              }
+            />
+            <Kpi
+              label="Оплата не пройшла"
+              value={n(kind("payment_fail")?.affected_users ?? 0)}
+              sub={`по ${n1(kind("payment_fail")?.events_per_affected)} спроб`}
+            />
+            <Kpi
+              label="Доступ заборонено"
+              value={n(kind("access_denied")?.affected_users ?? 0)}
+              sub={`місяцем раніше — ${n(kindsPrev.get("access_denied")?.affected_users ?? 0)}`}
+            />
+            <Kpi
+              label="Екран «Щось пішло не так»"
+              value={n(kind("app_failure")?.affected_users ?? 0)}
+              sub={`по ${n1(kind("app_failure")?.events_per_affected)} разів на людину`}
+            />
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Panel
+              title="Що саме ламається"
+              metric="Людей із помилкою"
+              note="«Разів на людину» читати разом із кількістю: 5 людей по 10 разів — це зламаний сценарій у вузької групи, а 500 по одному — загальна шорсткість. Класи між собою не складаються: auth — здебільшого сам користувач, access — питання до операційки."
+            >
+              <div className="max-h-[22rem] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card">
+                    <TableRow>
+                      <TableHead>Помилка</TableHead>
+                      <TableHead>Клас</TableHead>
+                      <TableHead className="text-right">Людей</TableHead>
+                      <TableHead className="text-right">% активних</TableHead>
+                      <TableHead className="text-right">Разів на людину</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {kindsCur.map((r) => (
+                      <TableRow key={r.error_kind}>
+                        <TableCell
+                          className="font-medium"
+                          title={r.hint_ua ?? undefined}
+                        >
+                          {r.label_ua}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {r.error_class}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {n(r.affected_users)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {pct(r.affected_rate)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {n1(r.events_per_affected)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </Panel>
+
+            <Panel
+              title="Частка з поломкою застосунку"
+              metric="Помилки застосунку"
+              note="Тільки клас app — екран помилки, немає зʼєднання, оплата, недоступна послуга. Тертя на вході й питання доступу сюди не входять навмисно."
+            >
+              <BklitLine
+                data={appTrend.map((r) => ({
+                  month: r.report_month_key,
+                  rate: r.affected_rate as number,
+                }))}
+                series={[{ key: "rate", label: "Клас app", slot: 2 }]}
+                kind="pct"
+              />
+            </Panel>
+          </div>
+
+          <Panel
+            title="Помилки на реліз"
+            metric="Помилки на реліз"
+            note={`Частка рахується від активних ТІЄЇ Ж версії за тиждень. Версії з аудиторією менше ${MIN_VERSION_BASE} не показуємо: при 26 активних один зачеплений дає 3,8% і назавжди займає перше місце. Фільтри ОС і версії діють лише на цей блок.`}
+          >
+            {releases.length === 0 ? (
+              <p className="px-1 py-6 text-sm text-muted-foreground">
+                За обраний період поломок на релізах із достатньою аудиторією
+                немає.
+              </p>
+            ) : (
+              <div className="max-h-[22rem] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card">
+                    <TableRow>
+                      <TableHead>Тиждень</TableHead>
+                      <TableHead>Версія</TableHead>
+                      <TableHead>Помилка</TableHead>
+                      <TableHead className="text-right">Людей</TableHead>
+                      <TableHead className="text-right">З активних версії</TableHead>
+                      <TableHead className="text-right">Разів</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {releases.map((r) => (
+                      <TableRow
+                        key={`${r.event_week}|${r.os_type}|${r.app_version}|${r.error_kind}`}
+                      >
+                        <TableCell className="whitespace-nowrap">
+                          {weekTooltip(r.event_week).toLowerCase()}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-medium">
+                          {r.os_type} {r.app_version}
+                        </TableCell>
+                        <TableCell>{r.label_ua}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {n(r.affected_users)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {pct(r.affected_rate)}{" "}
+                          <span className="text-muted-foreground">
+                            з {n(r.version_active_users)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {n1(r.events_per_affected)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </Panel>
+        </Section>
 
         {!last ? (
           <Panel title="Немає даних за обраний фільтр">

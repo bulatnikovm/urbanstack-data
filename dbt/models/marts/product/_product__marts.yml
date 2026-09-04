@@ -191,3 +191,88 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "n_reg_7d <= n_mature_7d and n_reg_30d <= n_mature_30d and n_reg_90d <= n_mature_90d"
+
+  - name: mart_app_errors_monthly
+    description: >
+      Помилки застосунку по місяцях (report_month × error_kind). Годує детектор
+      аномалій і місячний тренд на сторінці «Стан додатку». Класифікація подій —
+      сід `product_event_catalog.error_kind`, підписи — `product_error_catalog`.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [report_month, error_kind]
+    columns:
+      - name: error_kind
+        description: Вид помилки з сіда. NULL означав би подію без запису в довіднику.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('product_error_catalog')
+              field: error_kind
+      - name: affected_users
+        tests:
+          - not_null
+      - name: affected_rate
+        description: >
+          Частка зачеплених від УСІХ активних місяця. Знаменник спільний для всіх
+          видів помилок — саме тому види між собою порівнювані.
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+      - name: events_per_affected
+        description: >
+          Подій на одну зачеплену людину. Разом із часткою розрізняє дві різні
+          аварії: вузька група в циклі проти широкої разової шорсткості.
+
+  - name: mart_app_errors_weekly
+    description: >
+      Помилки в розрізі релізу (event_week × os_type × app_version × error_kind).
+      Частка рахується від активних ТІЄЇ Ж версії, інакше показник міряє розкотку,
+      а не якість.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [event_week, os_type, app_version, error_kind]
+    columns:
+      - name: error_kind
+        tests:
+          - not_null
+          - relationships:
+              to: ref('product_error_catalog')
+              field: error_kind
+      - name: version_active_users
+        description: >
+          Активні саме цієї версії за тиждень. ⚠️ Суму по версіях НЕ можна вважати
+          аудиторією тижня: людина, що оновилась усередині тижня, є в обох.
+        tests:
+          - not_null
+      - name: affected_rate
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+
+  - name: mart_app_error_summary_monthly
+    description: >
+      Зведення помилок по класах (report_month × error_class, плюс рядок `any`).
+      Існує тому, що `mart_app_errors_monthly` не можна згортати складанням:
+      людина з двома видами помилок лежить у двох рядках.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [report_month, error_class]
+    columns:
+      - name: error_class
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['app', 'auth', 'access', 'any']
+      - name: affected_users
+        tests:
+          - not_null
+      - name: affected_rate
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true

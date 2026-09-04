@@ -28,3 +28,5 @@ complex.segment_sleeping,Сонні,PROD-007,mart_user_segments_monthly,segment_
 complex.segment_dead,Неактивні,PROD-007,mart_user_segments_monthly,segment_dead,complex,count,mixed,down,40,0.15,audience
 module.module_users,Користувачі модуля,PROD-011,mart_module_usage_monthly,module_users,module,count,event,up,40,0.20,engagement
 module.penetration_rate,Покриття модуля,PROD-011,mart_module_usage_monthly,penetration_rate,module,rate,mixed,up,0.02,0.20,engagement
+error.affected_users,Людей із помилкою,PROD-050,mart_app_errors_monthly,affected_users,error_kind,count,event,down,25,0.50,health
+error.affected_rate,Частка з помилкою,PROD-051,mart_app_errors_monthly,affected_rate,error_kind,rate,event,down,0.005,0.50,health

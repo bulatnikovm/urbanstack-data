@@ -227,6 +227,36 @@ modules as (
 
 ),
 
+-- ── Помилки застосунку ───────────────────────────────────────────────────
+-- Вимір — ВИД помилки, підпис береться з довідника, а не з `error_kind`:
+-- у наративі має стояти «Оплата не пройшла», а не `payment_fail`.
+--
+-- ⚠️ Тут навмисно немає розрізу по версії, хоча саме він ловить баги релізу.
+-- Причина не в лінощах: детектор увесь побудований на МІСЯЦЯХ і на власній
+-- історії ряду (медіана + MAD за 12 місяців), а версія живе кілька тижнів і
+-- історії не має взагалі. Ряд «помилка × версія» був би вічно молодим, z по
+-- ньому не рахується, і працював би тільки запасний відсотковий поріг — тобто
+-- шум. Реліз розбирає сторінка, тренд виду помилки — детектор.
+app_errors as (
+
+    select
+        report_month,
+        label_ua                                        as dimension_value,
+        concat('error.', metric_col)                    as series_key,
+        value
+    from (
+        select
+            report_month,
+            label_ua,
+            cast(affected_users as float64)             as affected_users,
+            cast(affected_rate  as float64)             as affected_rate
+        from {{ ref('mart_app_errors_monthly') }}
+        where label_ua is not null
+    )
+    unpivot (value for metric_col in (affected_users, affected_rate))
+
+),
+
 unioned as (
     select * from base_totals
     union all select * from activation
@@ -237,6 +267,7 @@ unioned as (
     union all select * from by_complex
     union all select * from segments
     union all select * from modules
+    union all select * from app_errors
 ),
 
 meta as (

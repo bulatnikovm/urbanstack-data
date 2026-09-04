@@ -62,6 +62,7 @@ select
     c.is_success_action,
     c.is_activation_event,
     c.is_value_action,
+    c.error_kind,
 
     i.user_id,
     i.complex_id,
