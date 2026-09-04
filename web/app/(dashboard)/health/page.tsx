@@ -71,6 +71,15 @@ const MIN_RATE_BASE = 100;
  */
 const MIN_VERSION_BASE = 100;
 
+/**
+ * Скільки останніх тижнів показує блок релізів.
+ *
+ * Той самий прийом і та сама підстава, що в зведених таблицях операційного
+ * SLA («13 останніх місяців»): рейтинг за весь період відповідає на питання
+ * «коли нам було найгірше за всю історію», а не «що зламано зараз».
+ */
+const RELEASE_WEEKS = 12;
+
 /** Попередній місяць до ключа "2026-08" → "2026-07". */
 function prevMonthKey(key: string): string {
   const [y, m] = key.split("-").map(Number);
@@ -204,10 +213,26 @@ export default async function HealthPage({
 
   // Релізи: тільки поломки на нашому боці, тільки версії з достатньою
   // аудиторією, у межах вибраного періоду й фільтрів.
+  //
+  // ⚠️ І ТІЛЬКИ ОСТАННІ ТИЖНІ. Без цього блок відповідав не на те питання:
+  // період за замовчуванням — уся історія, сортування йде за часткою, і
+  // нагору назавжди спливали найгірші тижні за всі роки. Реально показувало
+  // лютий 2025 на iOS 1.1.7 («немає зʼєднання» у 30,7% з 934) — інцидент
+  // справжній, але сьогодні на 1.1.7 не сидить ніхто, і вдіяти з цим нічого
+  // не можна. Питання блоку — «який реліз ламається ЗАРАЗ».
+  const weeksAll = [...new Set(getAppErrorsWeekly().map((r) => r.event_week))]
+    .sort()
+    .filter((w) => {
+      const m = w.slice(0, 7);
+      return m >= range.from && m <= range.to;
+    });
+  const weekFloor = weeksAll.at(-RELEASE_WEEKS) ?? weeksAll[0] ?? "";
+
   const releases = getAppErrorsWeekly()
     .filter((r) => {
       const weekMonth = r.event_week.slice(0, 7);
       if (weekMonth < range.from || weekMonth > range.to) return false;
+      if (r.event_week < weekFloor) return false;
       if (r.error_class !== "app") return false;
       if (r.version_active_users < MIN_VERSION_BASE) return false;
       if (os !== "all" && r.os_type.toLowerCase() !== os) return false;
@@ -353,7 +378,7 @@ export default async function HealthPage({
           <Panel
             title="Помилки на реліз"
             metric="Помилки на реліз"
-            note={`Частка рахується від активних ТІЄЇ Ж версії за тиждень. Версії з аудиторією менше ${MIN_VERSION_BASE} не показуємо: при 26 активних один зачеплений дає 3,8% і назавжди займає перше місце. Фільтри ОС і версії діють лише на цей блок.`}
+            note={`Останні ${RELEASE_WEEKS} тижнів вибраного періоду — блок про те, що ламається ЗАРАЗ. Рейтинг за всю історію показував би лютий 2025 на версії, якою вже ніхто не користується. Частка рахується від активних ТІЄЇ Ж версії за тиждень; версії з аудиторією менше ${MIN_VERSION_BASE} не показуємо. Фільтри ОС і версії діють лише на цей блок.`}
           >
             {releases.length === 0 ? (
               <p className="px-1 py-6 text-sm text-muted-foreground">

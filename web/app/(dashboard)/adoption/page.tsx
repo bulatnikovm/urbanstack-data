@@ -8,7 +8,7 @@ import {
 import { delta, monthLabel, n, pct, pp } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { Hl, Kpi, PageBody, Panel, Section } from "@/components/dashboard";
-import { FunnelSteps } from "@/components/funnel-steps";
+import { FunnelFlow } from "@/components/funnel-flow";
 import { RankedBars } from "@/components/ranked-bars";
 import { BklitLine } from "@/components/bklit-line";
 import { requireAccess } from "@/lib/guard";
@@ -249,12 +249,12 @@ export default async function AdoptionPage({ searchParams }: PageProps<"/adoptio
                 : "")
             }
           >
-            <FunnelSteps
+            <FunnelFlow
               steps={[
                 { label: "Є особовий рахунок", value: potential },
-                { label: "Зареєструвались у застосунку", value: registered },
+                { label: "Зареєструвались", value: registered },
                 { label: `Заходили в ${monthLabel(curKey)}`, value: visitors },
-                { label: "Зробили цільову дію", value: coreActive },
+                { label: "Цільова дія", value: coreActive },
               ]}
             />
           </Panel>
