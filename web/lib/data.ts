@@ -269,6 +269,27 @@ export type AdoptionFunnelMonthly = {
 };
 
 /**
+ * Воронка «на зараз»: запас — станом на сьогодні, потік — за ковзні 30 днів.
+ *
+ * ⚠️ Часу у вимірі НЕМАЄ: один рядок на будинок. Це знімок, а не ряд, і
+ * підставляти його в графік по місяцях не можна.
+ */
+export type AdoptionFunnelRolling = {
+  house_id: string;
+  house_address: string;
+  complex_id: string;
+  complex_name: string;
+  window_days: number;
+  window_from: string;
+  window_to: string;
+  n_potential: number;
+  n_registered: number;
+  n_visitors: number;
+  n_core_active: number;
+  n_never_registered: number;
+};
+
+/**
  * Випереджальний показник: будинок × місяць провізіонінгу × тип приміщення.
  *
  * ⚠️ ТІЛЬКИ ЛІЧИЛЬНИКИ. Частку рахувати ВИКЛЮЧНО як n_reg_Nd / n_mature_Nd
@@ -338,6 +359,8 @@ export const getAdoptionFunnel = () =>
   loadCompact<AdoptionFunnelMonthly>("mart_adoption_funnel_monthly");
 export const getAdoptionByHouse = () =>
   loadCompact<AdoptionHouseMonthly>("mart_adoption_house_monthly");
+export const getAdoptionFunnelNow = () =>
+  load<AdoptionFunnelRolling>("mart_adoption_funnel_rolling");
 
 /**
  * Згортка лічильників підключення. Приймає НАБІР рядків і рахує частки з

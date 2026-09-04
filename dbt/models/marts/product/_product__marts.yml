@@ -276,3 +276,30 @@ models:
               min_value: 0
               max_value: 1
               inclusive: true
+
+  - name: mart_adoption_funnel_rolling
+    description: >
+      Воронка прийняття «на зараз»: запас (є рахунок / зареєструвались) —
+      станом на сьогодні, потік (заходили / цільова дія) — за ковзні 30 днів.
+      Окремо від помісячної, бо помісячна на початку місяця ділить чотириденний
+      потік на пожиттєвий запас і показує 6% там, де насправді 29%.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [house_id]
+    columns:
+      - name: house_id
+        tests:
+          - not_null
+          - unique
+      - name: n_potential
+        tests:
+          - not_null
+      - name: n_visitors
+        description: >
+          ⚠️ Останні 2-3 дні вікна завжди трохи занижені: 3-5% подій доїжджають
+          після факту. Властивість реального часу, не похибка моделі.
+        tests:
+          - not_null
+      - name: window_days
+        tests:
+          - not_null
