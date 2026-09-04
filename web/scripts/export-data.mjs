@@ -33,7 +33,6 @@ const MANIFEST = {
   mart_module_usage_monthly: "report_month, module_order",
   mart_module_retention: "module_order",
   mart_version_adoption: "report_month, os_type, app_version",
-  mart_adoption_funnel_rolling: "complex_name, house_address",
   mart_app_health_weekly: "event_week, os_type, app_version",
   mart_app_errors_monthly: "report_month, error_kind",
   mart_app_error_summary_monthly: "report_month, error_class",

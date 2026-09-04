@@ -2,7 +2,6 @@ import {
   adoptionRollup,
   getAdoptionByHouse,
   getAdoptionFunnel,
-  getAdoptionFunnelNow,
   getPeriod,
   type AdoptionHouseMonthly,
 } from "@/lib/data";
@@ -84,27 +83,6 @@ export default async function AdoptionPage({ searchParams }: PageProps<"/adoptio
   const visitors = sum(cur, (r) => r.n_visitors);
   const coreActive = sum(cur, (r) => r.n_core_active);
   const never = sum(cur, (r) => r.n_never_registered);
-
-  /**
-   * Для ПОТОЧНОГО місяця воронка рахується за ковзні 30 днів, а не з першого
-   * числа.
-   *
-   * Причина не в «неповному місяці», а в тому, що два верхні кроки — це
-   * ЗАПАС (накопичено за всю історію), а два нижні — ПОТІК усередині вікна.
-   * Четвертого числа ділиться чотириденний потік на пожиттєвий запас, і
-   * воронка показує 6% там, де насправді 27%. Для минулих місяців вікно і
-   * так повне, тому там лишається помісячна вітрина — історія не рухається.
-   */
-  const nowRows = isPartial ? getAdoptionFunnelNow() : [];
-  const nowWindow = nowRows[0];
-  const funnelSteps = isPartial
-    ? {
-        potential: nowRows.reduce((a, r) => a + r.n_potential, 0),
-        registered: nowRows.reduce((a, r) => a + r.n_registered, 0),
-        visitors: nowRows.reduce((a, r) => a + r.n_visitors, 0),
-        coreActive: nowRows.reduce((a, r) => a + r.n_core_active, 0),
-      }
-    : { potential, registered, visitors, coreActive };
 
   const prevRegistered = sum(prev, (r) => r.n_registered);
   const prevPotential = sum(prev, (r) => r.n_potential);
@@ -258,11 +236,7 @@ export default async function AdoptionPage({ searchParams }: PageProps<"/adoptio
           }
         >
           <Panel
-            title={
-              isPartial
-                ? "Воронка прийняття — на зараз"
-                : `Воронка прийняття — ${monthLabel(curKey)}`
-            }
+            title={`Воронка прийняття — ${monthLabel(curKey)}`}
             metric={[
               "Потенційні користувачі",
               "Частка зареєстрованих",
@@ -271,21 +245,16 @@ export default async function AdoptionPage({ searchParams }: PageProps<"/adoptio
             note={
               "Кожен мешканець рахується рівно один раз і потрапляє рівно в один будинок (основне приміщення: житло важливіше за комерцію/паркінг). Тому суму по будинках можна згортати до ЖК і до тоталу — на це стоїть тест, який щоночі звіряє цю вітрину зі Стор. 1." +
               (isPartial
-                ? ` ⚠️ Два верхні кроки — стан бази на сьогодні, два нижні — активність за ковзні ${nowWindow?.window_days ?? 30} днів, а не з першого числа. Інакше четвертого числа ділився б чотириденний потік на пожиттєвий запас і воронка показувала б 6% замість 27%. Останні 2-3 дні вікна трохи занижені: частина подій доїжджає із запізненням.`
-                : " Два нижні кроки — активність усередині цього місяця.")
+                ? ` ⚠️ Місяць ще триває (${daysElapsed} з ${daysInMonth} днів), тому два нижні кроки неповні: «є рахунок» і «зареєструвались» — це стан бази, а «заходили» й «цільова дія» встигли накопичитись лише за кілька днів. Порівнювати їхні частки з попередніми місяцями не можна.`
+                : "")
             }
           >
             <BklitFunnel
               steps={[
-                { label: "Є особовий рахунок", value: funnelSteps.potential },
-                { label: "Зареєструвались", value: funnelSteps.registered },
-                {
-                  label: isPartial
-                    ? `Заходили за ${nowWindow?.window_days ?? 30} днів`
-                    : `Заходили в ${monthLabel(curKey)}`,
-                  value: funnelSteps.visitors,
-                },
-                { label: "Цільова дія", value: funnelSteps.coreActive },
+                { label: "Є особовий рахунок", value: potential },
+                { label: "Зареєструвались", value: registered },
+                { label: `Заходили в ${monthLabel(curKey)}`, value: visitors },
+                { label: "Цільова дія", value: coreActive },
               ]}
             />
           </Panel>
