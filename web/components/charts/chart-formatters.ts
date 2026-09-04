@@ -1,23 +1,15 @@
-// Файл vendored (Bklit), локально патчений — те саме, що й три правки в
-// shadcn `chart.tsx` (див. web/README.md). Оригінал був на "en-US": вісь X
-// і заголовок тултипа показували "Jul 27" на україномовному дашборді.
-// ⚠️ `npx shadcn add @bklit/...` перезаписує цей файл без -o — з -o теж, це
-// вже сталося один раз (2026-08-06). Патч треба переносити вручну щоразу.
-// Вісь X. Було `{month, day}` → "1 квіт." — день завжди 1 (усі марти
-// помісячні) і року немає, тому на 32 місяцях вісь читалась як безрік'я з
-// трьома однаковими "квіт". Тепер місяць + рік.
-export const shortDateFmt = new Intl.DateTimeFormat("uk-UA", {
+export const shortDateFmt = new Intl.DateTimeFormat("en-US", {
   month: "short",
-  year: "2-digit",
+  day: "numeric",
 });
 
-export const weekdayDateFmt = new Intl.DateTimeFormat("uk-UA", {
+export const weekdayDateFmt = new Intl.DateTimeFormat("en-US", {
   weekday: "short",
   month: "short",
   day: "numeric",
 });
 
-export const hmsTimeFmt = new Intl.DateTimeFormat("uk-UA", {
+export const hmsTimeFmt = new Intl.DateTimeFormat("en-US", {
   hour: "2-digit",
   minute: "2-digit",
   second: "2-digit",
@@ -25,4 +17,4 @@ export const hmsTimeFmt = new Intl.DateTimeFormat("uk-UA", {
 });
 
 // `Intl.NumberFormat.prototype.format` is a bound getter — safe to extract.
-export const intFmt = new Intl.NumberFormat("uk-UA").format;
+export const intFmt = new Intl.NumberFormat("en-US").format;
