@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-09-04T10:43:50.346Z",
+  "snapshot_at": "2026-09-05T04:08:53.037Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
@@ -8,11 +8,11 @@
       "compact": false
     },
     "mart_user_base_monthly": {
-      "rows": 326,
+      "rows": 327,
       "compact": false
     },
     "mart_user_segments_monthly": {
-      "rows": 326,
+      "rows": 327,
       "compact": false
     },
     "mart_user_segments": {
@@ -48,19 +48,19 @@
       "compact": false
     },
     "mart_version_adoption": {
-      "rows": 845,
+      "rows": 847,
       "compact": false
     },
     "mart_adoption_curve": {
-      "rows": 910,
+      "rows": 1001,
       "compact": false
     },
     "mart_app_health_weekly": {
-      "rows": 2491,
+      "rows": 2494,
       "compact": false
     },
     "mart_app_errors_monthly": {
-      "rows": 244,
+      "rows": 245,
       "compact": false
     },
     "mart_app_error_summary_monthly": {
@@ -68,15 +68,15 @@
       "compact": false
     },
     "mart_app_errors_weekly": {
-      "rows": 2826,
+      "rows": 2828,
       "compact": false
     },
     "mart_adoption_funnel_monthly": {
-      "rows": 3998,
+      "rows": 4000,
       "compact": true
     },
     "mart_adoption_house_monthly": {
-      "rows": 2338,
+      "rows": 2345,
       "compact": true
     },
     "agg_os_monthly": {
