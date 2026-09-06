@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-09-05T04:08:53.037Z",
+  "snapshot_at": "2026-09-06T04:07:08.963Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
@@ -48,7 +48,7 @@
       "compact": false
     },
     "mart_version_adoption": {
-      "rows": 847,
+      "rows": 851,
       "compact": false
     },
     "mart_adoption_curve": {
@@ -56,11 +56,11 @@
       "compact": false
     },
     "mart_app_health_weekly": {
-      "rows": 2494,
+      "rows": 2497,
       "compact": false
     },
     "mart_app_errors_monthly": {
-      "rows": 245,
+      "rows": 246,
       "compact": false
     },
     "mart_app_error_summary_monthly": {
@@ -68,7 +68,7 @@
       "compact": false
     },
     "mart_app_errors_weekly": {
-      "rows": 2828,
+      "rows": 2830,
       "compact": false
     },
     "mart_adoption_funnel_monthly": {
@@ -76,7 +76,7 @@
       "compact": true
     },
     "mart_adoption_house_monthly": {
-      "rows": 2345,
+      "rows": 2346,
       "compact": true
     },
     "agg_os_monthly": {
