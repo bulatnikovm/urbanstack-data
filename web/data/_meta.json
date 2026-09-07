@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-09-06T04:07:08.963Z",
+  "snapshot_at": "2026-09-07T04:11:03.902Z",
   "project": "analytics-454817",
   "dataset": "dbt_product",
   "tables": {
@@ -56,7 +56,7 @@
       "compact": false
     },
     "mart_app_health_weekly": {
-      "rows": 2497,
+      "rows": 2499,
       "compact": false
     },
     "mart_app_errors_monthly": {
@@ -68,7 +68,7 @@
       "compact": false
     },
     "mart_app_errors_weekly": {
-      "rows": 2830,
+      "rows": 2832,
       "compact": false
     },
     "mart_adoption_funnel_monthly": {
