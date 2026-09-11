@@ -12,6 +12,8 @@ import {
 import { BklitLine } from "@/components/bklit-line";
 import { RankedBars } from "@/components/ranked-bars";
 import { StackedShare } from "@/components/stacked-share";
+import { CategoryTrend, type CategoryTrendRow } from "@/components/category-trend";
+import { CellBreakdownProvider } from "@/components/cell-breakdown";
 import { ExportXlsx } from "@/components/export-xlsx";
 import { buildSheet } from "@/lib/xlsx";
 import {
@@ -88,6 +90,24 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
           )?.unique_users ?? 0
       ),
     }));
+
+  // ── Динаміка категорії на наведення (ANA-25) ──────────────────────────
+  //
+  // «Категорії в деталях» показує лише поточний місяць — той самий хвіст
+  // ${SHARE_MONTHS} місяців, що й «Структура цільових дій» вище, тільки для
+  // ОДНІЄЇ категорії замість усіх одразу.
+  const trendOf = (category: string): CategoryTrendRow[] =>
+    shareMonths.map((m) => {
+      const row = star.find(
+        (r) => r.report_month_key === m && r.star_category === category
+      );
+      return {
+        monthKey: m,
+        users: row?.unique_users ?? 0,
+        rate: row?.star_rate ?? 0,
+        momChangePct: row?.mom_change_pct ?? null,
+      };
+    });
 
   return (
     <>
@@ -262,7 +282,7 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
             <Panel
               title="Категорії в деталях"
               metric="Категорії цільових дій"
-              note="Зміна до попереднього місяця розрахована в самій марті."
+              note={`Зміна до попереднього місяця розрахована в самій марті. Наведи на назву категорії — покаже динаміку за останні ${SHARE_MONTHS} місяців.`}
               action={
                 <ExportXlsx
                   fileName={`dim9000-star-${curKey}`}
@@ -296,46 +316,55 @@ export default async function StarPage({ searchParams }: PageProps<"/star">) {
                 />
               }
             >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Категорія</TableHead>
-                    <TableHead className="text-right">Користувачів</TableHead>
-                    <TableHead className="text-right">% бази</TableHead>
-                    <TableHead className="text-right">Зміна</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cats.map((c) => (
-                    <TableRow key={c.star_category}>
-                      <TableCell className="font-medium">
-                        {stripOrder(c.star_category)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {n(c.unique_users)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {pct(c.star_rate)}
-                      </TableCell>
-                      <TableCell
-                        className="text-right tabular-nums"
-                        style={{
-                          color:
-                            c.mom_change_pct == null
-                              ? undefined
-                              : c.mom_change_pct >= 0
-                                ? "var(--status-good)"
-                                : "var(--status-critical)",
-                        }}
-                      >
-                        {c.mom_change_pct == null
-                          ? "—"
-                          : delta(c.mom_change_pct)}
-                      </TableCell>
+              <CellBreakdownProvider>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Категорія</TableHead>
+                      <TableHead className="text-right">Користувачів</TableHead>
+                      <TableHead className="text-right">% бази</TableHead>
+                      <TableHead className="text-right">Зміна</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {cats.map((c) => (
+                      <TableRow key={c.star_category}>
+                        <TableCell className="font-medium">
+                          <CategoryTrend
+                            data={{
+                              category: stripOrder(c.star_category),
+                              rows: trendOf(c.star_category),
+                            }}
+                          >
+                            {stripOrder(c.star_category)}
+                          </CategoryTrend>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {n(c.unique_users)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {pct(c.star_rate)}
+                        </TableCell>
+                        <TableCell
+                          className="text-right tabular-nums"
+                          style={{
+                            color:
+                              c.mom_change_pct == null
+                                ? undefined
+                                : c.mom_change_pct >= 0
+                                  ? "var(--status-good)"
+                                  : "var(--status-critical)",
+                          }}
+                        >
+                          {c.mom_change_pct == null
+                            ? "—"
+                            : delta(c.mom_change_pct)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CellBreakdownProvider>
             </Panel>
           </div>
         </Section>
