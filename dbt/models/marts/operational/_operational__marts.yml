@@ -167,6 +167,10 @@ models:
       statistic_citizen. Снапшот джерела лишився поруч з суфіксом `_src` для
       звірки — НЕ використовувати як основний. Різниця на лип.2026:
       26 895 проти 32 396.
+
+      ANA-27 (2026-09-11): area_total_sqm/area_useful_sqm — площі нарахувань
+      (AREA_COMM/AREA_POL з master_buh_information), сума по приміщеннях
+      активного будинку, той самий point-in-time фільтр, що й решта mart'у.
     columns:
       - name: complex_id
         tests:

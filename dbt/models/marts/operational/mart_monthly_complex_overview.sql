@@ -107,6 +107,40 @@ billing_accounts as (
     group by ah.complex_id, ah.report_month
 ),
 
+-- Площі нарахувань (ANA-27): area_total_sqm/area_useful_sqm з
+-- master_buh_information (одне й те саме джерело, що billing_accounts вище).
+-- Значення на приміщення майже завжди статичні (лише 0.7% просторів мають
+-- >1 різне значення area_useful_sqm за історію), але точковий point-in-time
+-- лишено заради узгодженості зі стилем решти mart'у.
+space_areas_by_month as (
+    select
+        ah.complex_id,
+        ah.report_month,
+        sl.space_id,
+        sl.area_total_sqm,
+        sl.area_useful_sqm,
+        row_number() over (
+            partition by ah.complex_id, ah.report_month, sl.space_id
+            order by sl.created_at desc
+        ) as rn
+    from active_houses_by_month ah
+    join {{ ref('int_space_geo') }} g on g.house_id = ah.house_id
+    join {{ ref('stg_finance__service_links') }} sl
+        on sl.space_id = g.space_id
+        and sl.created_at < timestamp(date_add(ah.report_month, interval 1 month))
+),
+
+areas as (
+    select
+        complex_id,
+        report_month,
+        sum(area_total_sqm)  as area_total_sqm,
+        sum(area_useful_sqm) as area_useful_sqm
+    from space_areas_by_month
+    where rn = 1
+    group by complex_id, report_month
+),
+
 -- Порахований з нуля підрахунок мешканців (канонічний з 2026-08-04).
 users_computed as (
     select * from {{ ref('fct_users_monthly') }} where not is_test_complex
@@ -133,6 +167,8 @@ select
     coalesce(sc.n_commercial, 0)     as n_commercial,
     coalesce(sc.n_storeroom, 0)      as n_storeroom,
     coalesce(ba.n_billing_accounts, 0) as n_billing_accounts,
+    coalesce(ar.area_total_sqm, 0)  as area_total_sqm,
+    coalesce(ar.area_useful_sqm, 0) as area_useful_sqm,
     -- Канонічні (пораховані з users через int_user_exclusions).
     coalesce(uc.n_users_total, 0)      as n_users_total,
     coalesce(uc.n_users_confirmed, 0)  as n_users_confirmed,
@@ -159,6 +195,7 @@ left join complexes c on c.complex_id = cm.complex_id
 left join house_months_agg hm on hm.complex_id = cm.complex_id and hm.report_month = cm.report_month
 left join space_counts sc on sc.complex_id = cm.complex_id and sc.report_month = cm.report_month
 left join billing_accounts ba on ba.complex_id = cm.complex_id and ba.report_month = cm.report_month
+left join areas ar on ar.complex_id = cm.complex_id and ar.report_month = cm.report_month
 left join users_computed uc on uc.complex_id = cm.complex_id and uc.report_month = cm.report_month
 left join citizens cs on cs.complex_id = cm.complex_id and cs.report_month = cm.report_month
 left join sla on sla.complex_id = cm.complex_id and sla.report_month = cm.report_month

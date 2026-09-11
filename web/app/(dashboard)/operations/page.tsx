@@ -182,6 +182,18 @@ export default async function OverviewPage({
                   { header: "Квартир", value: (c) => c.n_apartments },
                   { header: "Паркінг", value: (c) => c.n_parking },
                   { header: "Комерція", value: (c) => c.n_commercial },
+                  {
+                    header: "Площа загальна, м²",
+                    value: (c) => c.area_total_sqm,
+                    format: "#,##0",
+                    width: 18,
+                  },
+                  {
+                    header: "Площа корисна, м²",
+                    value: (c) => c.area_useful_sqm,
+                    format: "#,##0",
+                    width: 18,
+                  },
                   { header: "Користувачів", value: (c) => c.n_users_total },
                   {
                     header: "Підтверджені",
@@ -199,6 +211,8 @@ export default async function OverviewPage({
                   <TableHead>ЖК</TableHead>
                   <TableHead className="text-right">Будинків</TableHead>
                   <TableHead className="text-right">Квартир</TableHead>
+                  <TableHead className="text-right">Площа заг., м²</TableHead>
+                  <TableHead className="text-right">Площа корисна, м²</TableHead>
                   <TableHead className="text-right">Користувачів</TableHead>
                   <TableHead className="text-right">Підтверджені</TableHead>
                 </TableRow>
@@ -214,6 +228,12 @@ export default async function OverviewPage({
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {n(c.n_apartments)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {n(c.area_total_sqm)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {n(c.area_useful_sqm)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {n(c.n_users_total)}

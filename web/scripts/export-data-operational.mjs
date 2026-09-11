@@ -58,7 +58,9 @@ const QUERIES = {
       n_users_unconfirmed,
       n_owners,
       n_tenants,
-      n_billing_accounts
+      n_billing_accounts,
+      area_total_sqm,
+      area_useful_sqm
     from \`${PROJECT}.${DATASET}.mart_monthly_complex_overview\`
     order by report_month, complex_name
   `,

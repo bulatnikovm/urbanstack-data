@@ -18,12 +18,23 @@ models:
           - unique
 
   - name: stg_finance__service_links
-    description: Зв'язок групи послуг ↔ space_id
+    description: >
+      Зв'язок групи послуг ↔ space_id. Несе також площі нарахувань
+      (area_total_sqm/area_useful_sqm, ANA-27) — те саме джерело
+      master_buh_information, що й сам зв'язок.
     columns:
       - name: master_buh_information_id
         tests:
           - not_null
           - unique
+      - name: area_total_sqm
+        description: >
+          AREA_COMM із master_buh_information. area_comm >= area_pol у
+          29 253 з 29 253 ненульових пар на 2026-09-11 (1 виняток на весь
+          датасет — space з area_comm=0/area_pol=-0.7, джерело помилки не
+          зʼясовано, тому строгий тест на >= тут навмисно не додано).
+      - name: area_useful_sqm
+        description: AREA_POL із master_buh_information.
 
   - name: stg_finance__bank_merchants
     description: Банківські мерчант-акаунти (IBAN), лише purpose='payment'

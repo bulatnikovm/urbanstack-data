@@ -66,6 +66,10 @@ export type ComplexOverview = {
   n_owners: number;
   n_tenants: number;
   n_billing_accounts: number;
+  /** Загальна площа нарахувань, м² (AREA_COMM з master_buh_information). */
+  area_total_sqm: number;
+  /** Корисна площа нарахувань, м² (AREA_POL). area_total_sqm >= area_useful_sqm майже завжди. */
+  area_useful_sqm: number;
 };
 
 export type ChurnStageMonthly = {
