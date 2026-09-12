@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-09-11T10:38:15.494Z",
+  "snapshot_at": "2026-09-12T04:08:03.637Z",
   "project": "analytics-454817",
   "dataset": "dbt_operational",
   "tables": {
@@ -36,11 +36,11 @@
       "compact": false
     },
     "agg_categories_monthly": {
-      "rows": 15421,
+      "rows": 15426,
       "compact": true
     },
     "agg_tags_monthly": {
-      "rows": 18039,
+      "rows": 18055,
       "compact": true
     },
     "agg_nps_complex": {
@@ -64,7 +64,7 @@
       "compact": true
     },
     "agg_csat_comments": {
-      "rows": 1592,
+      "rows": 1595,
       "compact": true
     },
     "agg_csat_problems": {
@@ -72,7 +72,7 @@
       "compact": false
     },
     "agg_orders_house_monthly": {
-      "rows": 15340,
+      "rows": 15374,
       "compact": true
     }
   }
